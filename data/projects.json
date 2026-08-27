@@ -15,21 +15,6 @@
     "sourceUrl": "https://github.com/ZhangYiFei12/zyf-blog"
   },
   {
-    "id": "data-dashboard",
-    "title": "数据可视化仪表盘",
-    "year": "2024",
-    "description": "面向运营团队的实时数据监控仪表盘，支持多数据源接入、自定义图表与告警推送。",
-    "tags": [
-      "Next.js",
-      "ECharts",
-      "WebSocket"
-    ],
-    "featured": false,
-    "url": "",
-    "previewUrl": "https://example.com",
-    "sourceUrl": ""
-  },
-  {
     "id": "terminal-site-v1",
     "title": "终端风格个人站 v1",
     "year": "2023",
