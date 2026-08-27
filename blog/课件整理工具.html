@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>课件整理工具 · 张义飞</title>
+  <meta name="description" content="课件整理工具" />
+  <link rel="stylesheet" href="../css/style.css?v=4" />
+  <link rel="icon" type="image/png" href="../images/avatar.png" />
+  <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-inner">
+      <a href="../index.html" class="brand">
+        <span class="prompt">&gt;_</span>zhangyifei<span class="cursor"></span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="../index.html">首页</a></li>
+        <li><a href="../blog.html">博客</a></li>
+        <li><a href="../projects.html">项目</a></li>
+        <li><a href="../about.html">关于</a></li>
+      </ul>
+      <div class="nav-actions">
+        <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
+        <button class="nav-toggle" aria-label="菜单">☰ 菜单</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container article">
+
+    <article>
+      <header class="article-header">
+        <h1>课件整理工具</h1>
+        <div class="article-meta">
+          <span>📅 2026-08-27</span>
+          <span>🏷️ 工具</span>
+        </div>
+      </header>
+
+      <div class="article-body">
+<h1>📚 课件整理助手</h1>
+
+<p>面向教师备课场景的 <strong>Windows 桌面课件管理软件</strong>。基于 <strong>Python 3.12 + PySide6 + SQLite FTS5</strong> 构建，支持全格式课件导入、全文检索、学科自动识别、标签分类、一键归档等完整工作流。</p>
+
+<h2>✨ 功能一览</h2>
+
+<table>
+<thead><tr><th>模块</th><th>功能</th></tr></thead>
+<tbody>
+<tr><td>📥 导入解析</td><td>导入文件/文件夹（可拖拽），自动解析 PPT(X)/PDF/Word/TXT/MD/图片/音视频</td></tr>
+<tr><td>🔍 全文检索</td><td>中文内容毫秒级搜索（FTS5 trigram），支持课件正文、文件名、摘要</td></tr>
+<tr><td>🧠 学科识别</td><td>三层识别：文件名关键词 → 内容扫描 → 上下文推断（绿/黄/橙/红/灰置信度）</td></tr>
+<tr><td>🏷️ 标签体系</td><td>自定义标签、批量打标、按标签筛选</td></tr>
+<tr><td>🖼️ 多视图</td><td>大/中/小卡片视图 + 详细列表（表格排序、批量标签查询、视图记忆）</td></tr>
+<tr><td>📁 分类管理</td><td>树形分类、新建/重命名/删除，未分类视图</td></tr>
+<tr><td>✏️ 批量重命名</td><td>模板/前缀/后缀/查找替换/清理，带实时预览与冲突检测</td></tr>
+<tr><td>📦 一键归档</td><td>按学科移动到课件库目录，防覆盖</td></tr>
+<tr><td>♻️ 重复清理</td><td>文件名相似组检测，一键保留最新版</td></tr>
+<tr><td>↩️ 一键还原</td><td>归档历史批次，随时反悔还原</td></tr>
+<tr><td>👀 桌面监视</td><td>桌面新课件弹窗提示，一键入库/归档</td></tr>
+<tr><td>🖥️ 系统托盘</td><td>最小化到托盘，后台持续监视</td></tr>
+<tr><td>🖱️ 右键菜单</td><td>任意文件右键 → “发送到课件整理助手” 直接归档</td></tr>
+<tr><td>🎨 主题美化</td><td>明/暗主题自适应，圆角卡片、星级角标、置信度色条</td></tr>
+</tbody>
+</table>
+
+
+<h2>🚀 快速开始</h2>
+
+<h3>直接使用（免安装）</h3>
+
+<p>从 <a href="../../releases">Releases</a> 下载便携版（单文件 exe）或安装版，解压/安装后即可运行。</p>
+
+<h3>从源码运行</h3>
+
+<pre><code class="language-bash"># 1. 安装依赖（Python 3.10+）
+pip install PySide6 python-pptx python-docx PyMuPDF Pillow pystray watchdog imageio-ffmpeg
+
+# 2. 运行
+python app.py</code></pre>
+
+<h2>🧪 测试</h2>
+
+<pre><code class="language-bash">python tests/smoke.py      # 核心链路冒烟测试
+python tests/ui_smoke.py   # UI 构建冒烟测试</code></pre>
+
+<h2>📦 打包发布</h2>
+
+<pre><code class="language-bash"># 1. 打包单文件 exe（产物: dist\课件整理助手.exe）
+pip install pyinstaller
+pyinstaller build.spec --noconfirm --clean
+
+# 2. 生成安装版（需安装 Inno Setup 6）
+ISCC.exe installer.iss    # 产物: 发布\课件整理助手安装版.exe</code></pre>
+
+<h2>📂 项目结构</h2>
+
+<pre><code>courseware-manager/
+├── app.py               # 程序入口
+├── quick_move.py        # 右键菜单辅助脚本（独立运行）
+├── build.spec           # PyInstaller 打包配置
+├── installer.iss        # Inno Setup 安装脚本
+├── core/                # 核心逻辑（无 GUI 依赖）
+│   ├── config.py        #   配置与路径
+│   ├── database.py      #   SQLite + FTS5 全文检索
+│   ├── parsers.py       #   解析引擎（文本/页数/时长/缩略图）
+│   ├── classifier.py    #   学科三层识别 + 重复检测
+│   ├── scanner.py       #   目录扫描与索引
+│   ├── renamer.py       #   批量重命名
+│   └── organizer.py     #   归档/还原 + 批次日志
+├── services/            # 系统集成
+│   ├── watcher.py       #   桌面监视（watchdog）
+│   ├── tray.py          #   系统托盘（pystray）
+│   └── menu.py          #   右键菜单注册（注册表）
+├── ui/                  # PySide6 界面
+│   ├── main_window.py   #   主窗口
+│   ├── card_view.py     #   课件卡片网格
+│   ├── detail_panel.py  #   详情面板
+│   ├── theme.py         #   明暗主题
+│   ├── dialogs/         #   批量重命名/归档/重复清理/还原/设置等对话框
+│   └── signals.py       #   全局信号总线
+├── tests/               # 冒烟测试
+├── assets/              # 静态资源（logo 等）
+├── preview/             # 界面预览截图
+└── release/             # 预编译发布物（便携版 + 安装版）</code></pre>
+
+<h2>📝 说明</h2>
+
+<ul>
+  <li>索引模式不会移动你的原文件；只有执行「归档」时才把文件移动到课件库目录。</li>
+  <li>学科关键词可编辑 <code>data\学科关键词配置.json</code> 自定义（首次运行自动生成）。</li>
+  <li>老式 <code>.ppt/.doc</code> 需要安装 Office + pywin32 才能解析文本；无 Office 时跳过内容识别。</li>
+  <li>用户数据保存在 <code>%APPDATA%\课件整理助手2\</code>，卸载安装版时会询问是否保留。</li>
+</ul>
+
+
+<h2>📄 许可证</h2>
+
+<p><a href="LICENSE" target="_blank" rel="noopener">MIT</a></p>
+      </div>
+    </article>
+
+    <a class="back-link" href="../blog.html">返回博客列表</a>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>© <span data-year>2025</span> 张义飞 · Built with <span class="heart">♥</span> and a lot of coffee</p>
+      <p style="margin-top:6px;font-size:11px;color:#4b5a6e;">&gt;_ zhangyifei · 用代码记录世界</p>
+    </div>
+  </footer>
+
+  <script src="../js/main.js?v=2"></script>
+</body>
+</html>
