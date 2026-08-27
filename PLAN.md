@@ -39,7 +39,7 @@
 - **目录 TOC**：文章页自动扫描 h2/h3 生成目录卡片（≥2 个标题才显示），点击跳转 + 滚动高亮（IntersectionObserver），标题带 `scroll-margin-top` 避免被导航栏遮挡
 - **标签筛选**：博客列表顶部生成标签 chips（含文章数），点击筛选 + 空状态提示；`listItemSnippet` 输出 `data-tags`，后台发布的新文章自动支持筛选
 - **RSS feed.xml**：RSS 2.0（含 atom:link），`buildRss()` 生成，后台发布/编辑/删除文章自动同步更新；博客/首页 `<link rel="alternate">` 声明
-- **访问统计**：❌ 未开启 —— Cloudflare Pages token 无 RUM 权限，需在后台手动开启（见下文）
+- **访问统计**：✅ 已开启（2026-08-27，Cloudflare Web Analytics，`web_analytics_tag=12d6db…`）—— 统计脚本由 Cloudflare 边缘自动注入所有页面，已线上验证（首页/文章/博客/关于/404 均含 beacon）
 - 其他：`_headers` 新增 `/feed.xml` 不缓存；CSS `?v=6`、main.js `?v=4`、highlight.min.js `?v=1`；新增 `tools/test-tier2.mjs` 浏览器回归测试
 
 ## 待办：开启访问统计（需你在 Cloudflare 后台操作，约 1 分钟）
@@ -105,6 +105,6 @@
 ## 待用户确认
 
 1. ~~以上哪几个功能要做？~~ → 已选第一梯队并实施
-2. ~~访问统计：想要吗？~~ → 第二梯队想做，但需要你在 Cloudflare 后台开启（见上方步骤）
+2. ~~访问统计：想要吗？~~ → ✅ 已开启（2026-08-27，中文后台：Workers 和 Pages → zyf2026 → 指标 → Web Analytics → 启用）
 3. ~~关于页丰富内容由你提供还是起草？~~ → 已按 GitHub 项目等已有数据起草，**用户已要求删除关于页技能和时间线（已删）**
 4. **后续**：第三梯队（站内搜索 / 后台草稿 / 图片上传 / 站点设置）要做哪个？
