@@ -290,9 +290,10 @@ ${bodyHtml}
 export function slugify(name) {
   return name
     .replace(/\.md$/i, "")
+    .replace(/[^\p{L}\p{N}\s\-_]/gu, "") // 去掉 emoji/符号，保留字母数字、CJK、空格、-、_
     .replace(/\s+/g, "-")
-    .replace(/[\\/:*?"<>|]/g, "")
-    .replace(/-+/g, "-");
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 export function listItemSnippet(meta, slug) {
