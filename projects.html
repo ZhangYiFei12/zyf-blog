@@ -41,6 +41,428 @@
 
         <!-- PROJECTS-START -->
 <div class="card reveal">
+          <span class="year">2026</span>
+          <h3>AI文件阅读器</h3>
+          <p class="desc">## 📌 项目概述
+
+**AI 文件阅读器**是一款跨平台桌面 AI 文档阅读软件,基于 **Electron + TypeScript + Vite** 构建。
+
+它把"阅读文档"与"AI 理解文档"结合成一体:支持 **PDF / Word (DOCX) / EPUB / TXT / Markdown** 五种格式,可连接**本地大模型**(Ollama、LM Studio、vLLM 等)或**云端 API**(DeepSeek、Moonshot Kimi、OpenAI、智谱 GLM、阿里百炼等),自动生成**思维导图、大纲总结、全文翻译**,并支持**基于文档的多轮对话问答**与**一键导出**(Markdown / TXT / Word / PNG / XMind / PDF)。
+
+| 关键指标   | 值                                                           |
+| ---------- | ------------------------------------------------------------ |
+| 当前版本   | **1.0.16**(2026-08-25)                                       |
+| 技术栈     | Electron 33 / TypeScript 5.6 / electron-vite 2.3 / Vite 5.4  |
+| 许可证     | MIT                                                          |
+| 目标平台   | Windows(NSIS 安装包 + 便携版)、macOS(DMG)、Linux(AppImage / deb) |
+| 安装包体积 | 约 130 MB(Windows x64)                                       |
+
+---
+
+## 🏗️ 技术架构
+
+### 总体架构(三层)
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  渲染进程 Renderer (浏览器 UI)                            │
+│  ├─ index.html      页面结构(顶部栏/标签栏/侧栏/阅读区/…) │
+│  ├─ styles.css      样式(深/浅主题,变量驱动)              │
+│  └─ src/            UI 逻辑                               │
+│     ├─ main.ts       全部交互逻辑(2512 行)                │
+│     ├─ state.ts      全局状态 + localStorage 持久化       │
+│     ├─ markdown.ts   Markdown → HTML 渲染器               │
+│     └─ mindmap.ts    思维导图画布渲染 + PNG 导出          │
+└──────────────┬───────────────────────────────────────────┘
+               │  IPC(安全桥接,preload 暴露 window.api)
+┌──────────────▼───────────────────────────────────────────┐
+│  预加载 Preload                                           │
+│  └─ index.ts  通过 contextBridge 暴露白名单 API           │
+└──────────────┬───────────────────────────────────────────┘
+               │  IPC
+┌──────────────▼───────────────────────────────────────────┐
+│  主进程 Main (Node.js)                                    │
+│  ├─ index.ts           窗口/生命周期/IPC 分发(薄壳)       │
+│  ├─ llm-client.ts      OpenAI 兼容协议统一客户端           │
+│  ├─ exporter.ts        导出:MD/TXT/DOCX/PDF               │
+│  ├─ ocr.ts             tesseract.js 离线中文 OCR          │
+│  ├─ pdf-render.ts      PDF 按需渲染 + FontFace polyfill   │
+│  ├─ plugins.ts         C3 插件加载器                      │
+│  ├─ parsers/           文件解析器注册表(插件化)           │
+│  └─ tasks/             AI 任务注册表(插件化)              │
+└───────────────────────────────────────────────────────────┘
+```
+
+### 核心设计理念:注册表模式
+
+主进程 `index.ts` **只做 IPC 分发,不含任何业务逻辑**。所有解析器与 AI 任务都以"注册表"形式登记,新增功能 = **新增一个文件 + 注册一行代码**,现有代码零改动。
+
+```
+文件解析器注册表         AI 任务注册表
+─────────────────      ─────────────────
+FileParser {           AITaskDef {
+  id, extensions,        id, label, icon,
+  label, parse()         description, run()
+}                      }
+registerParser(p)      registerTask(t)
+```
+
+### IPC 通信接口一览
+
+| 通道                                                    | 方向    | 用途                                   |
+| ------------------------------------------------------- | ------- | -------------------------------------- |
+| `file:open-dialog` / `file:parse` / `file:is-supported` | 渲染→主 | 打开文件对话框、解析文件、格式校验     |
+| `pdf:open` / `pdf:render-page` / `pdf:close`            | 渲染→主 | PDF 文档打开、单页按需渲染、关闭释放   |
+| `pdf:ocr`                                               | 渲染→主 | 扫描版 PDF 全量 OCR                    |
+| `ai:generate` / `ai:cancel`                             | 渲染→主 | 发起/取消 AI 生成(含 requestId 可中断) |
+| `ai:stream`(事件)                                       | 主→渲染 | 流式输出(start / delta / done / error) |
+| `ai:test` / `ai:list-models` / `ai:tasks`               | 渲染→主 | 连接测试、模型列表、任务枚举           |
+| `export:markdown/txt/docx/freemind/xmind/pdf`           | 渲染→主 | 各类导出                               |
+| `plugin:list`                                           | 渲染→主 | 已加载插件列表                         |
+
+---
+
+## 🔧 核心模块详解
+
+### 1. 文件解析器(`src/main/parsers/`)
+
+| 解析器           | 格式   | 技术方案                              |
+| ---------------- | ------ | ------------------------------------- |
+| `pdf-parser.ts`  | PDF    | pdfjs-dist 提取文本层 + 章节页码      |
+| `docx-parser.ts` | Word   | mammoth(HTML) + cheerio(结构化)       |
+| `epub-parser.ts` | EPUB   | adm-zip 解包 + cheerio 解析章节       |
+| `text-parser.ts` | TXT/MD | iconv-lite 编码探测(UTF-8/GBK/UTF-16) |
+
+解析结果为统一的 `ParsedDocument` 结构:`{ fileName, filePath, format, title, text, chars, words, paragraphs }`,供阅读与 AI 任务共用。
+
+### 2. PDF 渲染(`pdf-render.ts`)
+
+- **按需渲染**:打开 PDF 只解析文档结构(≈88ms),只渲染当前页,翻页按需取图并**预取相邻页**,几百页 PDF 也能秒开
+- **动态分辨率**:基础倍率 2.0×,放大时当前页自动升级到 4.0× / 6.0×,保证 1:1 像素清晰(上限 6.0× 防内存爆炸)
+- **LRU 缓存**:最多缓存 15 页,翻页 40 页也只驻留最近 15 页
+- **FontFace polyfill**:用 `@napi-rs/canvas` 的 `GlobalFonts.register` 注册内嵌字体字节,解决 Electron 主进程无 DOM FontFace API 导致的中文 PDF 白页问题(修复后文字密度 0% → 2.77%)
+- **图片/文本双视图**:图片视图(所有 PDF 都能看)与文本视图(搜索/复制)
+
+### 3. OCR 引擎(`ocr.ts`)
+
+- **tesseract.js + chi_sim 中文模型**(20 MB,WASM 本地运行,无需联网)
+- **惰性加载**:首次 OCR 才加载依赖,不拖慢启动
+- **50 字文本阈值**:有文本层的 PDF 直接用原文本,不浪费时间 OCR
+- 结果缓存到 `doc.ocrText`,后续 AI 任务直接复用
+- 逐页进度提示(「OCR 识别中:第 x / y 页」)
+
+### 4. LLM 统一客户端(`llm-client.ts`)
+
+基于 **OpenAI 兼容协议** 的统一封装,本地(Ollama/LM Studio/vLLM)与云端(DeepSeek/Kimi/OpenAI/智谱/百炼/自定义)全部走同一套代码:
+
+- `chatStream()` — 流式对话(SSE)
+- `chatComplete()` — 非流式完整返回
+- 统一支持 `baseUrl / apiKey / model / temperature / maxTokens`
+
+### 5. AI 任务与长文处理(`tasks/`)
+
+内置 5 个任务:**mindmap(思维导图)、outline(大纲)、summary(总结)、translate(翻译)、chat(问答)**。
+
+长文档处理流水线(`processLongText`):
+
+```
+文档 → 自适应分块 → 并行分块处理 → 分层合并 → 最终流式输出
+```
+
+- **自适应分块**:≤200KB 用 8000 字符/块、200KB~800KB 用 12000、&gt;800KB 用 16000,块数可控
+- **并行处理**:多块**并发 3 路**同时请求,大幅缩短等待时间(1.0.17 优化)
+- **自动重试**:单块失败自动重试 3 次(指数退避),网络抖动不拖垮整体
+- **分层合并**:每 4 块先合并,控制单次合并输入长度;合并失败自动重试
+- **流式输出**:最终结果实时流式显示,可随时中断
+- **问答预过滤**:超大文档先按关键词过滤无关段落再打分排序,避免全文打分(1400 万字符 1.3s 完成)
+
+### 6. 插件系统(`plugins.ts`,C3)
+
+- **扫描路径**(按优先级全加载):`userData/plugins/` → 应用目录 `plugins/`(开发) → `resources/plugins`(打包后,经 `extraResources` 复制)
+- 插件导出 `register({ parsers, tasks })`,可注册自定义解析器或 AI 任务
+- 内置示例插件「关键词提取 v1.0.0」
+- 设置面板展示已加载插件列表
+
+```js
+// 一个最小插件
+module.exports = {
+  name: '关键词提取',
+  version: '1.0.0',
+  register({ tasks }) {
+    tasks.register({ id: 'keywords', label: '关键词提取', icon: '🔑',
+      run: (params) =&gt; '提取结果...' })
+  }
+}
+```
+
+### 7. 渲染进程(UI)
+
+- **多标签页(C1)**:多文档时显示标签栏,支持切换/关闭,单文档自动隐藏;标签位于「阅读/思维导图/大纲/翻译/问答」标签行正下方(1.0.17 优化)
+- **状态持久化**:最近文件、高亮、进度、标签、设置、主题全部存 `localStorage`
+- **思维导图交互**:节点拖拽、双击编辑、SVG 平滑连线、折叠/展开、滚轮缩放、画布平移、右键导出 PNG
+- **Markdown 渲染器**:标题/代码块(语言角标)/表格(斑马纹)/引用/任务列表/嵌套列表完整支持
+- **流式渲染节流**:rAF + 80ms 节流,长文档不卡顿
+
+---
+
+## ✨ 功能特性大全
+
+### 基础阅读
+
+- 📄 多格式:PDF、Word、EPUB、TXT、Markdown
+- 📖 分页 / 连续两种阅读模式
+- 🔍 搜索高亮(全文关键词,计数 + 上下切换)
+- 📑 文档目录:自动识别标题层级,点击跳转 + 当前章节高亮
+- 🔢 页码跳转:输入页码回车直达,自动限界
+- 📊 阅读进度:顶部进度条 + 底部状态栏(页码/百分比/字符数)
+
+### AI 能力
+
+- 🧠 思维导图:AI 提取要点 → 结构化思维导图(可编辑/拖拽/缩放/折叠)
+- 📋 大纲总结:文档大纲 + 核心摘要,生成后可切换查看
+- 🌐 全文翻译:9 种目标语言,长文档自动分块翻译合并
+- 💬 文档问答:基于文档内容的多轮对话
+- 🗣️ 多语言输出:中/英/日/韩/法/德/俄/西,设置一键切换
+- 🔄 流式输出 + 可中断
+- 📦 长文自动分块 + 并行处理 + 分层合并
+
+### 效率增强(1.0.16)
+
+- 🗂️ A1 最近文件:最近 10 个文件下拉快速打开
+- 🖱️ A2 拖拽打开:文件拖入窗口即打开,半透明覆盖层反馈
+- 📋 A3 选中浮动条:选择文字弹出 5 按钮(复制/翻译/问答/高亮/朗读)
+- 📄 A4 PDF 导出:当前文档导出为 A4 PDF(printToPDF,零依赖)
+- 📖 A5 进度记忆:自动记录每篇文档阅读位置,重开自动恢复
+- ⌨️ A6 快捷键:Ctrl+O/F/PgUp/PgDn/±/Shift+E 等
+- 🔍 A7 OCR 开关:扫描版 PDF 自动 OCR 可关闭
+- 🖍️ B2 批注/高亮:选中文字加高亮,侧栏列表点击跳转,持久化
+- 📦 B4 批量任务:多文件队列执行(大纲/总结/思维导图),进度条 + 结果汇总
+- 🔊 B6 语音朗读:SpeechSynthesis 原生 TTS,文档/选中文字均可朗读
+- 🏷️ C1 多标签页:多文档标签切换/关闭,单文档自动隐藏
+- 🧩 C3 插件系统:外部插件注册解析器/AI 任务
+
+### 交互细节(1.0.17 最新)
+
+- **生成中防误触**:AI 生成中再次点击生成按钮,弹出「「任务名」正在生成中,是否重新生成?」确认,确认后自动取消旧请求并重新生成
+- **AI 生成提速**:多块文档并行处理(并发 3 路),等待时间大幅缩短
+- **标签栏位置优化**:多标签栏移至功能标签行(阅读/思维导图…)正下方
+
+### 导出能力
+
+| 类型     | 格式                                 | 说明                           |
+| -------- | ------------------------------------ | ------------------------------ |
+| 文本     | Markdown / TXT                       | 大纲、总结、思维导图、翻译结果 |
+| 文档     | Word (DOCX)                          | 保留 Markdown 结构             |
+| 图片     | PNG                                  | 思维导图画布截图(右键导出)     |
+| 思维导图 | XMind (.xmind 原生) / FreeMind (.mm) | ZIP 结构, XMind 双击即开       |
+| 阅读快照 | PDF                                  | 当前文档 A4 导出               |
+
+---
+
+## 📅 更新历程
+
+### 🎯 v1.0.17(开发中)— 体验优化
+
+- 标签栏移至「阅读/思维导图」标签行正下方(单文档仍自动隐藏)
+- AI 生成中再次点击生成按钮 → 确认「已在生成,是否重新生成?」,确认后取消旧请求并重生成
+- **AI 生成速度优化**:长文档多块并行处理(并发 3 路)
+
+### 🎯 v1.0.16 — 12 项新功能
+
+- **A 组基础增强**:A1 最近文件、A2 拖拽打开、A3 选中浮动条(复制/翻译/问答/高亮/朗读)、A4 PDF 导出、A5 进度记忆、A6 快捷键、A7 OCR 开关
+- **B 组高级功能**:B2 批注/高亮、B4 批量任务、B6 语音朗读(TTS)
+- **C 组重构级**:C1 多标签页、C3 插件系统
+- 验证:dev CDP 11 项 + 真实 exe 10 项 + 全量回归(smoke 12/12、AI 5/5、PDF 渲染 8/8)
+
+### 🎯 v1.0.15 — PDF 清晰度 + 目录修复
+
+- 动态渲染倍率 2.0×(放大自动升 4.0×/6.0×),放大不再模糊
+- 修复目录映射遗漏 `page` 字段,PDF 图片视图目录可精确定位
+
+### 🎯 v1.0.14 — 目录跳转 + 页码跳转
+
+- 左侧目录点击跳转章节(文本按字符比例 / PDF 精确到页)+ 高亮当前项
+- 底部页码输入框回车跳转,自动限界,失焦清空
+
+### 🎯 v1.0.13 — 查看按钮 + Markdown 强化 + 超大文件稳定
+
+- 新增「查看大纲 / 查看总结」按钮,生成后缓存,无需二次生成
+- AI 输出全部强制 Markdown 格式(标题/列表/代码块规范)
+- 自适应分块(8K/12K/16K)+ 自动重试 3 次 + 合并容错
+
+### 🎯 v1.0.12 — 大纲/总结可编辑
+
+- 编辑模式(Markdown 源码编辑器),Ctrl+Enter 保存 / Esc 取消
+- 保存后底层数据联动:导出/复制/思维导图均用修改后内容
+
+### 🎯 v1.0.11 — UI 优化 + 帮助/关于 + 启动提速
+
+- 顶部新增「帮助」「关于」按钮,弹窗分区展示
+- 重依赖全部惰性加载:解析器加载 423ms → 8ms(↓98%),总启动 ↓20-35%
+
+### 🎯 v1.0.10 — 修复导出 XMind 原生格式
+
+- 生成标准 XMind ZIP 包(content.json / metadata / manifest),XMind 双击即开
+- FreeMind 保留为单独导出选项
+
+### 🎯 v1.0.9 — 思维导图导出 XMind 兼容格式
+
+- FreeMind XML 导出,XMind/MindManager 可导入;根节点去重、XML 安全转义
+
+### 🎯 v1.0.8 — Markdown 格式修复 + PDF 文字版排版优化
+
+- Markdown 文件正文套用完整渲染器:代码块(语言角标)/表格(斑马纹)/任务列表/引用
+- PDF 文字版:段落分组、两端对齐、行高 1.95、首行缩进 2em
+
+### 🎯 v1.0.7 — PDF 字体修复 + 内存优化
+
+- FontFace polyfill 修复中文 PDF 白页(0% → 2.77% 文字密度)
+- canvas 释放、page.cleanup、LRU 缓存,内存无线性泄漏
+- PDF 图片缩放(25%~400%)+ 居中 + 放大后拖拽平移
+
+### 🎯 v1.0.6 — 大文件性能优化
+
+- PDF 按需渲染:40 页 PDF 打开 2949ms → 180ms(10.9 倍)
+- 连续模式渐进渲染(100KB 首屏 + 滚动增量加载)
+- 聊天流式增量渲染(rAF 节流)、大文本相关性预过滤
+- 超大文本分页保护(&gt;2000 万字符字符切片)
+
+### 🎯 v1.0.5 — PDF 图片阅读 + OCR 识别
+
+- PDF 默认图片视图(扫描版也能看),图片/文本视图切换
+- AI 任务自动 OCR(内置 tesseract.js + chi_sim,离线中文)
+- 修复 node-canvas 缺失导致的启动崩溃
+
+---
+
+## 🛠️ 开发与扩展指南
+
+### 开发命令
+
+| 命令                | 说明                        |
+| ------------------- | --------------------------- |
+| `npm install`       | 安装依赖                    |
+| `npm run dev`       | 开发模式(热重载)            |
+| `npm run build`     | 构建到 `out/`               |
+| `npm run typecheck` | TypeScript 类型检查         |
+| `npm run dist`      | 打包(NSIS / DMG / AppImage) |
+
+### 打包(国内镜像加速)
+
+```bash
+# 打包前必做:构建 + 确认无 exe 进程占用
+npm run build
+
+$env:ELECTRON_BUILDER_BINARIES_MIRROR = "https://npmmirror.com/mirrors/electron-builder-binaries/"
+$env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"
+npx electron-builder --win
+```
+
+&gt; ⚠️ 打包时 `plugins/` 目录必须作为 `extraResources` 复制,否则便携版 exe 无法扫描到插件。
+
+### 添加新文件格式
+
+```typescript
+// src/main/parsers/pptx-parser.ts
+import { registerParser, type FileParser } from './index'
+const pptxParser: FileParser = {
+  id: 'pptx', extensions: ['.pptx'], label: 'PowerPoint 演示文稿',
+  async parse(filePath) { return { /* ParsedDocument */ } }
+}
+registerParser(pptxParser)   // ← 注册一行即可
+```
+
+### 添加新 AI 任务
+
+```typescript
+// src/main/tasks/keywords.ts
+import { registerTask, processLongText, type AITaskDef } from './index'
+const keywordsTask: AITaskDef = {
+  id: 'keywords', label: '关键词提取', icon: '🔑',
+  async run(params) {
+    return processLongText(params.client, params.text,
+      (chunk) =&gt; `提取以下内容的关键词:\n"{text}"`,
+      (parts) =&gt; `合并关键词列表:\n"{text}"`, params.callbacks)
+  }
+}
+registerTask(keywordsTask)
+```
+
+### 添加新服务商
+
+在 `src/shared/types.ts` 的 `PROVIDER_PRESETS` 数组中加一项 `{ id, label, baseUrl, defaultModel, models, hint }` 即可。
+
+---
+
+## 🧪 测试与验证
+
+### 离线测试(无需真实模型)
+
+```bash
+# 1. 启动模拟 AI 服务(OpenAI 兼容,11434 端口)
+node test-fixtures/mock-llm-server.mjs
+
+# 2. 解析器冒烟测试
+npx electron . --smoke-test "test-fixtures/人工智能发展综述.md"
+
+# 3. AI 流水线测试
+npx electron . --ai-test "test-fixtures/人工智能发展综述.md" mindmap
+
+# 4. UI / 端到端测试
+npx electron . --ui-test
+npx electron . --e2e-test "test-fixtures/人工智能发展综述.md"
+```
+
+### 最近版本回归数据
+
+| 版本   | 回归结果                                                     |
+| ------ | ------------------------------------------------------------ |
+| 1.0.16 | smoke 12/12 · AI 任务 5/5 · PDF 渲染 8/8 · 真实 exe 10 项元素 + 7 项功能 |
+| 1.0.15 | smoke 4/4 · md 17/17 · mm 6/6 · e2e 4/4 · pdf-ui ✅ · pdf-render 9/9 |
+| 1.0.14 | smoke 4/4 · md 17/17 · mm 6/6 · e2e 4/4 · pdf-ui ✅ · pdf-render 9/9 |
+| 1.0.13 | smoke 4/4 · md 17/17 · mm 6/6 · e2e 4/4 · pdf-ui ✅ · pdf-render 9/9 |
+| 1.0.12 | smoke ✅ · md 17/17 · mm 6/6 · e2e 4/4 · pdf-ui ✅ · pdf-render 9/9 |
+| 1.0.11 | smoke 5/5 · md 17/17 · mm 6/6 · e2e 4/4 · pdf-ui ✅ · pdf-render 9/9 |
+| 1.0.10 | smoke 3/3 · md 17/17 · mm 6/6 · e2e ✅ · pdf-ui ✅ · pdf-render 9/9 |
+| 1.0.6  | smoke 7/7 · md 17/17 · mm 6/6 · e2e(220 分片)✅ · pdf-render 8/8 |
+
+---
+
+## ❓ 常见问题
+
+**Q: 测试连接失败?**
+
+- 本地模型:确认 Ollama/LM Studio 已启动、模型已拉取(`ollama list`)、端口正确
+- 云端:确认 API Key 有效、余额充足、网络可访问
+
+**Q: 模型输出乱码或英文?**
+
+- 部分本地小模型中文能力弱,建议 `qwen2.5:7b` 及以上;可在设置调高温度
+
+**Q: 大文档处理慢?**
+
+- 超过上下文窗口会自动分块,每块独立调用 AI 再合并。1.0.17 起多块**并行处理**,速度大幅提升
+
+**Q: 如何导出思维导图图片?**
+
+- 思维导图页**右键点击画布**导出 PNG;或导出 Markdown / XMind
+
+**Q: 打包后插件不生效?**
+
+- 确认 `plugins/` 已通过 `extraResources` 复制到 `resources/plugins`,并在 exe 同级目录放置插件
+
+---
+
+## 📄 许可证
+
+MIT License</p>
+
+          <div class="links">
+            <a href="https://github.com/ZhangYiFei12/ai-file-reader" target="_blank" rel="noopener">◈ 源码</a>
+          </div>
+        </div>
+
+        <div class="card reveal">
           <span class="featured-badge">★ 精选</span>
           <span class="year">2025</span>
           <h3><a href="index.html">个人博客系统</a></h3>
