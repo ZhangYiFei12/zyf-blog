@@ -345,6 +345,24 @@ ${linksHtml}
         </div>`;
 }
 
+export function buildFeaturedCard(p) {
+  const tagStr = (p.tags && p.tags.length ? p.tags : [])
+    .map(t => `            <span class="tag">${escapeHtml(t)}</span>`)
+    .join("\n");
+  const meta = tagStr ? `          <div class="meta">\n${tagStr}\n          </div>` : "";
+  return `        <div class="card reveal">
+          <span class="featured-badge">★ 精选</span>
+          <span class="year">${escapeHtml(p.year || "")}</span>
+          <h3><a href="projects.html">${escapeHtml(p.title)}</a></h3>
+          <p class="desc">${escapeHtml(p.description || "")}</p>
+${meta}
+        </div>`;
+}
+
+export function renderFeatured(projects) {
+  return projects.filter(p => p.featured).map(p => buildFeaturedCard(p)).join("\n\n");
+}
+
 export function renderProjects(projects) {
   return projects.map(p => buildProjectCard(p)).join("\n\n");
 }

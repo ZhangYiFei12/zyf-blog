@@ -25,6 +25,7 @@ import {
   slugify,
   listItemSnippet,
   renderProjects,
+  renderFeatured,
 } from "../../tools/md2html-core.mjs";
 
 const DEFAULT_REPO = "ZhangYiFei12/zyf-blog";
@@ -437,14 +438,17 @@ export async function onRequest(context) {
       projects.unshift(project); // 新增放最前
     }
 
-    // 写 JSON + 重生成 projects.html
+    // 写 JSON + 重生成 projects.html + index.html 精选区
     const jsonContent = JSON.stringify(projects, null, 2) + "\n";
     const projectsHtml = await getFile(env, "projects.html");
     const newProjectsHtml = replaceBetween(projectsHtml, "<!-- PROJECTS-START -->", "<!-- PROJECTS-END -->", renderProjects(projects));
+    const indexHtml = await getFile(env, "index.html");
+    const newIndexHtml = replaceBetween(indexHtml, "<!-- FEATURED-START -->", "<!-- FEATURED-END -->", renderFeatured(projects));
 
     const commitSha = await commitFiles(env, `🛠️ ${idx >= 0 ? "后台编辑" : "后台新增"}项目：${project.title}`, [
       { path: "data/projects.json", content: jsonContent },
       { path: "projects.html", content: newProjectsHtml },
+      { path: "index.html", content: newIndexHtml },
     ]);
 
     return json({ ok: true, id: project.id, commitSha, message: "已提交，Cloudflare 正在自动部署（约 30 秒~1 分钟）" });
@@ -463,10 +467,13 @@ export async function onRequest(context) {
     const jsonContent = JSON.stringify(remaining, null, 2) + "\n";
     const projectsHtml = await getFile(env, "projects.html");
     const newProjectsHtml = replaceBetween(projectsHtml, "<!-- PROJECTS-START -->", "<!-- PROJECTS-END -->", renderProjects(remaining));
+    const indexHtml = await getFile(env, "index.html");
+    const newIndexHtml = replaceBetween(indexHtml, "<!-- FEATURED-START -->", "<!-- FEATURED-END -->", renderFeatured(remaining));
 
     const commitSha = await commitFiles(env, `🗑️ 后台删除项目：${target.title}`, [
       { path: "data/projects.json", content: jsonContent },
       { path: "projects.html", content: newProjectsHtml },
+      { path: "index.html", content: newIndexHtml },
     ]);
 
     return json({ ok: true, id, commitSha, message: "已删除并提交，等待自动部署" });
