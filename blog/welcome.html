@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>我的第一篇文章：欢迎来到我的博客 · 张义飞</title>
+  <meta name="description" content="这是一个示例文章，展示了博客系统的写作方式。" />
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="icon" type="image/png" href="../images/avatar.png" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-inner">
+      <a href="../index.html" class="brand">
+        <span class="prompt">&gt;_</span>zhangyifei<span class="cursor"></span>
+      </a>
+      <button class="nav-toggle" aria-label="菜单">☰ 菜单</button>
+      <ul class="nav-links">
+        <li><a href="../index.html">首页</a></li>
+        <li><a href="../blog.html">博客</a></li>
+        <li><a href="../projects.html">项目</a></li>
+        <li><a href="../about.html">关于</a></li>
+        <li><a href="../photos.html">照片</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main class="container article">
+
+    <article>
+      <header class="article-header">
+        <h1>我的第一篇文章：欢迎来到我的博客</h1>
+        <div class="article-meta">
+          <span>📅 2025-06-01</span>
+          <span>🏷️ 随笔 · 开始</span>
+        </div>
+      </header>
+
+      <div class="article-body">
+        <h2>你好，世界 👋</h2>
+        <p>欢迎来到我的博客！这是我的第一篇文章。</p>
+        <p>这个博客基于 <strong>Next.js 15 + TypeScript + Tailwind CSS</strong> 构建，支持：</p>
+        <ul>
+          <li>✍️ <strong>Markdown 写作</strong>：在 <code>src/content/posts/</code> 目录下新建 <code>.md</code> 文件即可发布文章</li>
+          <li>🏷️ <strong>标签系统</strong>：文章可以自定义标签</li>
+          <li>📷 <strong>照片上传</strong>：在首页可以上传照片到 <code>/uploads/</code> 目录</li>
+          <li>🔧 <strong>易于扩展</strong>：数据都集中在 <code>src/data/</code> 配置文件中</li>
+        </ul>
+
+        <h2>如何写一篇文章</h2>
+        <p>在 <code>src/content/posts/</code> 下新建一个 <code>.md</code> 文件，顶部带上元信息：</p>
+        <pre><code>---
+title: "文章标题"
+date: "2025-06-01"
+excerpt: "文章摘要，会显示在列表页"
+tags: ["技术", "Next.js"]
+---
+
+这里是正文，支持 **Markdown** 语法。</code></pre>
+
+        <h2>为什么搭这个博客</h2>
+        <blockquote>记录是思考的延伸。把想法写下来，才能看得更清楚。</blockquote>
+        <p>作为一名开发者，我希望有一个属于自己的空间：</p>
+        <ol>
+          <li>沉淀技术知识，方便日后回顾</li>
+          <li>分享项目实践，与同路人交流</li>
+          <li>保持输出的习惯，倒逼输入</li>
+        </ol>
+        <p>如果你也感兴趣，欢迎通过首页的社交媒体联系我！</p>
+
+        <hr />
+
+        <p><em>愿你写的每一行代码，都跑得又快又好。</em></p>
+      </div>
+    </article>
+
+    <a class="back-link" href="../blog.html">返回博客列表</a>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>© <span data-year>2025</span> 张义飞 · Built with <span class="heart">♥</span> and a lot of coffee</p>
+      <p style="margin-top:6px;font-size:11px;color:#4b5a6e;">&gt;_ zhangyifei · 用代码记录世界</p>
+    </div>
+  </footer>
+
+  <script src="../js/main.js"></script>
+</body>
+</html>

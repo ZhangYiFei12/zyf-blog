@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>照片墙 · 张义飞 | 个人博客</title>
+  <meta name="description" content="张义飞的照片墙" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" type="image/png" href="images/avatar.png" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-inner">
+      <a href="index.html" class="brand">
+        <span class="prompt">&gt;_</span>zhangyifei<span class="cursor"></span>
+      </a>
+      <button class="nav-toggle" aria-label="菜单">☰ 菜单</button>
+      <ul class="nav-links">
+        <li><a href="index.html">首页</a></li>
+        <li><a href="blog.html">博客</a></li>
+        <li><a href="projects.html">项目</a></li>
+        <li><a href="about.html">关于</a></li>
+        <li><a href="photos.html">照片</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main class="container">
+
+    <div class="page-head">
+      <h1>照<span class="accent">片</span></h1>
+      <p>随手记录生活 —— 支持拖拽上传，保存在本地浏览器。</p>
+    </div>
+
+    <section class="section" style="border-top:none;padding-top:0;">
+
+      <div class="notice">
+        <strong>ℹ 说明：</strong>纯静态网站没有服务器存储。照片保存在<b>当前浏览器的本地数据库</b>（IndexedDB）中，
+        同一浏览器内刷新/关闭后依然保留。清除浏览器数据或更换设备会丢失。
+      </div>
+
+      <!-- 上传区 -->
+      <div class="photo-uploader" id="uploader">
+        <div class="big">📷</div>
+        <p>点击选择照片，或将图片拖拽到这里</p>
+        <p class="hint">支持 JPG / PNG / WebP / GIF · 单张不超过 5MB</p>
+      </div>
+      <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,image/gif" multiple style="display:none;" />
+
+      <!-- 照片墙 -->
+      <div class="photo-empty" id="empty" style="display:block;">暂无照片 · 上传第一张照片吧 📸</div>
+      <div class="photo-wall" id="wall"></div>
+
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>© <span data-year>2025</span> 张义飞 · Built with <span class="heart">♥</span> and a lot of coffee</p>
+      <p style="margin-top:6px;font-size:11px;color:#4b5a6e;">&gt;_ zhangyifei · 用代码记录世界</p>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,15 +1,24 @@
+# 系统文件
+.DS_Store
+Thumbs.db
+*.log
 node_modules/
+
+# 构建产物
 .next/
 out/
 build/
-.DS_Store
-*.pem
-npm-debug.log*
-.env*
-.vercel
-*.tsbuildinfo
-next-env.d.ts
-public/uploads/
+dist/
 .open-next/
+.vercel/
+
+# 环境变量
+.env
+.env.*
+!.env.example
 .dev.vars
-.wrangler/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
