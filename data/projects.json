@@ -1,15 +1,16 @@
 [
   {
-    "title": "E2E 测试项目",
+    "title": "E2E 已编辑",
     "year": "2026",
-    "description": "测试新增",
+    "description": "已编辑",
     "tags": [
       "测试",
-      "E2E"
+      "E2E",
+      "编辑"
     ],
-    "featured": true,
+    "featured": false,
     "url": "",
-    "previewUrl": "https://example.com",
+    "previewUrl": "",
     "sourceUrl": "https://github.com/ZhangYiFei12",
     "id": "E2E-测试项目"
   },
