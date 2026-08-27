@@ -1,19 +1,5 @@
 [
   {
-    "title": "草稿项目测试sns",
-    "year": "2026",
-    "description": "用于验证项目草稿功能（已发布）",
-    "tags": [
-      "测试"
-    ],
-    "featured": true,
-    "published": true,
-    "url": "",
-    "previewUrl": "",
-    "sourceUrl": "",
-    "id": "草稿项目测试sns"
-  },
-  {
     "title": "AI文件阅读器",
     "year": "2026",
     "description": "AI 文件阅读器是一款跨平台桌面 AI 文档阅读软件,基于 Electron + TypeScript + Vite构建。\n它把\"阅读文档\"与\"AI 理解文档\"结合成一体:支持 PDF / Word (DOCX) / EPUB / TXT / Markdown五种格式,可连接本地大模型(Ollama、LM Studio、vLLM 等)或云端 API(DeepSeek、Moonshot Kimi、OpenAI、智谱 GLM、阿里百炼等),自动生成思维导图、大纲总结、全文翻译,并支持基于文档的多轮对话问答与一键导出(Markdown / TXT / Word / PNG / XMind / PDF)。",
