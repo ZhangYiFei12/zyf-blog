@@ -1,5 +1,17 @@
 [
   {
+    "title": "1",
+    "year": "",
+    "description": "## ✨ 功能特性\n\n- 📍 **GPS 定位**：读取照片/视频的 GPS 坐标，支持 JPEG、PNG、HEIC、RAW、MP4、MOV 等格式\n- 🗺️ **地名反查**：支持离线（GeoNames 70,000+ 城市）和在线（高德/百度/腾讯地图）\n- ✏️ **自定义命名规则**：支持占位符组合（日期、地点、原文件名等）\n- 🎨 **个性化设置**：背景颜色主题、API Key 本地保存\n- 📁 **批量处理**：支持拖拽添加，预览后确认执行\n- 🔄 **区域排序**：可选从大到小（省→市→区）或从小到大（区→市→省）",
+    "tags": [],
+    "featured": false,
+    "published": false,
+    "url": "",
+    "previewUrl": "",
+    "sourceUrl": "",
+    "id": "1"
+  },
+  {
     "title": "AI文件阅读器",
     "year": "2026",
     "description": "AI 文件阅读器是一款跨平台桌面 AI 文档阅读软件,基于 Electron + TypeScript + Vite构建。\n它把\"阅读文档\"与\"AI 理解文档\"结合成一体:支持 PDF / Word (DOCX) / EPUB / TXT / Markdown五种格式,可连接本地大模型(Ollama、LM Studio、vLLM 等)或云端 API(DeepSeek、Moonshot Kimi、OpenAI、智谱 GLM、阿里百炼等),自动生成思维导图、大纲总结、全文翻译,并支持基于文档的多轮对话问答与一键导出(Markdown / TXT / Word / PNG / XMind / PDF)。",
