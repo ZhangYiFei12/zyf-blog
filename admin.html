@@ -120,6 +120,11 @@
         <!-- 左侧：编辑器 -->
         <div>
           <div class="form-group">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+              <button class="btn btn-outline btn-sm" id="uploadMdBtn">📄 上传 .md 文件</button>
+              <span style="font-size:11px;color:var(--text-dim);">选择本地 Markdown，自动解析标题/日期/标签/摘要</span>
+              <input type="file" id="mdFileInput" accept=".md,.markdown,text/markdown" style="display:none;" />
+            </div>
             <label>标题</label>
             <input type="text" id="titleField" class="field" placeholder="文章标题" />
           </div>

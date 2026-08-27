@@ -25,6 +25,9 @@
 
   var previewTimer = null;
 
+  var uploadMdBtn = $("uploadMdBtn");
+  var mdFileInput = $("mdFileInput");
+
   /* ---------- 工具 ---------- */
 
   function getToken() { return sessionStorage.getItem(TOKEN_KEY); }
@@ -186,6 +189,68 @@
   }
 
   cancelEditBtn.addEventListener("click", resetEditor);
+
+  /* ---------- 上传 .md 文件（解析 Front Matter 填入表单） ---------- */
+
+  function parseFrontMatter(raw) {
+    var meta = { title: "", date: "", excerpt: "", tags: [] };
+    if (raw.indexOf("---") === 0) {
+      var end = raw.indexOf("\n---", 3);
+      if (end !== -1) {
+        var fm = raw.slice(3, end).trim();
+        var body = raw.slice(end + 4);
+        fm.split("\n").forEach(function (line) {
+          var m = line.match(/^([a-zA-Z_]+)\s*:\s*(.*)$/);
+          if (!m) return;
+          var key = m[1].toLowerCase();
+          var val = m[2].trim();
+          if ((val.charAt(0) === '"' && val.charAt(val.length - 1) === '"') || (val.charAt(0) === "'" && val.charAt(val.length - 1) === "'")) {
+            val = val.slice(1, -1);
+          }
+          if (key === "tags") {
+            meta.tags = val.replace(/^\[|\]$/g, "").split(/[,，]/).map(function (s) { return s.trim().replace(/^["']|["']$/g, ""); }).filter(Boolean);
+          } else if (key in meta) {
+            meta[key] = val;
+          }
+        });
+        return { meta: meta, body: body.trim() };
+      }
+    }
+    // 无 Front Matter：从内容第一行推标题
+    var lines = raw.split("\n");
+    var first = "";
+    for (var i = 0; i < lines.length; i++) { if (lines[i].trim().length) { first = lines[i]; break; } }
+    meta.title = first ? first.replace(/^#+\s*/, "").trim() : "";
+    return { meta: meta, body: raw.trim() };
+  }
+
+  uploadMdBtn.addEventListener("click", function () { mdFileInput.click(); });
+
+  mdFileInput.addEventListener("change", function () {
+    var file = mdFileInput.files && mdFileInput.files[0];
+    if (!file) return;
+    if (!/\.(md|markdown)$/i.test(file.name)) {
+      showToast("请选择 .md / .markdown 文件", "error");
+      mdFileInput.value = "";
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var raw = String(e.target && e.target.result || "");
+      if (!raw.trim()) { showToast("文件内容为空", "error"); mdFileInput.value = ""; return; }
+      var parsed = parseFrontMatter(raw);
+      $("titleField").value = parsed.meta.title || "";
+      $("dateField").value = parsed.meta.date || today();
+      $("tagsField").value = parsed.meta.tags.join(", ");
+      $("excerptField").value = parsed.meta.excerpt || "";
+      $("bodyField").value = parsed.body || "";
+      updatePreview();
+      showToast("已载入《" + (parsed.meta.title || file.name) + "》", "success");
+      mdFileInput.value = "";
+    };
+    reader.onerror = function () { showToast("读取文件失败", "error"); mdFileInput.value = ""; };
+    reader.readAsText(file, "utf-8");
+  });
 
   /* ---------- 实时预览（防抖，服务器端渲染同一转换器） ---------- */
 
