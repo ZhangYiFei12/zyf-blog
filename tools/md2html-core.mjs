@@ -258,7 +258,7 @@ export function buildPage(meta, bodyHtml, opts = {}) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${escapeHtml(meta.title)} · 张义飞</title>
   <meta name="description" content="${escapeAttr(excerpt)}" />
-  <link rel="stylesheet" href="../css/style.css?v=5" />
+  <link rel="stylesheet" href="../css/style.css?v=6" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
   <meta property="og:type" content="article" />
   <meta property="og:title" content="${escapeAttr(meta.title)}" />
@@ -309,7 +309,8 @@ ${articleHtml}
   </footer>
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
-  <script src="../js/main.js?v=3"></script>
+  <script src="../js/highlight.min.js?v=1"></script>
+  <script src="../js/main.js?v=4"></script>
 </body>
 </html>
 `;
@@ -328,8 +329,10 @@ export function slugify(name) {
 export function listItemSnippet(meta, slug) {
   const date = meta.date || new Date().toISOString().slice(0, 10);
   const excerpt = meta.excerpt || meta.title;
-  const tagStr = (meta.tags && meta.tags.length ? meta.tags : ["随笔"]).map(t => `            <span class="tag">${t}</span>`).join("\n");
-  return `      <a class="post-item" href="blog/${slug}.html">
+  const tags = meta.tags && meta.tags.length ? meta.tags : ["随笔"];
+  const tagStr = tags.map(t => `            <span class="tag">${t}</span>`).join("\n");
+  const dataTags = escapeAttr(tags.join(" "));
+  return `      <a class="post-item" href="blog/${slug}.html" data-tags="${dataTags}">
         <div class="post-left">
           <span class="post-title">${meta.title}</span>
           <span class="post-excerpt">${excerpt}</span>
@@ -389,9 +392,28 @@ export function renderProjects(projects) {
 /* ---------- 文章索引（data/posts.json，供客户端上一篇/下一篇、搜索等使用） ---------- */
 export function buildPostsIndex(posts) {
   const list = (Array.isArray(posts) ? posts : [])
-    .map(p => ({ slug: p.slug, title: p.meta.title, date: p.meta.date || "" }))
+    .map(p => ({ slug: p.slug, title: p.meta.title, date: p.meta.date || "", tags: p.meta.tags || [] }))
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
   return JSON.stringify(list, null, 2) + "\n";
+}
+
+/* ---------- RSS feed.xml ---------- */
+export function buildRss(posts, base = "https://zyf2026.pages.dev") {
+  const rfc822 = d => {
+    const date = d ? new Date(String(d) + "T00:00:00Z") : new Date();
+    if (isNaN(date.getTime())) return new Date().toUTCString();
+    return date.toUTCString();
+  };
+  const items = (Array.isArray(posts) ? posts : [])
+    .sort((a, b) => String(b.meta.date || "").localeCompare(String(a.meta.date || "")))
+    .map(p => {
+      const url = `${base}/blog/${p.slug}.html`;
+      const desc = (p.meta.excerpt || p.meta.title || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const title = String(p.meta.title || p.slug).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return `    <item>\n      <title>${title}</title>\n      <link>${url}</link>\n      <guid isPermaLink="true">${url}</guid>\n      <pubDate>${rfc822(p.meta.date)}</pubDate>\n      <description>${desc}</description>\n    </item>`;
+    })
+    .join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n  <channel>\n    <title>张义飞博客</title>\n    <link>${base}/blog.html</link>\n    <description>张义飞（Yifei Zhang）的个人博客：技术分享、项目实践与生活随笔。</description>\n    <language>zh-CN</language>\n    <atom:link href="${base}/feed.xml" rel="self" type="application/rss+xml" />\n${items}\n  </channel>\n</rss>\n`;
 }
 
 /* ---------- 站点地图 sitemap.xml ---------- */

@@ -25,6 +25,15 @@
   --badge-text: #0a0e14;
   --terminal-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
   --card-hover-shadow: 0 8px 30px var(--accent-glow);
+  /* 代码高亮 token 色（深色主题） */
+  --hl-comment: #64748b;
+  --hl-keyword: #22d3ee;
+  --hl-string: #86efac;
+  --hl-title: #fde68a;
+  --hl-number: #fda4af;
+  --hl-attr: #a5b4fc;
+  --hl-builtin: #f472b6;
+  --hl-meta: #94a3b8;
 }
 
 /* 浅色主题 */
@@ -46,6 +55,15 @@
   --badge-text: #ffffff;
   --terminal-shadow: 0 8px 28px rgba(15, 23, 42, 0.10);
   --card-hover-shadow: 0 10px 28px rgba(14, 116, 144, 0.10);
+  /* 代码高亮 token 色（浅色主题，加深保证对比度） */
+  --hl-comment: #64748b;
+  --hl-keyword: #0e7490;
+  --hl-string: #15803d;
+  --hl-title: #b45309;
+  --hl-number: #be123c;
+  --hl-attr: #4338ca;
+  --hl-builtin: #be185d;
+  --hl-meta: #6b7280;
 }
 
 * {
@@ -1246,4 +1264,156 @@ body::after {
 
 .notfound .back-home:hover {
   box-shadow: 0 0 20px var(--accent-glow);
+}
+
+/* ============================================================
+   代码语法高亮（highlight.js 自定义主题，随深浅色切换）
+   ============================================================ */
+pre code.hljs {
+  background: transparent;
+  padding: 0;
+  display: block;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--hl-comment);
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag {
+  color: var(--hl-keyword);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: var(--hl-string);
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section,
+.hljs-name {
+  color: var(--hl-title);
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: var(--hl-number);
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-type {
+  color: var(--hl-attr);
+}
+.hljs-built_in,
+.hljs-builtin-name {
+  color: var(--hl-builtin);
+}
+.hljs-meta,
+.hljs-meta .hljs-keyword {
+  color: var(--hl-meta);
+}
+
+/* ============================================================
+   文章目录 TOC
+   ============================================================ */
+.article-body h2[id],
+.article-body h3[id] {
+  scroll-margin-top: 84px;
+}
+
+.toc {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin: 0 0 28px;
+  font-size: 13px;
+}
+
+.toc-title {
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: var(--text);
+}
+
+.toc ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.toc li {
+  margin: 4px 0;
+}
+
+.toc li.toc-3 {
+  padding-left: 16px;
+}
+
+.toc a {
+  color: var(--text-dim);
+  text-decoration: none;
+  display: inline-block;
+  padding: 2px 8px;
+  border-left: 2px solid transparent;
+  border-radius: 0 4px 4px 0;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.toc a:hover {
+  color: var(--accent);
+}
+
+.toc a.active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: var(--bg);
+}
+
+/* ============================================================
+   博客标签筛选
+   ============================================================ */
+.tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 22px;
+}
+
+.tag-filter .chip {
+  padding: 5px 14px;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--text-dim);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tag-filter .chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tag-filter .chip.active {
+  background: var(--accent);
+  color: var(--badge-text);
+  border-color: var(--accent);
+}
+
+.tag-filter .chip em {
+  font-style: normal;
+  opacity: 0.6;
+  font-size: 11px;
+  margin-left: 2px;
 }

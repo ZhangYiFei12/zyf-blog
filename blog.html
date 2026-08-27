@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>博客 · 张义飞 | 个人博客</title>
   <meta name="description" content="张义飞的博客文章列表" />
-  <link rel="stylesheet" href="css/style.css?v=5" />
+  <link rel="stylesheet" href="css/style.css?v=6" />
   <link rel="icon" type="image/png" href="images/avatar.png" />
+  <link rel="alternate" type="application/rss+xml" title="张义飞博客 RSS" href="feed.xml" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="博客 · 张义飞 | 个人博客" />
   <meta property="og:description" content="张义飞的博客文章列表" />
@@ -46,8 +47,10 @@
     <section class="section" style="border-top:none;padding-top:0;">
       <h2 class="section-title">全部文章</h2>
 
+      <div class="tag-filter" id="tagFilter"></div>
+
       <!-- BLOG-LIST-START -->
-<a class="post-item" href="blog/GeoRenamer照片GPS定位软件.html">
+<a class="post-item" href="blog/GeoRenamer照片GPS定位软件.html" data-tags="工具">
         <div class="post-left">
           <span class="post-title">GeoRenamer照片GPS定位软件</span>
           <span class="post-excerpt">GeoRenamer照片GPS定位软件</span>
@@ -58,7 +61,7 @@
         <span class="post-date">2026-08-27</span>
       </a>
 
-      <a class="post-item" href="blog/MirrorSync-双向同步工具.html">
+      <a class="post-item" href="blog/MirrorSync-双向同步工具.html" data-tags="工具">
         <div class="post-left">
           <span class="post-title">MirrorSync 双向同步工具</span>
           <span class="post-excerpt">MirrorSync 双向同步工具</span>
@@ -69,7 +72,7 @@
         <span class="post-date">2026-08-27</span>
       </a>
 
-      <a class="post-item" href="blog/测试.html">
+      <a class="post-item" href="blog/测试.html" data-tags="随笔">
         <div class="post-left">
           <span class="post-title">必修三物理知识点</span>
           <span class="post-excerpt">必修三物理知识点</span>
@@ -80,7 +83,7 @@
         <span class="post-date">2026-08-27</span>
       </a>
 
-      <a class="post-item" href="blog/详细介绍与技术文档.html">
+      <a class="post-item" href="blog/详细介绍与技术文档.html" data-tags="AI 工具 技术文档">
         <div class="post-left">
           <span class="post-title">📖 AI 文件阅读器 — 详细介绍与技术文档</span>
           <span class="post-excerpt">AI 文件阅读器的完整技术文档：项目介绍、三层架构、核心模块详解与开发指南。</span>
@@ -93,7 +96,7 @@
         <span class="post-date">2026-08-27</span>
       </a>
 
-      <a class="post-item" href="blog/课件整理工具.html">
+      <a class="post-item" href="blog/课件整理工具.html" data-tags="工具">
         <div class="post-left">
           <span class="post-title">课件整理工具</span>
           <span class="post-excerpt">课件整理工具</span>
@@ -104,7 +107,7 @@
         <span class="post-date">2026-08-27</span>
       </a>
 
-      <a class="post-item" href="blog/AI-API-余额查询器.html">
+      <a class="post-item" href="blog/AI-API-余额查询器.html" data-tags="工具">
         <div class="post-left">
           <span class="post-title">AI API 余额查询器</span>
           <span class="post-excerpt">AI API 余额查询器</span>
@@ -117,7 +120,7 @@
 <!-- BLOG-LIST-END -->
 
       <!-- 新文章会由后台自动插入到上面 BLOG-LIST 标记区间内 -->
-      <div class="photo-empty" style="margin-top:24px;padding:40px;">暂无更多文章 · 敬请期待</div>
+      <div class="photo-empty" id="blogEmpty" style="margin-top:24px;padding:40px;">暂无更多文章 · 敬请期待</div>
     </section>
 
   </main>
@@ -130,6 +133,6 @@
   </footer>
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
-  <script src="js/main.js?v=3"></script>
+  <script src="js/main.js?v=4"></script>
 </body>
 </html>

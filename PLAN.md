@@ -1,6 +1,6 @@
 # PLAN：博客功能扩展与优化（候选清单）
 
-> 状态：**第一梯队已全部实施**（A 全部 + B 四项 + D 丰富关于页）
+> 状态：**第一梯队 ✅ + 第二梯队 ✅（除访问统计需你在 Cloudflare 后台开启）**
 > 技术约束：纯静态站点、零构建步骤、Cloudflare Pages 自动部署、后台已完备（文章/项目 CRUD + 深浅色主题 + 首页自动同步）
 
 ---
@@ -18,10 +18,10 @@
 ### 当前缺失（探索发现）
 - ✅ `robots.txt` / `sitemap.xml` / `404.html` —— 已全部实现（sitemap 随文章发布自动更新）
 - ✅ 文章代码块复制按钮 / 阅读进度条 / 返回顶部 / 上一篇·下一篇 —— 已实现
-- ✅ 关于页已丰富（技能条 + 经历时间线，复用 `.timeline` / `.skill-bar` CSS）
-- ❌ 文章代码块无语法高亮、无目录(TOC)
-- ❌ 博客列表无搜索、无标签筛选
-- ❌ 无访问统计、无 RSS `feed.xml`
+- ✅ 代码语法高亮（highlight.js 自托管 v11.9 + 自定义深浅色主题）、目录 TOC（滚动高亮）
+- ✅ 博客标签筛选（chips + 计数）、RSS `feed.xml`（发布自动更新）
+- ❌ 访问统计（需在 Cloudflare 后台开启 Web Analytics）
+- ❌ 博客列表无搜索
 - ❌ 后台无草稿状态、无站点设置、无图片上传
 
 ---
@@ -32,6 +32,24 @@
 - **B. 阅读体验**：顶部阅读进度条（`#readingProgress`）、代码块 hover 复制按钮（clipboard + execCommand 双 fallback）、右下角返回顶部按钮（滚动 >400px 出现）、底部上一篇/下一篇导航（客户端从 `data/posts.json` 渲染，发布即生效，零服务端依赖）
 - **D. 关于页**：技能条（4 组 16 项，复用 `.skill-bar`）+ 经历时间线（复用 `.timeline`）
 - 其他：`_headers` 新增 `/data/*`、`sitemap.xml`、`robots.txt` 不缓存；CSS `?v=5`、main.js `?v=3` 缓存版本已升级
+
+## 第二梯队（✅ 已实施 · 2026-08-27）
+
+- **代码语法高亮**：highlight.js v11.9 自托管（`js/highlight.min.js`，无外部依赖），自定义 token 配色随深浅色主题自动切换（CSS 变量 `--hl-*`），文章页自动高亮
+- **目录 TOC**：文章页自动扫描 h2/h3 生成目录卡片（≥2 个标题才显示），点击跳转 + 滚动高亮（IntersectionObserver），标题带 `scroll-margin-top` 避免被导航栏遮挡
+- **标签筛选**：博客列表顶部生成标签 chips（含文章数），点击筛选 + 空状态提示；`listItemSnippet` 输出 `data-tags`，后台发布的新文章自动支持筛选
+- **RSS feed.xml**：RSS 2.0（含 atom:link），`buildRss()` 生成，后台发布/编辑/删除文章自动同步更新；博客/首页 `<link rel="alternate">` 声明
+- **访问统计**：❌ 未开启 —— Cloudflare Pages token 无 RUM 权限，需在后台手动开启（见下文）
+- 其他：`_headers` 新增 `/feed.xml` 不缓存；CSS `?v=6`、main.js `?v=4`、highlight.min.js `?v=1`；新增 `tools/test-tier2.mjs` 浏览器回归测试
+
+## 待办：开启访问统计（需你在 Cloudflare 后台操作，约 1 分钟）
+
+1. 打开 https://dash.cloudflare.com 登录
+2. 左侧菜单 **Analytics（分析）→ Web Analytics**
+3. 点 **Add a site（添加站点）** → 站点域名填 `zyf2026.pages.dev` → 添加
+4. 创建成功后，回到 **Workers & Pages → zyf2026 → Settings（设置）→ Web Analytics**，选择刚创建的站点开启 → Cloudflare 会自动给所有页面注入统计脚本（无需改代码）
+
+> 或：把 Web Analytics 的 beacon token 发我，我用 `tools/test-analytics.mjs` 在本地把所有页面头部注入 Beacon 脚本后再部署。
 
 ---
 
@@ -87,7 +105,6 @@
 ## 待用户确认
 
 1. ~~以上哪几个功能要做？~~ → 已选第一梯队并实施
-2. ~~访问统计：想要吗？~~ → 未做（第二梯队可选，Cloudflare 官方免费无感）
-3. ~~关于页丰富内容由你提供还是起草？~~ → 已按 GitHub 项目等已有数据起草（技能比例/经历时间线为占位，可直接改 about.html 或让我调整）
-4. **关于页内容**：技能百分比、经历时间线是否正确？需要调整请告诉我
-5. **后续**：第二梯队（语法高亮 / TOC / 标签筛选 / RSS / 访问统计）要做哪个？
+2. ~~访问统计：想要吗？~~ → 第二梯队想做，但需要你在 Cloudflare 后台开启（见上方步骤）
+3. ~~关于页丰富内容由你提供还是起草？~~ → 已按 GitHub 项目等已有数据起草，**用户已要求删除关于页技能和时间线（已删）**
+4. **后续**：第三梯队（站内搜索 / 后台草稿 / 图片上传 / 站点设置）要做哪个？

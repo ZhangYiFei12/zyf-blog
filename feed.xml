@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>张义飞博客</title>
+    <link>https://zyf2026.pages.dev/blog.html</link>
+    <description>张义飞（Yifei Zhang）的个人博客：技术分享、项目实践与生活随笔。</description>
+    <language>zh-CN</language>
+    <atom:link href="https://zyf2026.pages.dev/feed.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>AI API 余额查询器</title>
+      <link>https://zyf2026.pages.dev/blog/AI-API-余额查询器.html</link>
+      <guid isPermaLink="true">https://zyf2026.pages.dev/blog/AI-API-余额查询器.html</guid>
+      <pubDate>Thu, 27 Aug 2026 00:00:00 GMT</pubDate>
+      <description>AI API 余额查询器</description>
+    </item>
+    <item>
+      <title>GeoRenamer照片GPS定位软件</title>
+      <link>https://zyf2026.pages.dev/blog/GeoRenamer照片GPS定位软件.html</link>
+      <guid isPermaLink="true">https://zyf2026.pages.dev/blog/GeoRenamer照片GPS定位软件.html</guid>
+      <pubDate>Thu, 27 Aug 2026 00:00:00 GMT</pubDate>
+      <description>GeoRenamer照片GPS定位软件</description>
+    </item>
+    <item>
+      <title>MirrorSync 双向同步工具</title>
+      <link>https://zyf2026.pages.dev/blog/MirrorSync-双向同步工具.html</link>
+      <guid isPermaLink="true">https://zyf2026.pages.dev/blog/MirrorSync-双向同步工具.html</guid>
+      <pubDate>Thu, 27 Aug 2026 00:00:00 GMT</pubDate>
+      <description>MirrorSync 双向同步工具</description>
+    </item>
+    <item>
+      <title>必修三物理知识点</title>
+      <link>https://zyf2026.pages.dev/blog/测试.html</link>
+      <guid isPermaLink="true">https://zyf2026.pages.dev/blog/测试.html</guid>
+      <pubDate>Thu, 27 Aug 2026 00:00:00 GMT</pubDate>
+      <description>必修三物理知识点</description>
+    </item>
+    <item>
+      <title>📖 AI 文件阅读器 — 详细介绍与技术文档</title>
+      <link>https://zyf2026.pages.dev/blog/详细介绍与技术文档.html</link>
+      <guid isPermaLink="true">https://zyf2026.pages.dev/blog/详细介绍与技术文档.html</guid>
+      <pubDate>Thu, 27 Aug 2026 00:00:00 GMT</pubDate>
+      <description>AI 文件阅读器的完整技术文档：项目介绍、三层架构、核心模块详解与开发指南。</description>
+    </item>
+    <item>
+      <title>课件整理工具</title>
+      <link>https://zyf2026.pages.dev/blog/课件整理工具.html</link>
+      <guid isPermaLink="true">https://zyf2026.pages.dev/blog/课件整理工具.html</guid>
+      <pubDate>Thu, 27 Aug 2026 00:00:00 GMT</pubDate>
+      <description>课件整理工具</description>
+    </item>
+  </channel>
+</rss>

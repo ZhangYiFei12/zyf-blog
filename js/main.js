@@ -178,13 +178,100 @@
     });
   });
 
+  /* ---- HTML 转义辅助 ---- */
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+  }
+
+  /* ---- 文章目录 TOC（文章页） ---- */
+  var articleBody = document.querySelector(".article-body");
+  if (articleBody) {
+    var headings = articleBody.querySelectorAll("h2, h3");
+    var tocItems = [];
+    var usedIds = {};
+    headings.forEach(function (h) {
+      var text = h.textContent.trim();
+      var base = text.replace(/[^\w\u4e00-\u9fa5]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() || "section";
+      var id = base, n = 1;
+      while (usedIds[id]) { n++; id = base + "-" + n; }
+      usedIds[id] = true;
+      h.id = id;
+      tocItems.push({ id: id, text: text, level: h.tagName === "H2" ? 2 : 3 });
+    });
+    if (tocItems.length >= 2) {
+      var toc = document.createElement("nav");
+      toc.className = "toc";
+      toc.innerHTML = '<div class="toc-title">📑 目录</div><ol>' +
+        tocItems.map(function (it) {
+          return '<li class="toc-' + it.level + '"><a href="#' + esc(it.id) + '">' + esc(it.text) + '</a></li>';
+        }).join("") +
+        '</ol>';
+      articleBody.insertBefore(toc, articleBody.firstChild);
+      if ("IntersectionObserver" in window) {
+        var tocLinks = toc.querySelectorAll("a");
+        var spy = new IntersectionObserver(function (entries) {
+          entries.forEach(function (en) {
+            if (en.isIntersecting) {
+              tocLinks.forEach(function (a) { a.classList.toggle("active", a.getAttribute("href") === "#" + en.target.id); });
+            }
+          });
+        }, { rootMargin: "-80px 0px -60% 0px" });
+        headings.forEach(function (h) { spy.observe(h); });
+      }
+    }
+  }
+
+  /* ---- 代码语法高亮（highlight.js，文章页） ---- */
+  if (window.hljs && document.querySelector(".article-body code")) {
+    try { hljs.highlightAll(); } catch (e) {}
+  }
+
+  /* ---- 博客标签筛选（博客列表页） ---- */
+  var tagFilter = document.getElementById("tagFilter");
+  if (tagFilter) {
+    var postItems = Array.prototype.slice.call(document.querySelectorAll(".post-item"));
+    var emptyState = document.getElementById("blogEmpty");
+    var tagCounts = {};
+    postItems.forEach(function (item) {
+      (item.getAttribute("data-tags") || "").split(/\s+/).filter(Boolean).forEach(function (t) {
+        tagCounts[t] = (tagCounts[t] || 0) + 1;
+      });
+    });
+    var allTags = Object.keys(tagCounts).sort(function (a, b) { return tagCounts[b] - tagCounts[a]; });
+    function renderChips(activeTag) {
+      var html = '<button type="button" class="chip' + (activeTag ? "" : " active") + '" data-tag="">全部 <em>' + postItems.length + '</em></button>';
+      allTags.forEach(function (t) {
+        html += '<button type="button" class="chip' + (activeTag === t ? " active" : "") + '" data-tag="' + esc(t) + '">' + esc(t) + ' <em>' + tagCounts[t] + '</em></button>';
+      });
+      tagFilter.innerHTML = html;
+    }
+    function applyFilter(tag) {
+      var visible = 0;
+      postItems.forEach(function (item) {
+        var tags = (item.getAttribute("data-tags") || "").split(/\s+/).filter(Boolean);
+        var show = !tag || tags.indexOf(tag) !== -1;
+        item.style.display = show ? "" : "none";
+        if (show) visible++;
+      });
+      renderChips(tag);
+      if (emptyState) {
+        emptyState.textContent = visible ? "暂无更多文章 · 敬请期待" : "没有「" + (tag || "") + "」标签的文章";
+        emptyState.style.display = visible ? "" : "block";
+      }
+    }
+    tagFilter.addEventListener("click", function (e) {
+      var btn = e.target.closest ? e.target.closest(".chip") : null;
+      if (!btn) return;
+      applyFilter(btn.getAttribute("data-tag"));
+    });
+    if (allTags.length) applyFilter("");
+    else tagFilter.style.display = "none";
+  }
+
   /* ---- 上一篇 / 下一篇（文章页，客户端渲染） ---- */
   var postNav = document.getElementById("postNav");
   if (postNav) {
     var current = decodeURIComponent(window.location.pathname.split("/").pop().replace(/\.html$/i, ""));
-    function esc(s) {
-      return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-    }
     fetch("../data/posts.json", { cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("fetch failed")); })
       .then(function (posts) {

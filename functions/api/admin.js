@@ -28,6 +28,7 @@ import {
   renderFeatured,
   buildPostsIndex,
   buildSitemap,
+  buildRss,
 } from "../../tools/md2html-core.mjs";
 
 const DEFAULT_REPO = "ZhangYiFei12/zyf-blog";
@@ -390,6 +391,7 @@ export async function onRequest(context) {
       { path: "index.html", content: indexHtml },
       { path: "data/posts.json", content: buildPostsIndex(updatedPosts) },
       { path: "sitemap.xml", content: buildSitemap(updatedPosts) },
+      { path: "feed.xml", content: buildRss(updatedPosts) },
     ]);
 
     return json({ ok: true, slug, commitSha, message: "已提交，Cloudflare 正在自动部署（约 30 秒~1 分钟）" });
@@ -418,6 +420,7 @@ export async function onRequest(context) {
       { path: "index.html", content: indexHtml },
       { path: "data/posts.json", content: buildPostsIndex(remaining) },
       { path: "sitemap.xml", content: buildSitemap(remaining) },
+      { path: "feed.xml", content: buildRss(remaining) },
     ]);
 
     return json({ ok: true, slug, commitSha, message: "已删除并提交，等待自动部署" });

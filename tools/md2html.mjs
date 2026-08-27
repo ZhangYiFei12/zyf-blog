@@ -16,7 +16,7 @@ import { readdirSync, readFileSync, writeFileSync, mkdirSync, statSync } from "f
 import { dirname, join, basename, resolve } from "path";
 import { fileURLToPath } from "url";
 
-import { parseFrontMatter, parseBody, buildPage, slugify, listItemSnippet, buildPostsIndex, buildSitemap } from "./md2html-core.mjs";
+import { parseFrontMatter, parseBody, buildPage, slugify, listItemSnippet, buildPostsIndex, buildSitemap, buildRss } from "./md2html-core.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, ".."); // 项目根目录
@@ -41,7 +41,8 @@ function writeSiteData(posts) {
   mkdirSync(dataDir, { recursive: true });
   writeFileSync(join(dataDir, "posts.json"), buildPostsIndex(sorted), "utf8");
   writeFileSync(join(ROOT, "sitemap.xml"), buildSitemap(sorted), "utf8");
-  console.log(`✔ 已写入  data/posts.json（${sorted.length} 篇） + sitemap.xml`);
+  writeFileSync(join(ROOT, "feed.xml"), buildRss(sorted), "utf8");
+  console.log(`✔ 已写入  data/posts.json（${sorted.length} 篇） + sitemap.xml + feed.xml`);
 }
 
 function main() {
