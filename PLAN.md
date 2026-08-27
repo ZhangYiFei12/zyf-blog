@@ -49,14 +49,9 @@
 - **图片上传**：后台编辑器新增「🖼️ 上传图片」按钮，选图（≤2MB）→ base64 提交 → 后台提交到 `images/uploads/` → 返回可引用 URL 并自动插入正文（`![文件名](/images/uploads/...)`）；部署后（约 30 秒）文章预览/页面即可显示
 - 其他：`data/search-index.json` 由 `buildSearchIndex()` 生成（含 `&lt;…&gt;` 转义标签剥离）；CSS `?v=7`、main.js `?v=5`、admin.js `?v=4`；新增 `tools/test-tier3.mjs` 回归测试（核心函数草稿过滤 + 浏览器搜索 UI）
 
-## 待办：开启访问统计（需你在 Cloudflare 后台操作，约 1 分钟）
+## ✅ 访问统计：已开启（2026-08-27）
 
-1. 打开 https://dash.cloudflare.com 登录
-2. 左侧菜单 **Analytics（分析）→ Web Analytics**
-3. 点 **Add a site（添加站点）** → 站点域名填 `zyf2026.pages.dev` → 添加
-4. 创建成功后，回到 **Workers & Pages → zyf2026 → Settings（设置）→ Web Analytics**，选择刚创建的站点开启 → Cloudflare 会自动给所有页面注入统计脚本（无需改代码）
-
-> 或：把 Web Analytics 的 beacon token 发我，我用 `tools/test-analytics.mjs` 在本地把所有页面头部注入 Beacon 脚本后再部署。
+用户已在中文后台点击启用：**Workers 和 Pages → zyf2026 → 指标（Metrics）→ Web Analytics → 启用**。统计脚本由 Cloudflare 边缘自动注入所有页面（`web_analytics_tag=12d6db…`），已线上验证（首页/文章/博客/关于/404 均含 beacon），数据在「分析 → Web Analytics」查看。无需任何代码改动。
 
 ---
 
@@ -114,4 +109,4 @@
 1. ~~以上哪几个功能要做？~~ → 已选第一梯队并实施
 2. ~~访问统计：想要吗？~~ → ✅ 已开启（2026-08-27，中文后台：Workers 和 Pages → zyf2026 → 指标 → Web Analytics → 启用）
 3. ~~关于页丰富内容由你提供还是起草？~~ → 已按 GitHub 项目等已有数据起草，**用户已要求删除关于页技能和时间线（已删）**
-4. **后续**：第三梯队（站内搜索 / 后台草稿 / 图片上传 / 站点设置）要做哪个？
+4. ~~后续：第三梯队（站内搜索 / 后台草稿 / 图片上传 / 站点设置）要做哪个？~~ → ✅ 第三梯队已全部完成并部署（站内搜索 + 后台草稿 + 图片上传，2026-08-27）
