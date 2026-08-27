@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoRenamer照片GPS定位软件 · 张义飞</title>
+  <meta name="description" content="GeoRenamer照片GPS定位软件" />
+  <link rel="stylesheet" href="../css/style.css?v=4" />
+  <link rel="icon" type="image/png" href="../images/avatar.png" />
+  <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-inner">
+      <a href="../index.html" class="brand">
+        <span class="prompt">&gt;_</span>zhangyifei<span class="cursor"></span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="../index.html">首页</a></li>
+        <li><a href="../blog.html">博客</a></li>
+        <li><a href="../projects.html">项目</a></li>
+        <li><a href="../about.html">关于</a></li>
+      </ul>
+      <div class="nav-actions">
+        <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
+        <button class="nav-toggle" aria-label="菜单">☰ 菜单</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container article">
+
+    <article>
+      <header class="article-header">
+        <h1>GeoRenamer照片GPS定位软件</h1>
+        <div class="article-meta">
+          <span>📅 2026-08-27</span>
+          <span>🏷️ 工具</span>
+        </div>
+      </header>
+
+      <div class="article-body">
+<h1>📍 GeoRenamer</h1>
+
+<p>按位置信息重命名照片/视频 — 读取 GPS 坐标，自动反查地名，按自定义格式批量重命名文件。</p>
+
+<h2>✨ 功能特性</h2>
+
+<ul>
+  <li>📍 <strong>GPS 定位</strong>：读取照片/视频的 GPS 坐标，支持 JPEG、PNG、HEIC、RAW、MP4、MOV 等格式</li>
+  <li>🗺️ <strong>地名反查</strong>：支持离线（GeoNames 70,000+ 城市）和在线（高德/百度/腾讯地图）</li>
+  <li>✏️ <strong>自定义命名规则</strong>：支持占位符组合（日期、地点、原文件名等）</li>
+  <li>🎨 <strong>个性化设置</strong>：背景颜色主题、API Key 本地保存</li>
+  <li>📁 <strong>批量处理</strong>：支持拖拽添加，预览后确认执行</li>
+  <li>🔄 <strong>区域排序</strong>：可选从大到小（省→市→区）或从小到大（区→市→省）</li>
+</ul>
+
+
+<h2>📦 安装使用</h2>
+
+<h3>下载安装版（推荐）</h3>
+
+<ol>
+  <li>下载 <code>GeoRenamer Setup x.x.x.exe</code></li>
+  <li>运行安装程序，按提示完成安装</li>
+  <li>从桌面或开始菜单启动</li>
+</ol>
+
+
+<h3>使用便携版</h3>
+
+<ol>
+  <li>下载 <code>GeoRenamer x.x.x.exe</code></li>
+  <li>双击直接运行，无需安装</li>
+</ol>
+
+
+<h2>🛠️ 开发环境</h2>
+
+<h3>环境要求</h3>
+
+<ul>
+  <li>Node.js &gt;= 18</li>
+  <li>npm 或 pnpm</li>
+</ul>
+
+
+<h3>安装依赖</h3>
+
+<pre><code class="language-bash">npm install</code></pre>
+
+<h3>开发运行</h3>
+
+<pre><code class="language-bash">npm start</code></pre>
+
+<h3>打包构建</h3>
+
+<pre><code class="language-bash"># 安装版
+npm run build:installer
+
+# 便携版
+npm run build:portable
+
+# 全部
+npm run build</code></pre>
+
+<h2>📖 使用说明</h2>
+
+<h3>基本操作</h3>
+
+<ol>
+  <li>点击 <strong>➕ 添加文件</strong> 或拖拽照片/视频到窗口</li>
+  <li>选择地名引擎（推荐高德/百度/腾讯，国内更快更准）</li>
+  <li>点击 <strong>🔍 开始解析</strong>，等待读取元数据和反查地名</li>
+  <li>在表格中预览「原文件名 → 新文件名」</li>
+  <li>对无 GPS 的文件，点击 <strong>✏️ 手动补地点</strong> 输入地名</li>
+  <li>确认无误后点击 <strong>✅ 确认重命名</strong> 执行</li>
+</ol>
+
+
+<h3>命名规则</h3>
+
+<p>默认格式：<code>{date}_{place}</code> → <code>20250101_153000_杭州西湖区.jpg</code></p>
+
+<p>支持的占位符：</p>
+
+<ul>
+  <li><code>{date}</code> - 日期时间（20250101_153000）</li>
+  <li><code>{place}</code> - 完整地点（杭州西湖区）</li>
+  <li><code>{region}</code> - 行政区域（根据排序设置自动组合）</li>
+  <li><code>{province}</code> / <code>{city}</code> / <code>{district}</code> - 省/市/区</li>
+  <li><code>{original}</code> - 原文件名</li>
+  <li><code>{年}</code> / <code>{月}</code> / <code>{日}</code> / <code>{时}</code> / <code>{分}</code> / <code>{秒}</code> - 时间分量</li>
+</ul>
+
+
+<h3>区域排序</h3>
+
+<ul>
+  <li><strong>从小到大</strong>：区→市→省（如：西湖区<em>杭州</em>浙江）</li>
+  <li><strong>从大到小</strong>：省→市→区（如：浙江<em>杭州</em>西湖区）</li>
+</ul>
+
+
+<h2>⚙️ 设置说明</h2>
+
+<h3>地名引擎</h3>
+
+<table>
+<thead><tr><th>引擎</th><th>说明</th><th>需要</th></tr></thead>
+<tbody>
+<tr><td>离线城市库</td><td>GeoNames 数据，70,000+ 城市</td><td>无需网络</td></tr>
+<tr><td>高德地图</td><td>国内推荐，精确到区县</td><td>Web 服务 Key</td></tr>
+<tr><td>百度地图</td><td>覆盖最全</td><td>AK</td></tr>
+<tr><td>腾讯地图</td><td>微信生态</td><td>Key</td></tr>
+</tbody>
+</table>
+
+
+<h3>外观设置</h3>
+
+<ul>
+  <li>支持自定义背景颜色</li>
+  <li>提供 6 种预设颜色主题</li>
+</ul>
+
+
+<h2>📁 项目结构</h2>
+
+<pre><code>geo-renamer/
+├── assets/           # 图标和资源文件
+├── data/             # 离线数据（城市库、翻译映射）
+│   ├── cities.json   # 70,000+ 城市坐标库
+│   └── translations.json  # 多语言地名翻译
+├── lib/              # 核心逻辑
+│   ├── geocode.js    # 地名反查（离线/高德/百度/腾讯）
+│   ├── metadata.js   # EXIF 元数据读取（exiftool）
+│   ├── naming.js     # 文件名生成与去重
+│   └── store.js      # 设置持久化
+├── renderer/         # 前端界面
+│   ├── index.html    # 主页面
+│   ├── app.js        # 界面逻辑
+│   └── style.css     # 样式
+├── main.js           # Electron 主进程
+├── preload.js        # 预加载脚本
+└── package.json      # 项目配置</code></pre>
+
+<h2>🔧 技术栈</h2>
+
+<ul>
+  <li><strong>Electron</strong> - 跨平台桌面应用框架</li>
+  <li><strong>exiftool-vendored</strong> - 专业元数据读取（支持 200+ 格式）</li>
+  <li><strong>GeoNames</strong> - 全球城市坐标数据库</li>
+  <li><strong>Nominatim/高德/百度/腾讯</strong> - 在线地名反查 API</li>
+</ul>
+
+
+<h2>📄 许可证</h2>
+
+<ul>
+  <li>✅ <strong>允许</strong>：个人使用、20 人及以下公司团队内部使用</li>
+  <li>✅ <strong>允许</strong>：教育机构、非营利组织使用</li>
+  <li>❌ <strong>禁止</strong>：商业盈利使用（销售、付费服务、商业分发等）</li>
+</ul>
+
+
+<p>如需商业使用，请联系作者获取商业授权。</p>
+
+<p>详见 <a href="LICENSE" target="_blank" rel="noopener">LICENSE</a></p>
+
+<h2>🤝 贡献</h2>
+
+<p>欢迎提交 Issue 和 Pull Request！</p>
+
+<h2>📝 更新日志</h2>
+
+<h3>v0.0.5</h3>
+
+<ul>
+  <li>优化启动性能（懒加载、空间索引）</li>
+  <li>移除菜单栏</li>
+  <li>自定义应用图标</li>
+  <li>移除背景图片功能</li>
+  <li>修复中国地名显示问题</li>
+</ul>
+
+
+<h3>v0.0.4</h3>
+
+<ul>
+  <li>新增省/市/县级别命名占位符</li>
+  <li>支持行政区域排序（从小到大/从大到小）</li>
+</ul>
+
+
+<h3>v0.0.3</h3>
+
+<ul>
+  <li>新增百度地图、腾讯地图支持</li>
+  <li>GeoNames 完整数据（69,972 个城市）</li>
+  <li>自定义命名规则</li>
+  <li>设置本地保存</li>
+</ul>
+
+
+<h3>v0.0.2</h3>
+
+<ul>
+  <li>JavaScript 重写（Electron）</li>
+  <li>内置 exiftool-vendored</li>
+  <li>高德地图支持</li>
+</ul>
+
+
+<h3>v0.0.1</h3>
+
+<ul>
+  <li>初始版本（Python）</li>
+  <li>基本功能实现</li>
+</ul>
+
+      </div>
+    </article>
+
+    <a class="back-link" href="../blog.html">返回博客列表</a>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>© <span data-year>2025</span> 张义飞 · Built with <span class="heart">♥</span> and a lot of coffee</p>
+      <p style="margin-top:6px;font-size:11px;color:#4b5a6e;">&gt;_ zhangyifei · 用代码记录世界</p>
+    </div>
+  </footer>
+
+  <script src="../js/main.js?v=2"></script>
+</body>
+</html>
