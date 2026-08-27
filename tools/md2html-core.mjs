@@ -39,6 +39,10 @@ export function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+export function escapeAttr(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
 /* ---------- 行内格式 ---------- */
 export function inline(text) {
   let s = escapeHtml(text);
@@ -316,6 +320,33 @@ ${tagStr}
         </div>
         <span class="post-date">${date}</span>
       </a>`;
+}
+
+/* ---------- 项目卡片（后台与生产共用） ---------- */
+export function buildProjectCard(p) {
+  const featured = p.featured ? '          <span class="featured-badge">★ 精选</span>\n' : "";
+  const titleLink = p.url
+    ? `<a href="${escapeAttr(p.url)}">${escapeHtml(p.title)}</a>`
+    : escapeHtml(p.title);
+  const tagStr = (p.tags && p.tags.length ? p.tags : [])
+    .map(t => `            <span class="tag">${escapeHtml(t)}</span>`)
+    .join("\n");
+  const meta = tagStr ? `          <div class="meta">\n${tagStr}\n          </div>` : "";
+  const links = [];
+  if (p.previewUrl) links.push(`            <a href="${escapeAttr(p.previewUrl)}" target="_blank" rel="noopener">↗ 在线预览</a>`);
+  if (p.sourceUrl) links.push(`            <a href="${escapeAttr(p.sourceUrl)}" target="_blank" rel="noopener">◈ 源码</a>`);
+  const linksHtml = links.length ? `          <div class="links">\n${links.join("\n")}\n          </div>` : "";
+  return `        <div class="card reveal">
+${featured}          <span class="year">${escapeHtml(p.year || "")}</span>
+          <h3>${titleLink}</h3>
+          <p class="desc">${escapeHtml(p.description || "")}</p>
+${meta}
+${linksHtml}
+        </div>`;
+}
+
+export function renderProjects(projects) {
+  return projects.map(p => buildProjectCard(p)).join("\n\n");
 }
 
 /* ---------- 组合：输入 Markdown → 输出 {meta, slug, bodyHtml, pageHtml} ---------- */

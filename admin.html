@@ -73,6 +73,21 @@
     .article-list .item .date { font-size: 11px; color: var(--text-dim); }
     .article-list .item .actions { display: flex; gap: 6px; flex-shrink: 0; }
 
+    /* Tab 切换 */
+    .admin-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+    .tab { padding: 8px 18px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-dim); cursor: pointer; font-family: var(--mono); font-size: 13px; transition: all 0.2s; }
+    .tab:hover { border-color: var(--accent); color: var(--accent); }
+    .tab.active { border-color: var(--accent); color: var(--accent); background: rgba(34,211,238,.08); }
+
+    /* 复选框行 */
+    .checkbox-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
+    .checkbox-row input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+    .checkbox-row label { margin: 0; text-transform: none; letter-spacing: 0; }
+
+    /* 项目表单网格 */
+    .proj-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+    @media (max-width: 860px) { .proj-grid { grid-template-columns: 1fr; } }
+
     /* 消息 */
     .toast { position: fixed; bottom: 24px; right: 24px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 20px; font-size: 13px; font-family: var(--mono); max-width: 400px; z-index: 999; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
     .toast.success { border-color: var(--success); }
@@ -116,6 +131,12 @@
         </div>
       </div>
 
+      <div class="admin-tabs">
+        <button class="tab active" id="tabArticles">📝 文章</button>
+        <button class="tab" id="tabProjects">🛠️ 项目</button>
+      </div>
+
+      <div id="viewArticles">
       <div class="admin-grid">
         <!-- 左侧：编辑器 -->
         <div>
@@ -166,6 +187,68 @@
           <div id="articleList"></div>
           <div id="listLoading" class="loading">加载中</div>
         </div>
+      </div>
+      </div>
+
+      <div id="viewProjects" style="display:none;">
+      <div class="admin-grid">
+        <!-- 左侧：项目表单 -->
+        <div>
+          <div class="form-group">
+            <label>项目名称 *</label>
+            <input type="text" id="projTitleField" class="field" placeholder="项目名称" />
+          </div>
+          <div class="proj-grid">
+            <div class="form-group">
+              <label>年份</label>
+              <input type="text" id="projYearField" class="field" placeholder="2025" />
+            </div>
+            <div class="form-group">
+              <label>标签（逗号分隔）</label>
+              <input type="text" id="projTagsField" class="field" placeholder="React, Python, AI" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>描述</label>
+            <textarea id="projDescField" class="field" placeholder="项目简介…" style="min-height:80px;"></textarea>
+          </div>
+          <div class="proj-grid">
+            <div class="form-group">
+              <label>标题链接（可选）</label>
+              <input type="text" id="projUrlField" class="field" placeholder="index.html 或留空" />
+            </div>
+            <div class="form-group">
+              <label>在线预览链接（可选）</label>
+              <input type="text" id="projPreviewField" class="field" placeholder="https://…" />
+            </div>
+          </div>
+          <div class="proj-grid">
+            <div class="form-group">
+              <label>源码链接（可选）</label>
+              <input type="text" id="projSourceField" class="field" placeholder="https://github.com/…" />
+            </div>
+            <div class="form-group">
+              <div class="checkbox-row" style="margin-top:22px;">
+                <input type="checkbox" id="projFeatured" />
+                <label>★ 标记为精选项目</label>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:8px;">
+            <button class="btn" id="saveProjectBtn">➕ 添加项目</button>
+            <button class="btn btn-outline" id="resetProjectBtn" style="display:none;">新建项目</button>
+            <span id="projectStatus" style="font-size:11px;color:var(--text-dim);align-self:center;margin-left:8px;"></span>
+          </div>
+          <input type="hidden" id="projectId" value="" />
+        </div>
+
+        <!-- 右侧：项目列表 -->
+        <div class="article-list">
+          <h3>🛠️ 所有项目</h3>
+          <div id="projectList"></div>
+          <div id="projectListLoading" class="loading">加载中</div>
+        </div>
+      </div>
       </div>
     </div>
   </div>

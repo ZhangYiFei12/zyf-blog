@@ -28,6 +28,17 @@
   var uploadMdBtn = $("uploadMdBtn");
   var mdFileInput = $("mdFileInput");
 
+  var tabArticles = $("tabArticles");
+  var tabProjects = $("tabProjects");
+  var viewArticles = $("viewArticles");
+  var viewProjects = $("viewProjects");
+  var projectList = $("projectList");
+  var projectListLoading = $("projectListLoading");
+  var saveProjectBtn = $("saveProjectBtn");
+  var resetProjectBtn = $("resetProjectBtn");
+  var projectId = $("projectId");
+  var projectsCache = [];
+
   /* ---------- 工具 ---------- */
 
   function getToken() { return sessionStorage.getItem(TOKEN_KEY); }
@@ -77,6 +88,7 @@
     loginView.style.display = "none";
     adminView.style.display = "block";
     loadArticles();
+    loadProjects();
   }
 
   function login() {
@@ -325,6 +337,154 @@
       .then(function (data) {
         showToast(data.message, "success");
         loadArticles();
+      })
+      .catch(function (err) { showToast(err.message, "error"); });
+  }
+
+  /* ---------- Tab 切换（文章 / 项目） ---------- */
+
+  function switchTab(name) {
+    var isArticles = name === "articles";
+    tabArticles.className = "tab" + (isArticles ? " active" : "");
+    tabProjects.className = "tab" + (isArticles ? "" : " active");
+    viewArticles.style.display = isArticles ? "block" : "none";
+    viewProjects.style.display = isArticles ? "none" : "block";
+    if (!isArticles) loadProjects();
+  }
+
+  tabArticles.addEventListener("click", function () { switchTab("articles"); });
+  tabProjects.addEventListener("click", function () { switchTab("projects"); });
+
+  /* ---------- 项目列表 ---------- */
+
+  function loadProjects() {
+    projectList.innerHTML = "";
+    projectListLoading.style.display = "block";
+    api("/projects")
+      .then(function (data) {
+        projectListLoading.style.display = "none";
+        projectsCache = data.projects || [];
+        if (!projectsCache.length) {
+          projectList.innerHTML = '<div class="empty-state">暂无项目<br/>添加一个吧 🛠️</div>';
+          return;
+        }
+        projectsCache.forEach(function (p) {
+          var item = document.createElement("div");
+          item.className = "item";
+          item.innerHTML =
+            '<div class="info">' +
+              '<div class="title">' + escapeHtml(p.title || "(无标题)") + (p.featured ? ' <span style="color:var(--accent);font-size:10px;">★精选</span>' : "") + "</div>" +
+              '<div class="date">' + escapeHtml(p.year || "") + (p.tags && p.tags.length ? " · " + escapeHtml(p.tags.join(" / ")) : "") + "</div>" +
+            "</div>" +
+            '<div class="actions">' +
+              '<button class="btn btn-outline btn-sm" data-action="edit" data-id="' + escapeAttr(p.id) + '">编辑</button>' +
+              '<button class="btn btn-danger btn-sm" data-action="del" data-id="' + escapeAttr(p.id) + '">删除</button>' +
+            "</div>";
+          projectList.appendChild(item);
+        });
+      })
+      .catch(function (err) {
+        projectListLoading.style.display = "none";
+        projectList.innerHTML = '<div class="empty-state" style="color:var(--danger);">加载失败：' + escapeHtml(err.message) + "</div>";
+      });
+  }
+
+  projectList.addEventListener("click", function (e) {
+    var btn = e.target.closest("button[data-action]");
+    if (!btn) return;
+    var id = btn.getAttribute("data-id");
+    if (btn.getAttribute("data-action") === "edit") {
+      loadProject(id);
+    } else if (btn.getAttribute("data-action") === "del") {
+      deleteProject(id);
+    }
+  });
+
+  /* ---------- 项目表单 ---------- */
+
+  function fillProjectForm(p) {
+    $("projTitleField").value = p.title || "";
+    $("projYearField").value = p.year || "";
+    $("projTagsField").value = (p.tags || []).join(", ");
+    $("projDescField").value = p.description || "";
+    $("projUrlField").value = p.url || "";
+    $("projPreviewField").value = p.previewUrl || "";
+    $("projSourceField").value = p.sourceUrl || "";
+    $("projFeatured").checked = !!p.featured;
+  }
+
+  function resetProjectForm() {
+    projectId.value = "";
+    $("projTitleField").value = "";
+    $("projYearField").value = "";
+    $("projTagsField").value = "";
+    $("projDescField").value = "";
+    $("projUrlField").value = "";
+    $("projPreviewField").value = "";
+    $("projSourceField").value = "";
+    $("projFeatured").checked = false;
+    saveProjectBtn.textContent = "➕ 添加项目";
+    resetProjectBtn.style.display = "none";
+    $("projectStatus").textContent = "";
+  }
+
+  resetProjectBtn.addEventListener("click", resetProjectForm);
+
+  function loadProject(id) {
+    var p = projectsCache.find(function (x) { return x.id === id; });
+    if (!p) { showToast("项目不存在", "error"); return; }
+    fillProjectForm(p);
+    projectId.value = p.id;
+    saveProjectBtn.textContent = "💾 保存修改";
+    resetProjectBtn.style.display = "inline-flex";
+    $("projTitleField").scrollIntoView({ behavior: "smooth", block: "start" });
+    showToast("已载入《" + p.title + "》", "success");
+  }
+
+  function saveProject() {
+    var title = $("projTitleField").value.trim();
+    if (!title) { showToast("请填写项目名称", "error"); return; }
+    var payload = {
+      title: title,
+      year: $("projYearField").value.trim(),
+      tags: $("projTagsField").value.split(/[,，]/).map(function (s) { return s.trim(); }).filter(Boolean),
+      description: $("projDescField").value.trim(),
+      url: $("projUrlField").value.trim(),
+      previewUrl: $("projPreviewField").value.trim(),
+      sourceUrl: $("projSourceField").value.trim(),
+      featured: $("projFeatured").checked,
+    };
+    if (projectId.value) payload.id = projectId.value;
+
+    saveProjectBtn.disabled = true;
+    saveProjectBtn.textContent = "提交中…";
+    $("projectStatus").textContent = "";
+
+    api("/projects", { method: "POST", body: payload })
+      .then(function (data) {
+        $("projectStatus").textContent = "✔ " + data.message;
+        showToast(data.message, "success");
+        loadProjects();
+        resetProjectForm();
+      })
+      .catch(function (err) { showToast(err.message, "error"); })
+      .finally(function () {
+        saveProjectBtn.disabled = false;
+        saveProjectBtn.textContent = projectId.value ? "💾 保存修改" : "➕ 添加项目";
+      });
+  }
+
+  saveProjectBtn.addEventListener("click", saveProject);
+
+  /* ---------- 删除项目 ---------- */
+
+  function deleteProject(id) {
+    var p = projectsCache.find(function (x) { return x.id === id; });
+    if (!confirm("确定删除项目「" + (p ? p.title : "") + "」吗？\n删除后不可恢复。")) return;
+    api("/projects", { method: "DELETE", body: { id: id } })
+      .then(function (data) {
+        showToast(data.message, "success");
+        loadProjects();
       })
       .catch(function (err) { showToast(err.message, "error"); });
   }

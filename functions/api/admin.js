@@ -24,6 +24,7 @@ import {
   buildArticlePreview,
   slugify,
   listItemSnippet,
+  renderProjects,
 } from "../../tools/md2html-core.mjs";
 
 const DEFAULT_REPO = "ZhangYiFei12/zyf-blog";
@@ -222,6 +223,33 @@ function rateLimited(ip) {
   return rec.count > LOGIN_MAX;
 }
 
+/* 读取 data/projects.json */
+async function getProjects(env) {
+  try {
+    const raw = await getFile(env, "data/projects.json");
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/* 校验并规整项目对象 */
+function normalizeProject(input) {
+  const project = {
+    title: String(input.title || "").trim(),
+    year: String(input.year || "").trim(),
+    description: String(input.description || "").trim(),
+    tags: Array.isArray(input.tags) ? input.tags.map(String).filter(Boolean) : [],
+    featured: !!input.featured,
+    url: String(input.url || "").trim(),
+    previewUrl: String(input.previewUrl || "").trim(),
+    sourceUrl: String(input.sourceUrl || "").trim(),
+  };
+  project.id = input.id ? String(input.id).trim() : slugify(project.title) || `project-${Date.now()}`;
+  return project;
+}
+
 /* ---------------- 主处理器 ---------------- */
 
 export async function onRequest(context) {
@@ -386,6 +414,62 @@ export async function onRequest(context) {
     ]);
 
     return json({ ok: true, slug, commitSha, message: "已删除并提交，等待自动部署" });
+  }
+
+  // ---- GET /api/admin/projects ----
+  if (method === "GET" && rest.length === 1 && rest[0] === "projects") {
+    const projects = await getProjects(env);
+    return json({ projects });
+  }
+
+  // ---- POST /api/admin/projects（新建 / 编辑）----
+  if (method === "POST" && rest.length === 1 && rest[0] === "projects") {
+    const input = await request.json().catch(() => null);
+    if (!input || !input.title || !String(input.title).trim()) {
+      return json({ error: "缺少项目名称" }, 400);
+    }
+    const project = normalizeProject(input);
+    const projects = await getProjects(env);
+    const idx = projects.findIndex(p => p.id === project.id);
+    if (idx >= 0) {
+      projects[idx] = project; // 编辑
+    } else {
+      projects.unshift(project); // 新增放最前
+    }
+
+    // 写 JSON + 重生成 projects.html
+    const jsonContent = JSON.stringify(projects, null, 2) + "\n";
+    const projectsHtml = await getFile(env, "projects.html");
+    const newProjectsHtml = replaceBetween(projectsHtml, "<!-- PROJECTS-START -->", "<!-- PROJECTS-END -->", renderProjects(projects));
+
+    const commitSha = await commitFiles(env, `🛠️ ${idx >= 0 ? "后台编辑" : "后台新增"}项目：${project.title}`, [
+      { path: "data/projects.json", content: jsonContent },
+      { path: "projects.html", content: newProjectsHtml },
+    ]);
+
+    return json({ ok: true, id: project.id, commitSha, message: "已提交，Cloudflare 正在自动部署（约 30 秒~1 分钟）" });
+  }
+
+  // ---- DELETE /api/admin/projects（按 id）----
+  if (method === "DELETE" && rest.length === 1 && rest[0] === "projects") {
+    const input = await request.json().catch(() => null);
+    const id = input && input.id ? String(input.id).trim() : "";
+    if (!id) return json({ error: "缺少项目 ID" }, 400);
+    const projects = await getProjects(env);
+    const target = projects.find(p => p.id === id);
+    if (!target) return json({ error: "项目不存在" }, 404);
+    const remaining = projects.filter(p => p.id !== id);
+
+    const jsonContent = JSON.stringify(remaining, null, 2) + "\n";
+    const projectsHtml = await getFile(env, "projects.html");
+    const newProjectsHtml = replaceBetween(projectsHtml, "<!-- PROJECTS-START -->", "<!-- PROJECTS-END -->", renderProjects(remaining));
+
+    const commitSha = await commitFiles(env, `🗑️ 后台删除项目：${target.title}`, [
+      { path: "data/projects.json", content: jsonContent },
+      { path: "projects.html", content: newProjectsHtml },
+    ]);
+
+    return json({ ok: true, id, commitSha, message: "已删除并提交，等待自动部署" });
   }
 
   return json({ error: "not found" }, 404);
