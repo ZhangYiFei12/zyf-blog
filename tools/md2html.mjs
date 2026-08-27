@@ -280,7 +280,6 @@ function buildPage(meta, bodyHtml) {
         <li><a href="../blog.html">博客</a></li>
         <li><a href="../projects.html">项目</a></li>
         <li><a href="../about.html">关于</a></li>
-        <li><a href="../photos.html">照片</a></li>
       </ul>
     </div>
   </nav>

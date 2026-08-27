@@ -7,18 +7,16 @@
 - 🌙 **科技简约设计**：深色背景 · 青色点缀 · 等宽字体 · 网格背景
 - 📝 **博客**：`blog/` 目录下添加 HTML 文章即可
 - 🚀 **项目展示**：`projects.html` 中展示个人作品
-- 👤 **关于页**：个人简介 + 经历时间线 + 技能条
-- 📷 **照片墙**：拖拽上传，存储在浏览器本地（IndexedDB）
+- 👤 **关于页**：个人简介 + 技能条
 
 ## 📁 目录结构
 
 ```
 ├── index.html            # 首页
 ├── blog.html             # 博客列表
-├── blog/welcome.html     # 示例文章
+├── blog/详细介绍与技术文档.html # 文章页
 ├── projects.html         # 项目
 ├── about.html            # 关于
-├── photos.html           # 照片墙
 ├── css/style.css         # 样式
 ├── js/main.js            # 交互
 └── images/avatar.png     # 头像
@@ -86,10 +84,6 @@ node tools/md2html.mjs -w           # 监听模式，保存自动重新生成
 ## 🛠 工具
 
 - `tools/md2html.mjs` —— Markdown 一键转 HTML（零依赖，支持标题/加粗/斜体/代码块/列表/引用/表格/链接/图片/删除线/分割线）
-
-## 📷 照片墙说明
-
-纯静态站没有服务器，照片保存在**当前浏览器**的 IndexedDB 中（同一浏览器内持久保留，清除浏览器数据会丢失）。
 
 ## 📄 License
 
