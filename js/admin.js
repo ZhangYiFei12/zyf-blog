@@ -38,6 +38,9 @@
   var resetProjectBtn = $("resetProjectBtn");
   var projectId = $("projectId");
   var projectsCache = [];
+  var pendingDeleteId = null;
+  var pendingDeleteBtn = null;
+  var pendingDeleteTimer = null;
 
   /* ---------- 工具 ---------- */
 
@@ -345,6 +348,7 @@
 
   function switchTab(name) {
     var isArticles = name === "articles";
+    resetDeleteConfirm();
     tabArticles.className = "tab" + (isArticles ? " active" : "");
     tabProjects.className = "tab" + (isArticles ? "" : " active");
     viewArticles.style.display = isArticles ? "block" : "none";
@@ -394,9 +398,10 @@
     if (!btn) return;
     var id = btn.getAttribute("data-id");
     if (btn.getAttribute("data-action") === "edit") {
+      resetDeleteConfirm();
       loadProject(id);
     } else if (btn.getAttribute("data-action") === "del") {
-      deleteProject(id);
+      deleteProject(id, btn);
     }
   });
 
@@ -476,17 +481,41 @@
 
   saveProjectBtn.addEventListener("click", saveProject);
 
-  /* ---------- 删除项目 ---------- */
+  /* ---------- 删除项目（两步确认：先点一次进入待确认，4 秒内再点一次才删除） ---------- */
 
-  function deleteProject(id) {
-    var p = projectsCache.find(function (x) { return x.id === id; });
-    if (!confirm("确定删除项目「" + (p ? p.title : "") + "」吗？\n删除后不可恢复。")) return;
-    api("/projects", { method: "DELETE", body: { id: id } })
-      .then(function (data) {
-        showToast(data.message, "success");
-        loadProjects();
-      })
-      .catch(function (err) { showToast(err.message, "error"); });
+  function resetDeleteConfirm() {
+    if (pendingDeleteBtn) {
+      pendingDeleteBtn.textContent = "删除";
+      pendingDeleteBtn.classList.remove("btn-confirming");
+      pendingDeleteBtn = null;
+    }
+    pendingDeleteId = null;
+    if (pendingDeleteTimer) {
+      clearTimeout(pendingDeleteTimer);
+      pendingDeleteTimer = null;
+    }
+  }
+
+  function deleteProject(id, btn) {
+    // 第二步：待确认状态下再点同一个「删除」→ 真正删除
+    if (pendingDeleteId === id) {
+      resetDeleteConfirm();
+      api("/projects", { method: "DELETE", body: { id: id } })
+        .then(function (data) {
+          showToast(data.message, "success");
+          loadProjects();
+        })
+        .catch(function (err) { showToast(err.message, "error"); });
+      return;
+    }
+    // 第一步：进入待确认状态
+    resetDeleteConfirm();
+    if (!btn) { showToast("删除失败：按钮状态异常", "error"); return; }
+    pendingDeleteId = id;
+    pendingDeleteBtn = btn;
+    btn.textContent = "⚠ 再点一次确认";
+    btn.classList.add("btn-confirming");
+    pendingDeleteTimer = setTimeout(resetDeleteConfirm, 4000);
   }
 
   /* ---------- 转义 ---------- */
