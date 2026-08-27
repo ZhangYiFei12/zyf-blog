@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- ✏️ 修改①：浏览器标签页标题（"文章标题" 和 "你的名字"） -->
+  <title>文章标题 · 张义飞</title>
+  <!-- ✏️ 修改②：文章摘要（SEO 用，会显示在搜索结果里） -->
+  <meta name="description" content="一句话描述这篇文章的内容。" />
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="icon" type="image/png" href="../images/avatar.png" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-inner">
+      <a href="../index.html" class="brand">
+        <span class="prompt">&gt;_</span>zhangyifei<span class="cursor"></span>
+      </a>
+      <button class="nav-toggle" aria-label="菜单">☰ 菜单</button>
+      <ul class="nav-links">
+        <li><a href="../index.html">首页</a></li>
+        <li><a href="../blog.html">博客</a></li>
+        <li><a href="../projects.html">项目</a></li>
+        <li><a href="../about.html">关于</a></li>
+        <li><a href="../photos.html">照片</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main class="container article">
+
+    <article>
+      <header class="article-header">
+        <!-- ✏️ 修改③：文章大标题 -->
+        <h1>文章大标题</h1>
+        <div class="article-meta">
+          <!-- ✏️ 修改④：日期（格式：YYYY-MM-DD） -->
+          <span>📅 2025-01-01</span>
+          <!-- ✏️ 修改⑤：标签（用 · 分隔，参考格式） -->
+          <span>🏷️ 技术 · 随笔</span>
+        </div>
+      </header>
+
+      <div class="article-body">
+        <!-- ⬇️⬇️ 正文从这里开始写 ⬇️⬇️
+             复制下面的格式片段使用，写完删除多余的：
+
+             <h2>小标题</h2>
+             <p>普通段落文字。</p>
+             <p>加粗用 <strong>这样写</strong>。</p>
+             <ul>
+               <li>无序列表项</li>
+               <li>另一个列表项</li>
+             </ul>
+             <ol>
+               <li>有序列表项</li>
+               <li>另一个列表项</li>
+             </ol>
+             <blockquote>引用别人的话，显示为侧边条样式。</blockquote>
+             <p>行内代码用 <code>console.log("hi")</code>。</p>
+             <pre><code>// 整段代码块
+function hello() {
+  console.log("你好，世界");
+}</code></pre>
+             <hr />   <!-- 水平分割线 -->
+             <p><em>斜体文字，常用于结尾寄语。</em></p>
+        -->
+      </div>
+    </article>
+
+    <!-- 返回博客列表（保持不动） -->
+    <a class="back-link" href="../blog.html">返回博客列表</a>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>© <span data-year>2025</span> 张义飞 · Built with <span class="heart">♥</span> and a lot of coffee</p>
+      <p style="margin-top:6px;font-size:11px;color:#4b5a6e;">&gt;_ zhangyifei · 用代码记录世界</p>
+    </div>
+  </footer>
+
+  <script src="../js/main.js"></script>
+</body>
+</html>
