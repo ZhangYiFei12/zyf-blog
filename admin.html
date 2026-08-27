@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>后台 · 张义飞博客</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" type="image/png" href="images/avatar.png" />
+  <style>
+    /* 后台专用样式 - 复用现有 CSS 变量 */
+    .admin-body { background: var(--bg); color: var(--text); min-height: 100vh; }
+    .admin-container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .admin-header h1 { font-size: 18px; font-family: var(--mono); }
+    .admin-header .accent { color: var(--accent); }
+    .admin-header .logout { color: var(--text-dim); cursor: pointer; font-size: 12px; text-decoration: none; }
+    .admin-header .logout:hover { color: var(--danger); }
+
+    /* 登录 */
+    .login-wrap { display: flex; justify-content: center; align-items: center; min-height: 80vh; }
+    .login-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 40px; width: 360px; max-width: 90vw; }
+    .login-card h2 { font-size: 16px; margin-bottom: 20px; text-align: center; }
+    .login-card input { width: 100%; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-family: var(--mono); font-size: 14px; outline: none; transition: border-color 0.2s; }
+    .login-card input:focus { border-color: var(--accent); }
+    .login-card .btn { width: 100%; margin-top: 16px; }
+
+    /* 双列布局 */
+    .admin-grid { display: grid; grid-template-columns: 1fr 360px; gap: 24px; }
+    @media (max-width: 860px) { .admin-grid { grid-template-columns: 1fr; } }
+
+    /* 编辑器 */
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .form-group .field { width: 100%; padding: 8px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-family: var(--mono); font-size: 13px; outline: none; transition: border-color 0.2s; }
+    .form-group .field:focus { border-color: var(--accent); }
+    .form-group textarea.field { min-height: 200px; resize: vertical; line-height: 1.6; }
+    .form-group .row { display: flex; gap: 12px; }
+    .form-group .row .field { flex: 1; }
+
+    /* 预览 */
+    .preview-wrap { border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; background: var(--bg); margin-top: 8px; max-height: 300px; overflow-y: auto; }
+    .preview-wrap .article-body { font-size: 13px; }
+    .preview-wrap .article-body p { margin-bottom: 8px; }
+    .preview-wrap .article-body pre { font-size: 12px; padding: 8px; }
+
+    /* 按钮 */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; background: var(--accent); color: #000; border: none; border-radius: var(--radius); font-family: var(--mono); font-size: 13px; cursor: pointer; font-weight: 600; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+    /* 文章列表 */
+    .article-list { }
+    .article-list h3 { font-size: 13px; color: var(--text-dim); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .article-list .item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; }
+    .article-list .item .info { flex: 1; min-width: 0; }
+    .article-list .item .title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .article-list .item .date { font-size: 11px; color: var(--text-dim); }
+    .article-list .item .actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+    /* 消息 */
+    .toast { position: fixed; bottom: 24px; right: 24px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 20px; font-size: 13px; font-family: var(--mono); max-width: 400px; z-index: 999; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+    .toast.success { border-color: var(--success); }
+    .toast.error { border-color: var(--danger); }
+    .toast.info { border-color: var(--accent); }
+
+    /* 暂无文章 */
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--text-dim); border: 1px dashed var(--border); border-radius: var(--radius); font-size: 13px; }
+
+    /* 加载中 */
+    .loading { text-align: center; padding: 20px; color: var(--text-dim); font-size: 12px; font-family: var(--mono); }
+    .loading::after { content: "…"; animation: dots 1.2s steps(3) infinite; }
+    @keyframes dots { 0% { content: "."; } 33% { content: ".."; } 66% { content: "..."; } }
+
+    /* 滚动条 */
+    .preview-wrap::-webkit-scrollbar { width: 4px; }
+    .preview-wrap::-webkit-scrollbar-track { background: transparent; }
+    .preview-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  </style>
+</head>
+<body class="admin-body">
+
+  <!-- 登录界面 -->
+  <div id="loginView" class="login-wrap" style="display:none">
+    <div class="login-card">
+      <h2>&gt;_ 后台登录</h2>
+      <input type="password" id="passwordInput" placeholder="输入密码" autocomplete="current-password" />
+      <button class="btn" id="loginBtn">登录</button>
+      <p id="loginError" style="color:var(--danger);font-size:12px;margin-top:10px;text-align:center;display:none;"></p>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="adminView" style="display:none">
+    <div class="admin-container">
+      <div class="admin-header">
+        <h1><span class="accent">&gt;_</span> 博客后台 <span style="font-size:11px;color:var(--text-dim);font-weight:400;">发布 · 编辑 · 删除</span></h1>
+        <div>
+          <a href="index.html" class="logout" style="margin-right:16px;">← 返回网站</a>
+          <span id="logoutBtn" class="logout">退出登录</span>
+        </div>
+      </div>
+
+      <div class="admin-grid">
+        <!-- 左侧：编辑器 -->
+        <div>
+          <div class="form-group">
+            <label>标题</label>
+            <input type="text" id="titleField" class="field" placeholder="文章标题" />
+          </div>
+          <div class="form-group">
+            <div class="row">
+              <div>
+                <label>日期</label>
+                <input type="text" id="dateField" class="field" placeholder="2026-08-27" />
+              </div>
+              <div style="flex:2">
+                <label>标签（逗号分隔）</label>
+                <input type="text" id="tagsField" class="field" placeholder="AI, 技术, 工具" />
+              </div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>摘要</label>
+            <input type="text" id="excerptField" class="field" placeholder="文章摘要／描述" />
+          </div>
+          <div class="form-group">
+            <label>正文（Markdown）</label>
+            <textarea id="bodyField" class="field" placeholder="在此写 Markdown 正文…"></textarea>
+          </div>
+          <div class="form-group">
+            <label>实时预览</label>
+            <div id="previewBox" class="preview-wrap"><div class="article-body" id="previewContent"><p style="color:var(--text-dim);font-size:12px;">等待输入…</p></div></div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:16px;">
+            <button class="btn" id="publishBtn">📝 发布</button>
+            <button class="btn btn-outline" id="cancelEditBtn" style="display:none;">取消编辑</button>
+            <span id="publishStatus" style="font-size:11px;color:var(--text-dim);align-self:center;margin-left:8px;"></span>
+          </div>
+          <input type="hidden" id="editSlug" value="" />
+        </div>
+
+        <!-- 右侧：文章列表 -->
+        <div class="article-list">
+          <h3>📄 所有文章</h3>
+          <div id="articleList"></div>
+          <div id="listLoading" class="loading">加载中</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 浮动消息 -->
+  <div id="toast" class="toast" style="display:none;"></div>
+
+  <script src="js/admin.js"></script>
+</body>
+</html>
