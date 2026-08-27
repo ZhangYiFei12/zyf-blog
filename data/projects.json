@@ -1,5 +1,21 @@
 [
   {
+    "title": "AI 学习助手",
+    "year": "2024",
+    "description": "一个基于大语言模型的智能学习助手 Web 应用，支持对话式问答、笔记管理与知识卡片生成。",
+    "tags": [
+      "React",
+      "FastAPI",
+      "Python",
+      "OpenAI API"
+    ],
+    "featured": true,
+    "url": "",
+    "previewUrl": "",
+    "sourceUrl": "https://github.com/ZhangYiFei12",
+    "id": "ai-learning-assistant"
+  },
+  {
     "id": "personal-blog",
     "title": "个人博客系统",
     "year": "2025",
