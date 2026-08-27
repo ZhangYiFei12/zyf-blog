@@ -49,9 +49,43 @@ npx serve .
 
 ## 📝 如何新增文章
 
-1. 在 `blog/` 目录下新建 `xxx.html`（复制 `welcome.html` 改内容即可）
-2. 在 `blog.html` 中添加列表条目（参考现有格式）
-3. 在首页 `index.html` 的"最新文章"区域更新
+### 方式一：用 Markdown 写（推荐）
+
+1. 在 `blog/posts/` 目录下新建 `.md` 文件，顶部带上元信息：
+
+```markdown
+---
+title: "文章标题"
+date: "2025-06-01"
+excerpt: "文章摘要，会显示在列表页"
+tags: ["技术", "随笔"]
+---
+
+## 小标题
+
+正文支持 **Markdown** 语法。
+```
+
+2. 一键生成 HTML 页面：
+
+```bash
+node tools/md2html.mjs              # 转换 blog/posts/ 下全部 .md
+node tools/md2html.mjs 我的文章.md   # 转换单个文件
+node tools/md2html.mjs -w           # 监听模式，保存自动重新生成
+```
+
+工具会自动：生成 `blog/文章名.html`、打印博客列表条目代码（复制到 `blog.html` 即可）。
+
+3. 把打印的列表条目粘贴到 `blog.html` 的"全部文章"区域
+4. 可选：更新首页 `index.html` 的"最新文章"
+
+### 方式二：直接写 HTML
+
+复制 `blog/template.html`（空白模板）→ 改内容 → 在 `blog.html` 加条目。
+
+## 🛠 工具
+
+- `tools/md2html.mjs` —— Markdown 一键转 HTML（零依赖，支持标题/加粗/斜体/代码块/列表/引用/表格/链接/图片/删除线/分割线）
 
 ## 📷 照片墙说明
 
