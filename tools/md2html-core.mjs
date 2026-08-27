@@ -217,14 +217,32 @@ export function parseBody(md) {
   return html.join("\n\n");
 }
 
-/* ---------- 页面模板 ---------- */
-export function buildPage(meta, bodyHtml) {
+/* ---------- 文章片段（预览与生产共用，保证所见即所得） ---------- */
+export function buildArticlePreview(meta, bodyHtml) {
   const today = new Date().toISOString().slice(0, 10);
   const date = meta.date || today;
   const tags = Array.isArray(meta.tags) && meta.tags.length
     ? meta.tags.join(" · ")
     : "随笔";
+  return `    <article>
+      <header class="article-header">
+        <h1>${escapeHtml(meta.title)}</h1>
+        <div class="article-meta">
+          <span>📅 ${escapeHtml(date)}</span>
+          <span>🏷️ ${escapeHtml(tags)}</span>
+        </div>
+      </header>
+
+      <div class="article-body">
+${bodyHtml}
+      </div>
+    </article>`;
+}
+
+/* ---------- 页面模板 ---------- */
+export function buildPage(meta, bodyHtml) {
   const excerpt = meta.excerpt || meta.title;
+  const articleHtml = buildArticlePreview(meta, bodyHtml);
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -255,19 +273,7 @@ export function buildPage(meta, bodyHtml) {
 
   <main class="container article">
 
-    <article>
-      <header class="article-header">
-        <h1>${escapeHtml(meta.title)}</h1>
-        <div class="article-meta">
-          <span>📅 ${escapeHtml(date)}</span>
-          <span>🏷️ ${escapeHtml(tags)}</span>
-        </div>
-      </header>
-
-      <div class="article-body">
-${bodyHtml}
-      </div>
-    </article>
+${articleHtml}
 
     <a class="back-link" href="../blog.html">返回博客列表</a>
 

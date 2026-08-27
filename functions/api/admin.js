@@ -21,6 +21,7 @@ import {
   parseFrontMatter,
   parseBody,
   buildPage,
+  buildArticlePreview,
   slugify,
   listItemSnippet,
 } from "../../tools/md2html-core.mjs";
@@ -267,9 +268,16 @@ export async function onRequest(context) {
 
   // ---- POST /api/admin/preview ----
   if (method === "POST" && rest.length === 1 && rest[0] === "preview") {
-    const body = await request.json().catch(() => null);
-    const md = body && body.body ? String(body.body) : "";
-    const html = parseBody(md);
+    const input = await request.json().catch(() => null);
+    const md = input && input.body ? String(input.body) : "";
+    const bodyHtml = parseBody(md);
+    const meta = {
+      title: input && input.title ? String(input.title).trim() : "（无标题）",
+      date: input && input.date ? String(input.date).trim() : new Date().toISOString().slice(0, 10),
+      tags: Array.isArray(input && input.tags) ? input.tags.map(String).filter(Boolean) : [],
+      excerpt: input && input.excerpt ? String(input.excerpt).trim() : "",
+    };
+    const html = buildArticlePreview(meta, bodyHtml);
     return json({ html });
   }
 

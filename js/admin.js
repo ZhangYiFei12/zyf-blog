@@ -189,17 +189,28 @@
 
   /* ---------- 实时预览（防抖，服务器端渲染同一转换器） ---------- */
 
-  function updatePreview() {
-    var body = $("bodyField").value;
-    $("previewContent").innerHTML = '<p style="color:var(--text-dim);font-size:12px;">渲染中…</p>';
-    api("/preview", { method: "POST", body: { body: body } })
-      .then(function (data) { $("previewContent").innerHTML = data.html; })
-      .catch(function () { $("previewContent").innerHTML = '<p style="color:var(--danger);font-size:12px;">预览失败</p>'; });
-  }
-
-  $("bodyField").addEventListener("input", function () {
+  function schedulePreview() {
     clearTimeout(previewTimer);
     previewTimer = setTimeout(updatePreview, 600);
+  }
+
+  function updatePreview() {
+    var title = $("titleField").value.trim();
+    var date = $("dateField").value.trim();
+    var tags = $("tagsField").value.split(/[,，]/).map(function (s) { return s.trim(); }).filter(Boolean);
+    var excerpt = $("excerptField").value.trim();
+    var body = $("bodyField").value;
+    $("previewContent").innerHTML = '<p style="color:var(--text-dim);font-size:12px;">渲染中…</p>';
+    api("/preview", { method: "POST", body: { title: title, date: date, tags: tags, excerpt: excerpt, body: body } })
+      .then(function (data) { $("previewContent").innerHTML = data.html; })
+      .catch(function (err) {
+        $("previewContent").innerHTML = '<p style="color:var(--danger);font-size:12px;">预览失败：' + escapeHtml(err.message) + "</p>";
+      });
+  }
+
+  // 所有字段变化都触发实时预览
+  ["titleField", "dateField", "tagsField", "excerptField", "bodyField"].forEach(function (id) {
+    $(id).addEventListener("input", schedulePreview);
   });
 
   /* ---------- 发布 / 保存 ---------- */

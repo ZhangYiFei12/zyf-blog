@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台 · 张义飞博客</title>
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=2" />
   <link rel="icon" type="image/png" href="images/avatar.png" />
   <style>
     /* 后台专用样式 - 复用现有 CSS 变量 */
@@ -42,6 +42,18 @@
     .preview-wrap .article-body { font-size: 13px; }
     .preview-wrap .article-body p { margin-bottom: 8px; }
     .preview-wrap .article-body pre { font-size: 12px; padding: 8px; }
+    .preview-wrap .article-header { border-bottom: 1px dashed var(--border); margin-bottom: 12px; padding-bottom: 12px; }
+    .preview-wrap .article-header h1 { font-size: 18px; margin: 0 0 6px; }
+    .preview-wrap .article-meta { font-size: 11px; color: var(--text-dim); display: flex; gap: 12px; }
+    .preview-wrap .article-meta span { margin: 0; }
+    .preview-wrap .article-body { margin: 0; padding: 0; }
+    .preview-wrap .article-body h2 { font-size: 15px; }
+    .preview-wrap .article-body h3 { font-size: 14px; }
+    .preview-wrap table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+    .preview-wrap th, .preview-wrap td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; font-size: 12px; }
+    .preview-wrap th { background: var(--bg-card); }
+    .preview-wrap blockquote { border-left: 3px solid var(--accent); padding: 4px 12px; color: var(--text-dim); margin: 8px 0; }
+    .preview-wrap img { max-width: 100%; }
 
     /* 按钮 */
     .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 18px; background: var(--accent); color: #000; border: none; border-radius: var(--radius); font-family: var(--mono); font-size: 13px; cursor: pointer; font-weight: 600; transition: opacity 0.2s; }
@@ -156,6 +168,6 @@
   <!-- 浮动消息 -->
   <div id="toast" class="toast" style="display:none;"></div>
 
-  <script src="js/admin.js"></script>
+  <script src="js/admin.js?v=2"></script>
 </body>
 </html>
