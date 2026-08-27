@@ -409,6 +409,9 @@ export async function onRequest(context) {
     const isEdit = !!input.slug;
     const commitSha = await commitFiles(env, `📝 ${isEdit ? "后台编辑" : "后台发布"}：${title}`, commitChanges);
 
+    return json({ ok: true, slug, commitSha, message: isDraft ? "草稿已保存（仅后台可见）" : "已发布，Cloudflare 正在自动部署（约 30 秒~1 分钟）" });
+  }
+
   // ---- DELETE /api/admin/articles/:slug ----
   if (method === "DELETE" && rest.length === 2 && rest[0] === "articles") {
     const slug = decodeURIComponent(rest[1]);
