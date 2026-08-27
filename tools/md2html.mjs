@@ -67,8 +67,10 @@ function inline(text) {
   });
   // 图片 ![alt](src)
   s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, '<img src="$2" alt="$1" />');
-  // 链接 [text](url)
-  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  // 链接 [text](url)（页内锚点 # 或相对路径不加 target=_blank）
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, t, u) =>
+    /^#|^\./ .test(u) ? `<a href="${u}">${t}</a>` : `<a href="${u}" target="_blank" rel="noopener">${t}</a>`
+  );
   // 加粗
   s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
@@ -87,6 +89,7 @@ function parseBody(md) {
   const lines = md.split("\n");
   const html = [];
   let i = 0;
+  let guard = 0;
 
   // 收集一段行内内容的列表（遇到空行结束）
   function collectParagraph() {
@@ -113,12 +116,13 @@ function parseBody(md) {
       const indent = m[1].replace(/\t/g, "  ").length;
       items.push({ indent, ordered, text: m[3], raw: l });
       i++;
-      // 吸收缩进的子项
-      while (i < lines.length && /^\s+[-*+]|\d+\.\s/.test(lines[i])) {
+      // 吸收缩进的子项（两级以内，防止误吞）
+      while (i < lines.length && /^\s+[-*+]|^\d+\.\s/.test(lines[i])) {
         const s = lines[i].match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
         if (!s) break;
         const subIndent = s[1].replace(/\t/g, "  ").length;
         if (subIndent <= indent) break;
+        if (subIndent - indent > 4) break; // 超过两级的深层缩进，交给段落处理
         items.push({ indent: subIndent, ordered: s[2] !== "-" && s[2] !== "*" && s[2] !== "+", text: s[3], raw: lines[i] });
         i++;
       }
@@ -168,6 +172,10 @@ function parseBody(md) {
   }
 
   while (i < lines.length) {
+    if (++guard > lines.length * 20 + 100000) {
+      console.error("⚠️ 解析疑似死循环，中断于第", i + 1, "行:", lines[i] ? lines[i].slice(0, 60) : "(空)");
+      break;
+    }
     const l = lines[i];
 
     // 代码块
@@ -320,7 +328,7 @@ function slugify(name) {
 }
 
 function convertFile(filePath) {
-  const raw = readFileSync(filePath, "utf8");
+  const raw = readFileSync(filePath, "utf8").replace(/\r/g, "");
   const { meta, body } = parseFrontMatter(raw);
   const bodyHtml = parseBody(body);
   const html = buildPage(meta, bodyHtml);
