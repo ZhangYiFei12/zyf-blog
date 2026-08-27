@@ -1417,3 +1417,32 @@ pre code.hljs {
   font-size: 11px;
   margin-left: 2px;
 }
+
+/* ============================================================
+   博客站内搜索
+   ============================================================ */
+.search-box {
+  margin: 0 0 14px;
+}
+
+.search-box input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.search-box input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.search-box input::placeholder {
+  color: var(--text-dim);
+}

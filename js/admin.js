@@ -16,12 +16,17 @@
   var loginError = $("loginError");
   var logoutBtn = $("logoutBtn");
   var publishBtn = $("publishBtn");
+  var draftBtn = $("draftBtn");
   var publishStatus = $("publishStatus");
   var cancelEditBtn = $("cancelEditBtn");
   var editSlug = $("editSlug");
   var articleList = $("articleList");
   var listLoading = $("listLoading");
   var toastEl = $("toast");
+
+  var articleFilter = $("articleFilter");
+  var uploadImgBtn = $("uploadImgBtn");
+  var imgFileInput = $("imgFileInput");
 
   var previewTimer = null;
 
@@ -126,7 +131,9 @@
     showLogin();
   });
 
-  /* ---------- 文章列表 ---------- */
+  /* ---------- 文章列表（含草稿筛选） ---------- */
+
+  var articleFilterStatus = ""; // "" = 全部, "published", "draft"
 
   function loadArticles() {
     articleList.innerHTML = "";
@@ -138,12 +145,16 @@
           articleList.innerHTML = '<div class="empty-state">暂无文章<br/>写一篇发布吧 📝</div>';
           return;
         }
-        data.articles.forEach(function (a) {
+        var filtered = data.articles;
+        if (articleFilterStatus === "published") filtered = filtered.filter(function (a) { return a.published !== false; });
+        else if (articleFilterStatus === "draft") filtered = filtered.filter(function (a) { return a.published === false; });
+        filtered.forEach(function (a) {
+          var badge = a.published === false ? ' <span style="color:var(--accent);font-size:10px;border:1px solid var(--accent);border-radius:3px;padding:1px 6px;margin-left:4px;">草稿</span>' : "";
           var item = document.createElement("div");
           item.className = "item";
           item.innerHTML =
             '<div class="info">' +
-              '<div class="title">' + escapeHtml(a.title || "(无标题)") + "</div>" +
+              '<div class="title">' + escapeHtml(a.title || "(无标题)") + badge + "</div>" +
               '<div class="date">' + escapeHtml(a.date || "") + (a.tags && a.tags.length ? " · " + escapeHtml(a.tags.join(" / ")) : "") + "</div>" +
             "</div>" +
             '<div class="actions">' +
@@ -152,11 +163,26 @@
             "</div>";
           articleList.appendChild(item);
         });
+        if (!filtered.length) {
+          articleList.innerHTML = '<div class="empty-state">没有匹配的文章</div>';
+        }
       })
       .catch(function (err) {
         listLoading.style.display = "none";
         articleList.innerHTML = '<div class="empty-state" style="color:var(--danger);">加载失败：' + escapeHtml(err.message) + "</div>";
       });
+  }
+
+  // 文章列表筛选切换
+  if (articleFilter) {
+    articleFilter.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-filter]");
+      if (!btn) return;
+      articleFilterStatus = btn.getAttribute("data-filter") || "";
+      articleFilter.querySelectorAll(".tab").forEach(function (t) { t.classList.remove("active"); });
+      btn.classList.add("active");
+      loadArticles();
+    });
   }
 
   articleList.addEventListener("click", function (e) {
@@ -183,7 +209,8 @@
         $("bodyField").value = data.body || "";
         editSlug.value = data.slug;
         cancelEditBtn.style.display = "inline-flex";
-        publishBtn.textContent = "💾 保存修改";
+        publishBtn.textContent = "📝 发布";
+        draftBtn.textContent = "💾 存草稿";
         updatePreview();
         $("titleField").scrollIntoView({ behavior: "smooth", block: "start" });
         showToast("已载入《" + (data.meta.title || "") + "》", "success");
@@ -200,6 +227,7 @@
     editSlug.value = "";
     cancelEditBtn.style.display = "none";
     publishBtn.textContent = "📝 发布";
+    draftBtn.textContent = "💾 存草稿";
     updatePreview();
   }
 
@@ -293,9 +321,9 @@
     $(id).addEventListener("input", schedulePreview);
   });
 
-  /* ---------- 发布 / 保存 ---------- */
+  /* ---------- 发布 / 存草稿 ---------- */
 
-  function publish() {
+  function submitArticle(isPublished) {
     var title = $("titleField").value.trim();
     var body = $("bodyField").value.trim();
     if (!title) { showToast("请填写标题", "error"); return; }
@@ -307,12 +335,13 @@
       tags: $("tagsField").value.split(/[,，]/).map(function (s) { return s.trim(); }).filter(Boolean),
       excerpt: $("excerptField").value.trim(),
       body: body,
+      published: isPublished,
     };
-    // 编辑时传回原 slug，保证地址不变
     if (editSlug.value) payload.slug = editSlug.value;
 
-    publishBtn.disabled = true;
-    publishBtn.textContent = "提交中…";
+    var btn = isPublished ? publishBtn : draftBtn;
+    btn.disabled = true;
+    btn.textContent = "提交中…";
     publishStatus.textContent = "";
 
     api("/articles", { method: "POST", body: payload })
@@ -325,14 +354,54 @@
         showToast(err.message, "error");
       })
       .finally(function () {
-        publishBtn.disabled = false;
-        publishBtn.textContent = editSlug.value ? "💾 保存修改" : "📝 发布";
+        btn.disabled = false;
+        btn.textContent = isPublished ? "📝 发布" : "💾 存草稿";
       });
   }
 
-  publishBtn.addEventListener("click", publish);
+  publishBtn.addEventListener("click", function () { submitArticle(true); });
+  draftBtn.addEventListener("click", function () { submitArticle(false); });
 
-  /* ---------- 删除 ---------- */
+  /* ---------- 图片上传 ---------- */
+
+  uploadImgBtn.addEventListener("click", function () { imgFileInput.click(); });
+
+  imgFileInput.addEventListener("change", function () {
+    var file = imgFileInput.files && imgFileInput.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      showToast("图片超过 2MB，请压缩后上传", "error");
+      imgFileInput.value = "";
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var result = e.target && e.target.result;
+      if (!result) { showToast("读取图片失败", "error"); imgFileInput.value = ""; return; }
+      var b64 = result.split(",")[1] || "";
+      var parts = result.split(",")[0] || "";
+      var mime = (parts.match(/data:([^;]+)/) || ["", "image/png"])[1];
+      var ext = file.name.split(".").pop() || "png";
+      uploadImgBtn.disabled = true;
+      uploadImgBtn.textContent = "上传中…";
+      api("/upload", { method: "POST", body: { data: b64, mime: mime, ext: ext } })
+        .then(function (data) {
+          var md = "![" + (file.name.replace(/\.[^.]*$/, "") || "图片") + "](" + data.url + ")";
+          var body = $("bodyField");
+          var pos = body.selectionStart || body.value.length;
+          body.value = body.value.slice(0, pos) + md + body.value.slice(body.selectionEnd || pos);
+          showToast("图片已上传，部署后即可显示（约 30 秒）", "success");
+        })
+        .catch(function (err) { showToast(err.message, "error"); })
+        .finally(function () {
+          uploadImgBtn.disabled = false;
+          uploadImgBtn.textContent = "🖼️ 上传图片";
+          imgFileInput.value = "";
+        });
+    };
+    reader.onerror = function () { showToast("读取图片失败", "error"); imgFileInput.value = ""; };
+    reader.readAsDataURL(file);
+  });
 
   function deleteArticle(slug) {
     if (!confirm("确定删除这篇文章吗？\n删除后不可恢复。")) return;

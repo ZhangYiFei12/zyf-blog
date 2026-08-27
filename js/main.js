@@ -226,11 +226,22 @@
     try { hljs.highlightAll(); } catch (e) {}
   }
 
-  /* ---- 博客标签筛选（博客列表页） ---- */
+  /* ---- 博客标签筛选 + 站内搜索（博客列表页） ---- */
   var tagFilter = document.getElementById("tagFilter");
+  var searchInput = document.getElementById("searchInput");
   if (tagFilter) {
     var postItems = Array.prototype.slice.call(document.querySelectorAll(".post-item"));
     var emptyState = document.getElementById("blogEmpty");
+    var activeTag = "";
+    var searchQuery = "";
+    var searchIndex = null;
+
+    // 加载搜索索引（data/search-index.json，含标题/标签/正文纯文本）
+    fetch("data/search-index.json", { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("no index")); })
+      .then(function (idx) { searchIndex = idx; })
+      .catch(function () { searchIndex = null; });
+
     var tagCounts = {};
     postItems.forEach(function (item) {
       (item.getAttribute("data-tags") || "").split(/\s+/).filter(Boolean).forEach(function (t) {
@@ -238,33 +249,63 @@
       });
     });
     var allTags = Object.keys(tagCounts).sort(function (a, b) { return tagCounts[b] - tagCounts[a]; });
-    function renderChips(activeTag) {
+
+    function renderChips() {
       var html = '<button type="button" class="chip' + (activeTag ? "" : " active") + '" data-tag="">全部 <em>' + postItems.length + '</em></button>';
       allTags.forEach(function (t) {
         html += '<button type="button" class="chip' + (activeTag === t ? " active" : "") + '" data-tag="' + esc(t) + '">' + esc(t) + ' <em>' + tagCounts[t] + '</em></button>';
       });
       tagFilter.innerHTML = html;
     }
-    function applyFilter(tag) {
+
+    function itemMatches(item) {
+      var tags = (item.getAttribute("data-tags") || "").split(/\s+/).filter(Boolean);
+      if (activeTag && tags.indexOf(activeTag) === -1) return false;
+      if (!searchQuery) return true;
+      var slug = (item.getAttribute("href") || "").replace(/^blog\//, "").replace(/\.html$/, "");
+      var entry = searchIndex ? searchIndex.find(function (e) { return e.slug === slug; }) : null;
+      if (entry) {
+        return entry.title.toLowerCase().indexOf(searchQuery) !== -1 ||
+          (entry.text || "").toLowerCase().indexOf(searchQuery) !== -1 ||
+          (entry.tags || []).some(function (t) { return String(t).toLowerCase().indexOf(searchQuery) !== -1; });
+      }
+      return item.textContent.toLowerCase().indexOf(searchQuery) !== -1;
+    }
+
+    function applyFilter() {
       var visible = 0;
       postItems.forEach(function (item) {
-        var tags = (item.getAttribute("data-tags") || "").split(/\s+/).filter(Boolean);
-        var show = !tag || tags.indexOf(tag) !== -1;
+        var show = itemMatches(item);
         item.style.display = show ? "" : "none";
         if (show) visible++;
       });
-      renderChips(tag);
+      renderChips();
       if (emptyState) {
-        emptyState.textContent = visible ? "暂无更多文章 · 敬请期待" : "没有「" + (tag || "") + "」标签的文章";
+        emptyState.textContent = visible ? "暂无更多文章 · 敬请期待" : (searchQuery ? "没有找到与「" + searchQuery + "」相关的文章" : "没有「" + (activeTag || "") + "」标签的文章");
         emptyState.style.display = visible ? "" : "block";
       }
     }
+
     tagFilter.addEventListener("click", function (e) {
       var btn = e.target.closest ? e.target.closest(".chip") : null;
       if (!btn) return;
-      applyFilter(btn.getAttribute("data-tag"));
+      activeTag = btn.getAttribute("data-tag") || "";
+      applyFilter();
     });
-    if (allTags.length) applyFilter("");
+
+    if (searchInput) {
+      var searchTimer = null;
+      searchInput.addEventListener("input", function () {
+        clearTimeout(searchTimer);
+        var q = searchInput.value.trim().toLowerCase();
+        searchTimer = setTimeout(function () {
+          searchQuery = q;
+          applyFilter();
+        }, 200);
+      });
+    }
+
+    if (allTags.length) applyFilter();
     else tagFilter.style.display = "none";
   }
 

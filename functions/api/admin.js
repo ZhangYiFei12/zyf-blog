@@ -29,6 +29,7 @@ import {
   buildPostsIndex,
   buildSitemap,
   buildRss,
+  buildSearchIndex,
 } from "../../tools/md2html-core.mjs";
 
 const DEFAULT_REPO = "ZhangYiFei12/zyf-blog";
@@ -147,8 +148,8 @@ async function getAllPosts(env) {
   for (const f of (Array.isArray(files) ? files : [])) {
     if (!f.name.endsWith(".md")) continue;
     const content = await getFile(env, `blog/posts/${f.name}`);
-    const { meta } = parseFrontMatter(content);
-    posts.push({ slug: slugify(f.name), name: f.name, meta });
+    const { meta, body } = parseFrontMatter(content);
+    posts.push({ slug: slugify(f.name), name: f.name, meta, bodyHtml: parseBody(body) });
   }
   // 按日期倒序（无日期排最后）
   posts.sort((a, b) => String(b.meta.date || "").localeCompare(String(a.meta.date || "")));
@@ -169,7 +170,7 @@ async function commitFiles(env, message, changes) {
     } else {
       const blob = await (await gh(env, `/repos/${repo(env)}/git/blobs`, {
         method: "POST",
-        body: { content: c.content, encoding: "utf-8" },
+        body: { content: c.content, encoding: c.encoding || "utf-8" },
       })).json();
       tree.push({ path: c.path, mode: "100644", type: "blob", sha: blob.sha });
     }
@@ -204,12 +205,12 @@ function replaceBetween(content, startMarker, endMarker, newContent) {
 }
 
 /* 生成 .md 源文件内容 */
-function buildMarkdown({ title, date, excerpt, tags, body }) {
+function buildMarkdown({ title, date, excerpt, tags, body, published }) {
   const t = String(title || "").replace(/"/g, '\\"');
   const e = String(excerpt || "").replace(/"/g, '\\"');
   const tagsArr = Array.isArray(tags) && tags.length ? tags : ["随笔"];
   const tagsLine = `tags: [${tagsArr.map(x => `"${String(x).replace(/"/g, '\\"')}"`).join(", ")}]`;
-  return `---\ntitle: "${t}"\ndate: "${date}"\nexcerpt: "${e}"\n${tagsLine}\n---\n\n${String(body || "").trim()}\n`;
+  return `---\ntitle: "${t}"\ndate: "${date}"\nexcerpt: "${e}"\npublished: ${published !== false}\n${tagsLine}\n---\n\n${String(body || "").trim()}\n`;
 }
 
 /* 根据 posts 重生成 blog.html 列表 + index.html 最新文章，返回变更 */
@@ -322,6 +323,7 @@ export async function onRequest(context) {
       date: p.meta.date,
       excerpt: p.meta.excerpt,
       tags: p.meta.tags,
+      published: p.meta.published !== false,
     })) });
   }
 
@@ -347,6 +349,7 @@ export async function onRequest(context) {
     const date = String(input.date || new Date().toISOString().slice(0, 10));
     const excerpt = String(input.excerpt || "").trim();
     const tags = Array.isArray(input.tags) ? input.tags.map(String).filter(Boolean) : [];
+    const isDraft = input.published === false;
 
     // 确定 slug：编辑用传入 slug，新建用标题生成
     let slug = input.slug ? String(input.slug).trim() : slugify(title);
@@ -363,19 +366,23 @@ export async function onRequest(context) {
     }
 
     // 组装 Markdown
-    const mdContent = buildMarkdown({ title, date, excerpt, tags, body: input.body });
+    const mdContent = buildMarkdown({ title, date, excerpt, tags, body: input.body, published: !isDraft });
 
     // 渲染文章页
-    const meta = { title, date, excerpt, tags };
-    const pageHtml = buildPage(meta, parseBody(String(input.body)), { slug });
+    const meta = { title, date, excerpt, tags, published: !isDraft };
+    const bodyHtml = parseBody(String(input.body));
+    const pageHtml = buildPage(meta, bodyHtml, { slug });
 
     // 构造最新文章列表（含本篇文章）
     const updatedPosts = posts.filter(p => p.slug !== slug);
-    updatedPosts.push({ slug, meta });
+    updatedPosts.push({ slug, meta, bodyHtml });
     updatedPosts.sort((a, b) => String(b.meta.date || "").localeCompare(String(a.meta.date || "")));
 
-    const blogList = updatedPosts.map(p => listItemSnippet(p.meta, p.slug)).join("\n\n");
-    const latest = updatedPosts[0] ? listItemSnippet(updatedPosts[0].meta, updatedPosts[0].slug) : "";
+    // 筛选已发布文章（草稿不入公开列表）
+    const publishedPosts = updatedPosts.filter(p => p.meta.published !== false);
+
+    const blogList = publishedPosts.map(p => listItemSnippet(p.meta, p.slug)).join("\n\n");
+    const latest = publishedPosts[0] ? listItemSnippet(publishedPosts[0].meta, publishedPosts[0].slug) : "";
 
     // 读取并更新 blog.html / index.html
     let blogHtml = await getFile(env, "blog.html");
@@ -383,19 +390,24 @@ export async function onRequest(context) {
     blogHtml = replaceBetween(blogHtml, "<!-- BLOG-LIST-START -->", "<!-- BLOG-LIST-END -->", blogList);
     indexHtml = replaceBetween(indexHtml, "<!-- LATEST-START -->", "<!-- LATEST-END -->", latest);
 
-    const isEdit = !!input.slug;
-    const commitSha = await commitFiles(env, `📝 ${isEdit ? "后台编辑" : "后台发布"}：${title}`, [
+    const commitChanges = [
       { path: `blog/posts/${slug}.md`, content: mdContent },
       { path: `blog/${slug}.html`, content: pageHtml },
-      { path: "blog.html", content: blogHtml },
-      { path: "index.html", content: indexHtml },
       { path: "data/posts.json", content: buildPostsIndex(updatedPosts) },
       { path: "sitemap.xml", content: buildSitemap(updatedPosts) },
       { path: "feed.xml", content: buildRss(updatedPosts) },
-    ]);
+      { path: "data/search-index.json", content: buildSearchIndex(updatedPosts) },
+    ];
+    // 已发布文章才更新公开页面
+    if (publishedPosts.length) {
+      commitChanges.push(
+        { path: "blog.html", content: blogHtml },
+        { path: "index.html", content: indexHtml },
+      );
+    }
 
-    return json({ ok: true, slug, commitSha, message: "已提交，Cloudflare 正在自动部署（约 30 秒~1 分钟）" });
-  }
+    const isEdit = !!input.slug;
+    const commitSha = await commitFiles(env, `📝 ${isEdit ? "后台编辑" : "后台发布"}：${title}`, commitChanges);
 
   // ---- DELETE /api/admin/articles/:slug ----
   if (method === "DELETE" && rest.length === 2 && rest[0] === "articles") {
@@ -405,8 +417,9 @@ export async function onRequest(context) {
     if (!target) return json({ error: "文章不存在" }, 404);
 
     const remaining = posts.filter(p => p.slug !== slug);
-    const blogList = remaining.map(p => listItemSnippet(p.meta, p.slug)).join("\n\n");
-    const latest = remaining[0] ? listItemSnippet(remaining[0].meta, remaining[0].slug) : "";
+    const publishedRemaining = remaining.filter(p => p.meta.published !== false);
+    const blogList = publishedRemaining.map(p => listItemSnippet(p.meta, p.slug)).join("\n\n");
+    const latest = publishedRemaining[0] ? listItemSnippet(publishedRemaining[0].meta, publishedRemaining[0].slug) : "";
 
     let blogHtml = await getFile(env, "blog.html");
     let indexHtml = await getFile(env, "index.html");
@@ -421,9 +434,29 @@ export async function onRequest(context) {
       { path: "data/posts.json", content: buildPostsIndex(remaining) },
       { path: "sitemap.xml", content: buildSitemap(remaining) },
       { path: "feed.xml", content: buildRss(remaining) },
+      { path: "data/search-index.json", content: buildSearchIndex(remaining) },
     ]);
 
     return json({ ok: true, slug, commitSha, message: "已删除并提交，等待自动部署" });
+  }
+
+  // ---- POST /api/admin/upload（图片上传，提交到 images/uploads/）----
+  if (method === "POST" && rest.length === 1 && rest[0] === "upload") {
+    const input = await request.json().catch(() => null);
+    const b64 = input && input.data ? String(input.data) : "";
+    const mime = input && input.mime ? String(input.mime) : "image/png";
+    const ext = String((input && input.ext) || mime.split("/")[1] || "png")
+      .replace(/[^a-z0-9]/gi, "")
+      .toLowerCase() || "png";
+    if (!b64 || b64.length > 3 * 1024 * 1024) {
+      return json({ error: "图片数据无效或过大（>2MB）" }, 400);
+    }
+    const filename = `img-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const path = `images/uploads/${filename}`;
+    const commitSha = await commitFiles(env, `🖼️ 后台上传图片：${filename}`, [
+      { path, content: b64, encoding: "base64" },
+    ]);
+    return json({ ok: true, url: `/images/uploads/${filename}`, commitSha, message: "图片已提交，部署完成后即可引用（约 30 秒）" });
   }
 
   // ---- GET /api/admin/projects ----

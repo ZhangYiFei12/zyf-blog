@@ -5,7 +5,7 @@
 
 /* ---------- Front Matter 解析 ---------- */
 export function parseFrontMatter(raw) {
-  const meta = { title: "", date: "", excerpt: "", tags: [] };
+  const meta = { title: "", date: "", excerpt: "", tags: [], published: true };
   if (raw.startsWith("---")) {
     const end = raw.indexOf("\n---", 3);
     if (end !== -1) {
@@ -21,6 +21,8 @@ export function parseFrontMatter(raw) {
         }
         if (key === "tags") {
           meta.tags = val.replace(/^\[|\]$/g, "").split(/[,，]/).map(s => s.trim().replace(/^["']|["']$/g, "")).filter(Boolean);
+        } else if (key === "published") {
+          meta.published = String(val).toLowerCase() !== "false";
         } else if (key in meta) {
           meta[key] = val;
         }
@@ -258,7 +260,7 @@ export function buildPage(meta, bodyHtml, opts = {}) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${escapeHtml(meta.title)} · 张义飞</title>
   <meta name="description" content="${escapeAttr(excerpt)}" />
-  <link rel="stylesheet" href="../css/style.css?v=6" />
+  <link rel="stylesheet" href="../css/style.css?v=7" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
   <meta property="og:type" content="article" />
   <meta property="og:title" content="${escapeAttr(meta.title)}" />
@@ -310,7 +312,7 @@ ${articleHtml}
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
   <script src="../js/highlight.min.js?v=1"></script>
-  <script src="../js/main.js?v=4"></script>
+  <script src="../js/main.js?v=5"></script>
 </body>
 </html>
 `;
@@ -392,6 +394,7 @@ export function renderProjects(projects) {
 /* ---------- 文章索引（data/posts.json，供客户端上一篇/下一篇、搜索等使用） ---------- */
 export function buildPostsIndex(posts) {
   const list = (Array.isArray(posts) ? posts : [])
+    .filter(p => p.meta.published !== false) // 草稿不出现在公开索引
     .map(p => ({ slug: p.slug, title: p.meta.title, date: p.meta.date || "", tags: p.meta.tags || [] }))
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
   return JSON.stringify(list, null, 2) + "\n";
@@ -405,6 +408,7 @@ export function buildRss(posts, base = "https://zyf2026.pages.dev") {
     return date.toUTCString();
   };
   const items = (Array.isArray(posts) ? posts : [])
+    .filter(p => p.meta.published !== false)
     .sort((a, b) => String(b.meta.date || "").localeCompare(String(a.meta.date || "")))
     .map(p => {
       const url = `${base}/blog/${p.slug}.html`;
@@ -426,6 +430,7 @@ export function buildSitemap(posts, base = "https://zyf2026.pages.dev") {
     { loc: base + "/about.html", lastmod: today, pri: "0.6", freq: "monthly" },
   ];
   for (const p of (Array.isArray(posts) ? posts : [])) {
+    if (p.meta.published === false) continue; // 草稿不进 sitemap
     urls.push({
       loc: base + "/blog/" + p.slug + ".html",
       lastmod: p.meta.date || today,
@@ -437,6 +442,28 @@ export function buildSitemap(posts, base = "https://zyf2026.pages.dev") {
     .map(u => `  <url>\n    <loc>${u.loc}</loc>\n    <lastmod>${u.lastmod}</lastmod>\n    <changefreq>${u.freq}</changefreq>\n    <priority>${u.pri}</priority>\n  </url>`)
     .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`;
+}
+
+/* ---------- 搜索索引（data/search-index.json，客户端全文搜索用） ---------- */
+export function buildSearchIndex(posts) {
+  const stripHtml = html =>
+    String(html || "")
+      .replace(/&lt;[^>]+&gt;/g, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+      .replace(/\s+/g, " ")
+      .trim();
+  const list = (Array.isArray(posts) ? posts : [])
+    .filter(p => p.meta.published !== false)
+    .map(p => ({
+      slug: p.slug,
+      title: p.meta.title || "",
+      date: p.meta.date || "",
+      tags: p.meta.tags || [],
+      text: stripHtml(p.bodyHtml).slice(0, 800),
+    }));
+  return JSON.stringify(list) + "\n";
 }
 
 /* ---------- 组合：输入 Markdown → 输出 {meta, slug, bodyHtml, pageHtml} ---------- */
