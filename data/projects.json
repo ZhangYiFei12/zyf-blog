@@ -1,10 +1,28 @@
 [
   {
+    "title": "E2E 测试项目",
+    "year": "2026",
+    "description": "测试新增",
+    "tags": [
+      "测试",
+      "E2E"
+    ],
+    "featured": true,
+    "url": "",
+    "previewUrl": "https://example.com",
+    "sourceUrl": "https://github.com/ZhangYiFei12",
+    "id": "E2E-测试项目"
+  },
+  {
     "id": "personal-blog",
     "title": "个人博客系统",
     "year": "2025",
     "description": "就是你正在浏览的这个网站！基于纯静态 HTML + CSS + JavaScript 构建，支持 Markdown 写作与科技简约风格主题。",
-    "tags": ["Next.js", "TypeScript", "Tailwind CSS"],
+    "tags": [
+      "Next.js",
+      "TypeScript",
+      "Tailwind CSS"
+    ],
     "featured": true,
     "url": "index.html",
     "previewUrl": "index.html",
@@ -15,7 +33,12 @@
     "title": "AI 学习助手",
     "year": "2024",
     "description": "一个基于大语言模型的智能学习助手 Web 应用，支持对话式问答、笔记管理与知识卡片生成。",
-    "tags": ["React", "FastAPI", "Python", "OpenAI API"],
+    "tags": [
+      "React",
+      "FastAPI",
+      "Python",
+      "OpenAI API"
+    ],
     "featured": true,
     "url": "",
     "previewUrl": "",
@@ -26,7 +49,11 @@
     "title": "数据可视化仪表盘",
     "year": "2024",
     "description": "面向运营团队的实时数据监控仪表盘，支持多数据源接入、自定义图表与告警推送。",
-    "tags": ["Next.js", "ECharts", "WebSocket"],
+    "tags": [
+      "Next.js",
+      "ECharts",
+      "WebSocket"
+    ],
     "featured": false,
     "url": "",
     "previewUrl": "https://example.com",
@@ -37,7 +64,11 @@
     "title": "终端风格个人站 v1",
     "year": "2023",
     "description": "我的第一个个人网站，一个仿真终端界面，支持输入命令浏览我的技能与项目，蛮有 geek 范儿。",
-    "tags": ["HTML", "CSS", "JavaScript"],
+    "tags": [
+      "HTML",
+      "CSS",
+      "JavaScript"
+    ],
     "featured": false,
     "url": "",
     "previewUrl": "https://example.com",
