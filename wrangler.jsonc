@@ -1,0 +1,11 @@
+{
+  "name": "zyf-blog",
+  "compatibility_date": "2025-04-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": ".open-next/worker.js",
+  "assets": {
+    "directory": ".vercel/output/static",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash"
+  }
+}
