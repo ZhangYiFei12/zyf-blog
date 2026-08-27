@@ -2,12 +2,12 @@
   {
     "title": "草稿项目测试sns",
     "year": "2026",
-    "description": "用于验证项目草稿功能",
+    "description": "用于验证项目草稿功能（已发布）",
     "tags": [
       "测试"
     ],
     "featured": true,
-    "published": false,
+    "published": true,
     "url": "",
     "previewUrl": "",
     "sourceUrl": "",
