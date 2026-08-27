@@ -7,11 +7,20 @@
   <title>文章标题 · 张义飞</title>
   <!-- ✏️ 修改②：文章摘要（SEO 用，会显示在搜索结果里） -->
   <meta name="description" content="一句话描述这篇文章的内容。" />
-  <link rel="stylesheet" href="../css/style.css?v=4" />
+  <link rel="stylesheet" href="../css/style.css?v=5" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="文章标题 · 张义飞" />
+  <meta property="og:description" content="一句话描述这篇文章的内容。" />
+  <meta property="og:url" content="https://zyf2026.pages.dev/blog/文章文件名.html" />
+  <meta property="og:image" content="https://zyf2026.pages.dev/images/avatar.png" />
+  <meta property="og:site_name" content="张义飞博客" />
+  <meta name="twitter:card" content="summary" />
   <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
 </head>
 <body>
+
+  <div class="reading-progress" id="readingProgress"></div>
 
   <nav class="navbar">
     <div class="nav-inner">
@@ -72,6 +81,9 @@ function hello() {
       </div>
     </article>
 
+    <!-- 上一篇 / 下一篇（由 data/posts.json 客户端自动填充，保持不动） -->
+    <nav class="post-nav" id="postNav"></nav>
+
     <!-- 返回博客列表（保持不动） -->
     <a class="back-link" href="../blog.html">返回博客列表</a>
 
@@ -84,6 +96,7 @@ function hello() {
     </div>
   </footer>
 
-  <script src="../js/main.js?v=2"></script>
+  <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
+  <script src="../js/main.js?v=3"></script>
 </body>
 </html>

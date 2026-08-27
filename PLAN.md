@@ -1,116 +1,93 @@
-# PLAN — 加密后台：浏览器写文章并发布（✅ 已实现）
+# PLAN：博客功能扩展与优化（候选清单）
 
-> 此计划已全部实现，对应 commit 包含 `functions/api/admin.js` / `admin.html` / `js/admin.js` / `tools/md2html-core.mjs`。
+> 状态：**第一梯队已全部实施**（A 全部 + B 四项 + D 丰富关于页）
+> 技术约束：纯静态站点、零构建步骤、Cloudflare Pages 自动部署、后台已完备（文章/项目 CRUD + 深浅色主题 + 首页自动同步）
 
-## Context（为什么做这个）
+---
 
-现状：博客是纯静态站（零构建、无服务器），发文章流程 = 本地写 `.md` → `node tools/md2html.mjs` → 粘贴片段到 `blog.html` → `git push` → Cloudflare 自动部署。
+## Context（背景）
 
-需求：在浏览器里用**密码加密的后台**写文章并一键发布，不再依赖本地命令行。
+网站 https://zyf2026.pages.dev 已经上线并具备：文章发布（Markdown）、项目管理、主题切换、首页自动同步。用户问"还有什么功能或优化可以实施"，本计划整理候选功能并按**性价比**分组，由用户挑选后实施。
 
-约束：静态站没有传统服务器，但 Cloudflare Pages 支持 **Pages Functions（边缘无服务器函数）**，可与静态文件共存、读取加密密钥、调用 GitHub API 提交代码，提交后触发已有自动部署 → 文章上线。
+### 当前已具备
+- 首页（Hero + 最新文章 + 精选项目 + 站点导航）
+- 博客列表 / 项目 / 关于 / 后台管理（文章+项目 CRUD，Markdown 写作，`.md` 上传，双步删除确认）
+- 深浅色主题切换（localStorage 持久化）
+- Cloudflare Pages 自动部署 + `_headers` 缓存策略
 
-## ✅ 已确认决策（用户"都要"）
+### 当前缺失（探索发现）
+- ✅ `robots.txt` / `sitemap.xml` / `404.html` —— 已全部实现（sitemap 随文章发布自动更新）
+- ✅ 文章代码块复制按钮 / 阅读进度条 / 返回顶部 / 上一篇·下一篇 —— 已实现
+- ✅ 关于页已丰富（技能条 + 经历时间线，复用 `.timeline` / `.skill-bar` CSS）
+- ❌ 文章代码块无语法高亮、无目录(TOC)
+- ❌ 博客列表无搜索、无标签筛选
+- ❌ 无访问统计、无 RSS `feed.xml`
+- ❌ 后台无草稿状态、无站点设置、无图片上传
 
-1. **发布方式**：GitHub API 提交 → 触发 Cloudflare 自动部署，等约 30s~1min 生效 ✅
-2. **后台地址**：隐藏路径 `/admin`（不进导航栏）✅
-3. **功能范围**：写新文章 + 编辑已有文章 + 删除文章 ✅
-4. **密钥**：用户手动在 Cloudflare 控制台设置（密码 + GitHub Token），代码里不出现 ✅
-5. **首页同步**：发布时自动更新首页"最新文章" ✅
-6. **实时预览**：要，且预览用同一个转换器（保证预览=最终效果）✅
+---
 
-## Approach（推荐方案）
+## 第一梯队（✅ 已实施 · 2026-08-27）
 
-**Cloudflare Pages Functions + GitHub API + 自动部署**
+- **A. SEO**：`404.html`（自定义 404）+ `robots.txt` + `sitemap.xml`（发布/编辑/删除文章时由 admin.js 同步更新，本地工具也会重新生成）+ 全站 Open Graph / Twitter Card 标签（文章页 og:type=article，og:url 带具体文章链接）
+- **B. 阅读体验**：顶部阅读进度条（`#readingProgress`）、代码块 hover 复制按钮（clipboard + execCommand 双 fallback）、右下角返回顶部按钮（滚动 >400px 出现）、底部上一篇/下一篇导航（客户端从 `data/posts.json` 渲染，发布即生效，零服务端依赖）
+- **D. 关于页**：技能条（4 组 16 项，复用 `.skill-bar`）+ 经历时间线（复用 `.timeline`）
+- 其他：`_headers` 新增 `/data/*`、`sitemap.xml`、`robots.txt` 不缓存；CSS `?v=5`、main.js `?v=3` 缓存版本已升级
 
-```
-浏览器 /admin.html（登录+编辑器+管理）
-   │ HTTPS
-   ▼
-Cloudflare Pages
-   ├─ 静态页面：/admin.html + /js/admin.js（后台 UI，不进导航栏）
-   └─ /functions/api/admin.js（边缘函数 = 后台 API）
-        ├─ POST /api/admin/login              → 校验密码 → 签发 HMAC 令牌
-        ├─ GET  /api/admin/articles           → 列出已有文章（读 GitHub posts/）
-        ├─ GET  /api/admin/articles/:slug     → 取单篇 .md 原文（供编辑回填）
-        ├─ POST /api/admin/articles           → 新建/编辑：渲染+更新列表+提交
-        ├─ POST /api/admin/preview            → 服务器端渲染预览（同一转换器）
-        └─ DELETE /api/admin/articles/:slug   → 删除文章+提交
-   Secrets（Cloudflare Pages 环境变量，加密存储，不进代码）:
-        ADMIN_PASS     后台密码
-        SESSION_SECRET 令牌签名密钥（HMAC-SHA256）
-        GITHUB_TOKEN   只对该仓库有 contents 读写权限的 Token
-   GitHub API（服务端调用，Token 永不进客户端）
-        └─ 单次原子 commit：blog/posts/<slug>.md + blog/<slug>.html + blog.html + index.html
-   → push 事件 → Cloudflare 自动重新部署 → 文章上线（约 30s~1min）
-```
+---
 
-### 列表自动更新机制（关键设计）
+## 候选功能清单（按性价比排序）
 
-不再手改列表，改为**标记区间整体重生成**：
+### A. SEO 基础三件套（低投入 · 高价值）
+| 项目 | 说明 | 工作量 |
+|---|---|---|
+| `404.html` | Cloudflare Pages 原生支持自定义 404 页 | 极小 |
+| `robots.txt` + `sitemap.xml` | 用 Pages Function（复用 admin.js 的 GitHub API 模式）**动态**列出全部文章 → 发布文章后 sitemap 自动更新，无需手动重新生成 | 小 |
+| Open Graph 标签 | 每页/每文章加 `og:title` / `og:description` / `og:image`，微信/QQ/推特分享卡片 | 小 |
 
-- `blog.html` 文章区加标记 `<!-- BLOG-LIST-START --> ... <!-- BLOG-LIST-END -->`
-- `index.html` 最新文章区加标记 `<!-- LATEST-START --> ... <!-- LATEST-END -->`
-- 发布/编辑/删除时，后台函数读取 `blog/posts/*.md` 全部文章 → 解析 front matter → 按日期倒序 → 用 `listItemSnippet()` 重生成区间内容 → 覆盖写回
-- 好处：天然支持新增/编辑/删除，不会出现手改残留；文章列表与 posts/ 目录永远一致
+### B. 文章阅读体验（纯前端 · 零构建，全部可选）
+| 项目 | 说明 | 工作量 |
+|---|---|---|
+| 代码语法高亮 | 客户端 highlight.js（按需加载），配合 `_headers` 缓存注意 `?v=` | 中 |
+| 目录 TOC | 客户端 JS 扫描文章 h2/h3 生成侧边目录 + 滚动高亮 | 中 |
+| 阅读进度条 | 顶部细进度条（科技简约风格很搭） | 极小 |
+| 上一篇/下一篇 | 文章底部导航（需要文章顺序数据，可在 md2html-core 生成时写入） | 小 |
+| 复制代码按钮 | 代码块 hover 出现"复制"按钮 | 极小 |
+| 返回顶部按钮 | 右下角悬浮按钮 | 极小 |
 
-### GitHub 原子提交流程（单 commit）
+### C. 内容发现（静态友好）
+| 项目 | 说明 | 工作量 |
+|---|---|---|
+| 站内搜索 | 客户端全文搜索（工具生成 `search-index.json`，发布时自动更新）+ 搜索框 | 中 |
+| 标签筛选 | 博客列表按标签客户端过滤（数据已有，加按钮即可） | 小 |
+| RSS `feed.xml` | 工具生成 + 自动随文章发布更新（admin.js 提交时带上 feed） | 小 |
 
-1. `GET /repos/{repo}/git/ref/heads/main` → 当前 commit sha
-2. `GET /repos/{repo}/git/commits/{sha}` → 当前 tree sha
-3. 对每个变更文件 `POST /repos/{repo}/git/blobs`（utf-8）→ blob sha
-4. `POST /repos/{repo}/git/trees`（base_tree + tree 数组）→ 新 tree sha
-5. `POST /repos/{repo}/git/commits`（message + parents）→ 新 commit sha
-6. `PATCH /repos/{repo}/git/refs/heads/main` → 更新分支
+### D. 页面完善
+| 项目 | 说明 | 工作量 |
+|---|---|---|
+| 丰富关于页 | 复用已有 `.timeline` / `.skill-bar` CSS 加"技能条 + 经历时间线 + 教育/爱好"，并支持后台编辑（`data/profile.json`） | 中 |
+| 访问统计 | Cloudflare Web Analytics（免费、无 cookie 弹窗，插入一段脚本）或 Umami | 极小 |
 
-### 认证设计
+### E. 后台增强
+| 项目 | 说明 | 工作量 |
+|---|---|---|
+| 草稿状态 | front matter `draft: true` → 不渲染进列表/首页，后台可切换"草稿/发布" | 中 |
+| 文章配图上传 | 图片上传到 `images/`（复用 GitHub API），插入 markdown | 中 |
+| 站点设置 | `data/site.json`（站点名/标语/社交链接）后台可改，自动同步所有页面 | 中 |
 
-- `POST /login`：密码与 `ADMIN_PASS` 恒定时间比较 → 签发 `{sub, exp(12h)}` HMAC-SHA256 签名令牌（base64url）
-- 中间件：`/api/admin/*` 除 `/login` 外全部验签 + 检查过期
-- 客户端：token 存 `sessionStorage`，请求带 `Authorization: Bearer <token>`
-- 未登录/错令牌 → 401；错误密码 → 401
+---
 
-### 文章 slug
+## 推荐组合（若用户无偏好）
 
-- 由标题自动生成（`slugify`），中文保留（与现有"详细介绍与技术文档"一致）；编辑时用 URL 中的现有 slug
-- 后台 UI 允许手动改 slug（编辑时可见）
+**第一梯队（本周可做）**：A 全部（404 + robots/sitemap + OG 标签）、B 的阅读进度条 + 复制代码 + 返回顶部 + 上一篇/下一篇、D 的丰富关于页
+**第二梯队**：B 的代码高亮 + TOC、C 的标签筛选 + RSS、D 的访问统计
+**第三梯队（投入较大）**：站内搜索、后台草稿/图片上传/站点设置
 
-## Files（要改/新增的文件）
+---
 
-| 文件 | 作用 |
-|------|------|
-| `tools/md2html-core.mjs` | **新增**：抽出的纯函数核心（parseFrontMatter/escapeHtml/inline/parseBody/buildPage/slugify/listItemSnippet/renderMarkdown），无 Node 依赖，CLI 与函数共用 |
-| `tools/md2html.mjs` | **改**：改为 import 核心，行为不变（回归验证） |
-| `functions/api/admin.js` | **新增**：后台 API（登录/列表/预览/发布/编辑/删除 + HMAC 认证 + GitHub 提交） |
-| `admin.html` | **新增**：后台界面（登录 → 编辑器/文章管理），复用 css/style.css，样式内联在页内 |
-| `js/admin.js` | **新增**：后台交互（登录、编辑器、实时预览防抖、发布/编辑/删除、列表） |
-| `blog.html` | **改**：加 `BLOG-LIST-START/END` 标记 |
-| `index.html` | **改**：加 `LATEST-START/END` 标记 |
-| `README.md` | **改**：后台使用说明 + 密钥配置步骤 |
+## 待用户确认
 
-## Reuse（复用现有代码）
-
-- `tools/md2html.mjs` 全部纯函数 → `md2html-core.mjs`（唯一渲染来源）
-- `blog.html`/`index.html` 现有条目结构（`listItemSnippet` 输出与现有一致）
-- `css/style.css` 的变量（--accent/--bg-card/--border/--mono 等）+ `.card`/`.tag` 类做后台界面
-- 现有 Cloudflare 自动部署（push → deploy）无需改动
-
-## Steps（实施清单）
-
-- [ ] 1. 建 `tools/md2html-core.mjs`（从 md2html.mjs 抽出纯函数，无 fs/path）
-- [ ] 2. 改 `tools/md2html.mjs` import 核心 → `node tools/md2html.mjs blog/posts/详细介绍与技术文档.md` 回归，diff 确认输出不变
-- [ ] 3. `blog.html`/`index.html` 加标记区间
-- [ ] 4. 写 `functions/api/admin.js`：认证 + GitHub 原子提交 + 列表重生成 + 预览
-- [ ] 5. 写 `admin.html` + `js/admin.js`
-- [ ] 6. 本地测试：无 npm 环境则写 Node 测试台 mock Pages Functions context + mock GitHub API，跑通登录/发布/列表/编辑/删除/预览
-- [ ] 7. git commit + push → Cloudflare 自动部署（此时 functions 生效）
-- [ ] 8. 引导用户：Cloudflare 控制台设置 3 个密钥（ADMIN_PASS/SESSION_SECRET/GITHUB_TOKEN）+ 创建 GitHub fine-grained Token（contents: write 仅本仓库）
-- [ ] 9. 端到端验证：真实发布一篇测试文章 → 等部署 → 检查 /blog、/、/blog/<slug>.html、/admin
-- [ ] 10. README 更新后台使用说明
-
-## Verification（如何验证）
-
-- 本地：Node 测试台跑通全部 API 路径（登录/鉴权 401/列表/预览/发布生成 HTML 与列表/编辑/删除）
-- 回归：CLI 工具生成结果与拆分前 diff 一致
-- 线上：发布测试文章 → Cloudflare 部署后 `/blog/<slug>.html`、`/blog`（列表含新文）、`/`（最新文章更新）均正确
-- 安全：无 token 访问 API → 401；错密码 → 401；前端代码/网络响应中无 GITHUB_TOKEN、无 ADMIN_PASS
+1. ~~以上哪几个功能要做？~~ → 已选第一梯队并实施
+2. ~~访问统计：想要吗？~~ → 未做（第二梯队可选，Cloudflare 官方免费无感）
+3. ~~关于页丰富内容由你提供还是起草？~~ → 已按 GitHub 项目等已有数据起草（技能比例/经历时间线为占位，可直接改 about.html 或让我调整）
+4. **关于页内容**：技能百分比、经历时间线是否正确？需要调整请告诉我
+5. **后续**：第二梯队（语法高亮 / TOC / 标签筛选 / RSS / 访问统计）要做哪个？

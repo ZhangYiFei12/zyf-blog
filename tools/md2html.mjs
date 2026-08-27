@@ -16,7 +16,7 @@ import { readdirSync, readFileSync, writeFileSync, mkdirSync, statSync } from "f
 import { dirname, join, basename, resolve } from "path";
 import { fileURLToPath } from "url";
 
-import { parseFrontMatter, parseBody, buildPage, slugify, listItemSnippet } from "./md2html-core.mjs";
+import { parseFrontMatter, parseBody, buildPage, slugify, listItemSnippet, buildPostsIndex, buildSitemap } from "./md2html-core.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, ".."); // 项目根目录
@@ -27,11 +27,21 @@ function convertFile(filePath) {
   const raw = readFileSync(filePath, "utf8").replace(/\r/g, "");
   const { meta, body } = parseFrontMatter(raw);
   const bodyHtml = parseBody(body);
-  const html = buildPage(meta, bodyHtml);
   const slug = slugify(basename(filePath));
+  const html = buildPage(meta, bodyHtml, { slug });
   const outFile = join(OUT_DIR, slug + ".html");
   writeFileSync(outFile, html, "utf8");
   return { meta, slug, outFile };
+}
+
+/* 写 data/posts.json + sitemap.xml（供客户端上一篇/下一篇与搜索引擎使用） */
+function writeSiteData(posts) {
+  const sorted = posts.slice().sort((a, b) => String(b.meta.date || "").localeCompare(String(a.meta.date || "")));
+  const dataDir = join(ROOT, "data");
+  mkdirSync(dataDir, { recursive: true });
+  writeFileSync(join(dataDir, "posts.json"), buildPostsIndex(sorted), "utf8");
+  writeFileSync(join(ROOT, "sitemap.xml"), buildSitemap(sorted), "utf8");
+  console.log(`✔ 已写入  data/posts.json（${sorted.length} 篇） + sitemap.xml`);
 }
 
 function main() {
@@ -63,8 +73,10 @@ function main() {
     return;
   }
 
+  const converted = [];
   for (const f of files) {
     const { meta, slug, outFile } = convertFile(f);
+    converted.push({ meta, slug });
     console.log(`✔ 已生成  ${outFile.replace(ROOT + "/", "")}`);
     console.log(`   标题: ${meta.title} · 日期: ${meta.date || "(默认今天)"}`);
     console.log("");
@@ -74,6 +86,7 @@ function main() {
     console.log("  " + "-".repeat(60));
     console.log("");
   }
+  writeSiteData(converted);
 
   if (watch) {
     console.log("👀 监听中（Ctrl+C 退出）...");

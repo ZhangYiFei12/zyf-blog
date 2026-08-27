@@ -26,6 +26,8 @@ import {
   listItemSnippet,
   renderProjects,
   renderFeatured,
+  buildPostsIndex,
+  buildSitemap,
 } from "../../tools/md2html-core.mjs";
 
 const DEFAULT_REPO = "ZhangYiFei12/zyf-blog";
@@ -364,7 +366,7 @@ export async function onRequest(context) {
 
     // 渲染文章页
     const meta = { title, date, excerpt, tags };
-    const pageHtml = buildPage(meta, parseBody(String(input.body)));
+    const pageHtml = buildPage(meta, parseBody(String(input.body)), { slug });
 
     // 构造最新文章列表（含本篇文章）
     const updatedPosts = posts.filter(p => p.slug !== slug);
@@ -386,6 +388,8 @@ export async function onRequest(context) {
       { path: `blog/${slug}.html`, content: pageHtml },
       { path: "blog.html", content: blogHtml },
       { path: "index.html", content: indexHtml },
+      { path: "data/posts.json", content: buildPostsIndex(updatedPosts) },
+      { path: "sitemap.xml", content: buildSitemap(updatedPosts) },
     ]);
 
     return json({ ok: true, slug, commitSha, message: "已提交，Cloudflare 正在自动部署（约 30 秒~1 分钟）" });
@@ -412,6 +416,8 @@ export async function onRequest(context) {
       { path: `blog/${slug}.html`, delete: true },
       { path: "blog.html", content: blogHtml },
       { path: "index.html", content: indexHtml },
+      { path: "data/posts.json", content: buildPostsIndex(remaining) },
+      { path: "sitemap.xml", content: buildSitemap(remaining) },
     ]);
 
     return json({ ok: true, slug, commitSha, message: "已删除并提交，等待自动部署" });

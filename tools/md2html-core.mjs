@@ -244,8 +244,11 @@ ${bodyHtml}
 }
 
 /* ---------- 页面模板 ---------- */
-export function buildPage(meta, bodyHtml) {
+export function buildPage(meta, bodyHtml, opts = {}) {
   const excerpt = meta.excerpt || meta.title;
+  const slug = opts.slug ? String(opts.slug) : "";
+  const SITE = "https://zyf2026.pages.dev";
+  const pageUrl = slug ? `${SITE}/blog/${slug}.html` : SITE + "/";
   const articleHtml = buildArticlePreview(meta, bodyHtml);
 
   return `<!DOCTYPE html>
@@ -254,12 +257,21 @@ export function buildPage(meta, bodyHtml) {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${escapeHtml(meta.title)} · 张义飞</title>
-  <meta name="description" content="${escapeHtml(excerpt)}" />
-  <link rel="stylesheet" href="../css/style.css?v=4" />
+  <meta name="description" content="${escapeAttr(excerpt)}" />
+  <link rel="stylesheet" href="../css/style.css?v=5" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="${escapeAttr(meta.title)}" />
+  <meta property="og:description" content="${escapeAttr(excerpt)}" />
+  <meta property="og:url" content="${pageUrl}" />
+  <meta property="og:image" content="${SITE}/images/avatar.png" />
+  <meta property="og:site_name" content="张义飞博客" />
+  <meta name="twitter:card" content="summary" />
   <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
 </head>
 <body>
+
+  <div class="reading-progress" id="readingProgress"></div>
 
   <nav class="navbar">
     <div class="nav-inner">
@@ -283,6 +295,8 @@ export function buildPage(meta, bodyHtml) {
 
 ${articleHtml}
 
+    <nav class="post-nav" id="postNav"></nav>
+
     <a class="back-link" href="../blog.html">返回博客列表</a>
 
   </main>
@@ -294,7 +308,8 @@ ${articleHtml}
     </div>
   </footer>
 
-  <script src="../js/main.js?v=2"></script>
+  <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
+  <script src="../js/main.js?v=3"></script>
 </body>
 </html>
 `;
@@ -371,11 +386,42 @@ export function renderProjects(projects) {
   return projects.map(p => buildProjectCard(p)).join("\n\n");
 }
 
+/* ---------- 文章索引（data/posts.json，供客户端上一篇/下一篇、搜索等使用） ---------- */
+export function buildPostsIndex(posts) {
+  const list = (Array.isArray(posts) ? posts : [])
+    .map(p => ({ slug: p.slug, title: p.meta.title, date: p.meta.date || "" }))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  return JSON.stringify(list, null, 2) + "\n";
+}
+
+/* ---------- 站点地图 sitemap.xml ---------- */
+export function buildSitemap(posts, base = "https://zyf2026.pages.dev") {
+  const today = new Date().toISOString().slice(0, 10);
+  const urls = [
+    { loc: base + "/", lastmod: today, pri: "1.0", freq: "weekly" },
+    { loc: base + "/blog.html", lastmod: today, pri: "0.8", freq: "weekly" },
+    { loc: base + "/projects.html", lastmod: today, pri: "0.8", freq: "monthly" },
+    { loc: base + "/about.html", lastmod: today, pri: "0.6", freq: "monthly" },
+  ];
+  for (const p of (Array.isArray(posts) ? posts : [])) {
+    urls.push({
+      loc: base + "/blog/" + p.slug + ".html",
+      lastmod: p.meta.date || today,
+      pri: "0.7",
+      freq: "monthly",
+    });
+  }
+  const body = urls
+    .map(u => `  <url>\n    <loc>${u.loc}</loc>\n    <lastmod>${u.lastmod}</lastmod>\n    <changefreq>${u.freq}</changefreq>\n    <priority>${u.pri}</priority>\n  </url>`)
+    .join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`;
+}
+
 /* ---------- 组合：输入 Markdown → 输出 {meta, slug, bodyHtml, pageHtml} ---------- */
 export function renderMarkdown(md) {
   const { meta, body } = parseFrontMatter(md);
   const bodyHtml = parseBody(body);
-  const pageHtml = buildPage(meta, bodyHtml);
   const slug = slugify(meta.title || "untitled");
+  const pageHtml = buildPage(meta, bodyHtml, { slug });
   return { meta, slug, bodyHtml, pageHtml };
 }
