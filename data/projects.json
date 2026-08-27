@@ -1,20 +1,5 @@
 [
   {
-    "id": "personal-blog",
-    "title": "个人博客系统",
-    "year": "2025",
-    "description": "就是你正在浏览的这个网站！基于纯静态 HTML + CSS + JavaScript 构建，支持 Markdown 写作与科技简约风格主题。",
-    "tags": [
-      "Next.js",
-      "TypeScript",
-      "Tailwind CSS"
-    ],
-    "featured": true,
-    "url": "index.html",
-    "previewUrl": "index.html",
-    "sourceUrl": "https://github.com/ZhangYiFei12/zyf-blog"
-  },
-  {
     "id": "ai-learning-assistant",
     "title": "AI 学习助手",
     "year": "2024",
