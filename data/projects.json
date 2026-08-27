@@ -13,20 +13,5 @@
     "url": "index.html",
     "previewUrl": "index.html",
     "sourceUrl": "https://github.com/ZhangYiFei12/zyf-blog"
-  },
-  {
-    "id": "terminal-site-v1",
-    "title": "终端风格个人站 v1",
-    "year": "2023",
-    "description": "我的第一个个人网站，一个仿真终端界面，支持输入命令浏览我的技能与项目，蛮有 geek 范儿。",
-    "tags": [
-      "HTML",
-      "CSS",
-      "JavaScript"
-    ],
-    "featured": false,
-    "url": "",
-    "previewUrl": "https://example.com",
-    "sourceUrl": ""
   }
 ]
