@@ -1,6 +1,6 @@
 /* ============================================================
    张义飞个人博客 · 科技简约风格
-   Tech Minimal: 深色背景 / 青色点缀 / 等宽字体 / 网格背景
+   Tech Minimal: 深色/浅色双主题 / 青色点缀 / 等宽字体 / 网格背景
    ============================================================ */
 
 :root {
@@ -19,6 +19,33 @@
     Consolas, "Courier New", monospace;
   --maxw: 1080px;
   --radius: 6px;
+  --navbar-bg: rgba(10, 14, 20, 0.88);
+  --grid-line: rgba(34, 211, 238, 0.045);
+  --glow: rgba(34, 211, 238, 0.07);
+  --badge-text: #0a0e14;
+  --terminal-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+  --card-hover-shadow: 0 8px 30px var(--accent-glow);
+}
+
+/* 浅色主题 */
+[data-theme="light"] {
+  --bg: #f6f8fb;
+  --bg-soft: #eef2f7;
+  --bg-card: #ffffff;
+  --border: #d7dfe8;
+  --text: #25344a;
+  --text-dim: #5b6b82;
+  --accent: #0e7490;
+  --accent-dim: #22d3ee;
+  --accent-glow: rgba(14, 116, 144, 0.10);
+  --success: #059669;
+  --danger: #dc2626;
+  --navbar-bg: rgba(255, 255, 255, 0.86);
+  --grid-line: rgba(14, 116, 144, 0.05);
+  --glow: rgba(14, 116, 144, 0.045);
+  --badge-text: #ffffff;
+  --terminal-shadow: 0 8px 28px rgba(15, 23, 42, 0.10);
+  --card-hover-shadow: 0 10px 28px rgba(14, 116, 144, 0.10);
 }
 
 * {
@@ -40,6 +67,7 @@ body {
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* ---- 网格背景 ---- */
@@ -48,8 +76,8 @@ body::before {
   position: fixed;
   inset: 0;
   background-image:
-    linear-gradient(rgba(34, 211, 238, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(34, 211, 238, 0.045) 1px, transparent 1px);
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
   background-size: 32px 32px;
   pointer-events: none;
   z-index: 0;
@@ -61,7 +89,7 @@ body::after {
   inset: 0;
   background: radial-gradient(
     ellipse 80% 50% at 50% -10%,
-    rgba(34, 211, 238, 0.07),
+    var(--glow),
     transparent
   );
   pointer-events: none;
@@ -86,16 +114,20 @@ body::after {
 
 ::selection {
   background: var(--accent);
-  color: var(--bg);
+  color: var(--badge-text);
 }
 
 /* ---- 通用容器 ---- */
 .container {
   max-width: var(--maxw);
   margin: 0 auto;
-  padding: 0 20px;
+  padding: 0 24px;
   position: relative;
   z-index: 1;
+}
+
+@media (max-width: 480px) {
+  .container { padding: 0 16px; }
 }
 
 /* ============================================================
@@ -105,9 +137,10 @@ body::after {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(10, 14, 20, 0.88);
+  background: var(--navbar-bg);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .nav-inner {
@@ -117,7 +150,7 @@ body::after {
   height: 56px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 14px;
 }
 
 .brand {
@@ -129,6 +162,7 @@ body::after {
   align-items: center;
   gap: 8px;
   letter-spacing: 0.5px;
+  flex-shrink: 0;
 }
 
 .brand .prompt {
@@ -152,6 +186,8 @@ body::after {
   display: flex;
   gap: 6px;
   list-style: none;
+  flex: 1;
+  justify-content: flex-end;
 }
 
 .nav-links a {
@@ -171,6 +207,41 @@ body::after {
   border-color: var(--accent-dim);
 }
 
+/* ---- 导航右侧操作区 ---- */
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 主题切换按钮 */
+.theme-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s;
+  flex-shrink: 0;
+  font-family: var(--mono);
+}
+
+.theme-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+  background: var(--accent-glow);
+  transform: rotate(20deg);
+}
+
+/* 移动端菜单按钮 */
 .nav-toggle {
   display: none;
   background: none;
@@ -181,6 +252,11 @@ body::after {
   cursor: pointer;
   font-family: var(--mono);
   font-size: 13px;
+  transition: border-color 0.2s;
+}
+
+.nav-toggle:hover {
+  border-color: var(--accent-dim);
 }
 
 @media (max-width: 768px) {
@@ -211,13 +287,13 @@ body::after {
    首页 Hero
    ============================================================ */
 .hero {
-  padding: 80px 0 60px;
+  padding: 72px 0 56px;
 }
 
 .hero-grid {
   display: grid;
   grid-template-columns: 240px 1fr;
-  gap: 48px;
+  gap: 40px;
   align-items: start;
 }
 
@@ -233,6 +309,7 @@ body::after {
   overflow: hidden;
   position: relative;
   box-shadow: 0 0 40px var(--accent-glow);
+  transition: box-shadow 0.3s ease;
 }
 
 .avatar-box img {
@@ -274,7 +351,7 @@ body::after {
 }
 
 .hero-text h1 {
-  font-size: 32px;
+  font-size: 34px;
   font-weight: 700;
   color: var(--text);
   margin-bottom: 6px;
@@ -320,7 +397,8 @@ body::after {
   border-radius: var(--radius);
   background: var(--bg-soft);
   overflow: hidden;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--terminal-shadow);
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .terminal-bar {
@@ -448,7 +526,7 @@ body::after {
 .card:hover {
   border-color: var(--accent-dim);
   transform: translateY(-3px);
-  box-shadow: 0 8px 30px var(--accent-glow);
+  box-shadow: var(--card-hover-shadow);
 }
 
 .card h3 {
@@ -523,7 +601,7 @@ body::after {
   top: 16px;
   left: -1px;
   font-size: 10px;
-  color: var(--bg);
+  color: var(--badge-text);
   background: var(--accent);
   padding: 3px 10px;
   border-radius: 0 3px 3px 0;
@@ -542,10 +620,12 @@ body::after {
   border-bottom: 1px dashed var(--border);
   text-decoration: none;
   transition: all 0.2s;
+  border-left: 2px solid transparent;
+  padding-left: 16px;
 }
 
 .post-item:hover {
-  padding-left: 12px;
+  border-left-color: var(--accent);
   background: var(--accent-glow);
 }
 
@@ -557,6 +637,7 @@ body::after {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 1;
 }
 
 .post-title {
@@ -569,12 +650,14 @@ body::after {
 .post-excerpt {
   font-size: 12.5px;
   color: var(--text-dim);
+  line-height: 1.6;
 }
 
 .post-date {
   font-size: 12px;
   color: var(--text-dim);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .post-date::before {
@@ -597,6 +680,7 @@ body::after {
   .post-item {
     flex-direction: column;
     gap: 8px;
+    padding-left: 12px;
   }
 }
 
@@ -630,7 +714,7 @@ body::after {
 }
 
 .article-body {
-  max-width: 720px;
+  max-width: 760px;
   font-size: 15px;
   line-height: 2;
   color: var(--text);
@@ -650,7 +734,7 @@ body::after {
 }
 
 .article-body p {
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .article-body ul,
@@ -711,6 +795,13 @@ body::after {
 
 .article-body em {
   color: var(--text-dim);
+}
+
+.article-body img {
+  max-width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin: 12px 0;
 }
 
 .back-link {
@@ -928,6 +1019,7 @@ body::after {
   padding: 32px 0;
   margin-top: 60px;
   text-align: center;
+  transition: border-color 0.3s ease;
 }
 
 .footer p {

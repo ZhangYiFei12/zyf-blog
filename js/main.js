@@ -5,6 +5,27 @@
 (function () {
   "use strict";
 
+  /* ---- 深浅色主题切换 ---- */
+  var themeBtn = document.getElementById("themeToggle");
+  function currentTheme() {
+    return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+  }
+  function syncThemeIcon() {
+    if (!themeBtn) return;
+    themeBtn.textContent = currentTheme() === "light" ? "☾" : "☀";
+    themeBtn.setAttribute("aria-label", currentTheme() === "light" ? "切换到深色模式" : "切换到浅色模式");
+  }
+  syncThemeIcon();
+  if (themeBtn) {
+    themeBtn.addEventListener("click", function () {
+      var isLight = currentTheme() === "light";
+      if (isLight) document.documentElement.removeAttribute("data-theme");
+      else document.documentElement.setAttribute("data-theme", "light");
+      try { localStorage.setItem("zyf-theme", isLight ? "dark" : "light"); } catch (e) {}
+      syncThemeIcon();
+    });
+  }
+
   /* ---- 移动端导航切换 ---- */
   var toggle = document.querySelector(".nav-toggle");
   var links = document.querySelector(".nav-links");

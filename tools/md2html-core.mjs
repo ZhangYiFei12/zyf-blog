@@ -255,8 +255,9 @@ export function buildPage(meta, bodyHtml) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${escapeHtml(meta.title)} · 张义飞</title>
   <meta name="description" content="${escapeHtml(excerpt)}" />
-  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="../css/style.css?v=4" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
+  <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
 </head>
 <body>
 
@@ -265,13 +266,16 @@ export function buildPage(meta, bodyHtml) {
       <a href="../index.html" class="brand">
         <span class="prompt">&gt;_</span>zhangyifei<span class="cursor"></span>
       </a>
-      <button class="nav-toggle" aria-label="菜单">☰ 菜单</button>
       <ul class="nav-links">
         <li><a href="../index.html">首页</a></li>
         <li><a href="../blog.html">博客</a></li>
         <li><a href="../projects.html">项目</a></li>
         <li><a href="../about.html">关于</a></li>
       </ul>
+      <div class="nav-actions">
+        <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
+        <button class="nav-toggle" aria-label="菜单">☰ 菜单</button>
+      </div>
     </div>
   </nav>
 
@@ -290,7 +294,7 @@ ${articleHtml}
     </div>
   </footer>
 
-  <script src="../js/main.js"></script>
+  <script src="../js/main.js?v=2"></script>
 </body>
 </html>
 `;

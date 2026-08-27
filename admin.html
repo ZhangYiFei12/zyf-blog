@@ -4,8 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台 · 张义飞博客</title>
-  <link rel="stylesheet" href="css/style.css?v=3" />
+  <link rel="stylesheet" href="css/style.css?v=4" />
   <link rel="icon" type="image/png" href="images/avatar.png" />
+  <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
   <style>
     /* 后台专用样式 - 复用现有 CSS 变量 */
     .admin-body { background: var(--bg); color: var(--text); min-height: 100vh; }
@@ -127,8 +128,9 @@
     <div class="admin-container">
       <div class="admin-header">
         <h1><span class="accent">&gt;_</span> 博客后台 <span style="font-size:11px;color:var(--text-dim);font-weight:400;">发布 · 编辑 · 删除</span></h1>
-        <div>
-          <a href="index.html" class="logout" style="margin-right:16px;">← 返回网站</a>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <button class="theme-toggle" id="adminThemeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
+          <a href="index.html" class="logout">← 返回网站</a>
           <span id="logoutBtn" class="logout">退出登录</span>
         </div>
       </div>
@@ -259,5 +261,23 @@
   <div id="toast" class="toast" style="display:none;"></div>
 
   <script src="js/admin.js?v=3"></script>
+  <script>
+    (function () {
+      function cur() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }
+      function sync() {
+        var b = document.getElementById("adminThemeToggle");
+        if (b) b.textContent = cur() === "light" ? "☾" : "☀";
+      }
+      sync();
+      var b = document.getElementById("adminThemeToggle");
+      if (b) b.addEventListener("click", function () {
+        var light = cur() === "light";
+        if (light) document.documentElement.removeAttribute("data-theme");
+        else document.documentElement.setAttribute("data-theme", "light");
+        try { localStorage.setItem("zyf-theme", light ? "dark" : "light"); } catch (e) {}
+        sync();
+      });
+    })();
+  </script>
 </body>
 </html>
