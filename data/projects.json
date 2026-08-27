@@ -1,5 +1,18 @@
 [
   {
+    "title": "两步确认测试项目",
+    "year": "2026",
+    "description": "用于验证两步删除的临时项目",
+    "tags": [
+      "测试"
+    ],
+    "featured": false,
+    "url": "",
+    "previewUrl": "",
+    "sourceUrl": "",
+    "id": "两步确认测试项目"
+  },
+  {
     "id": "personal-blog",
     "title": "个人博客系统",
     "year": "2025",
