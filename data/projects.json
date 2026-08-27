@@ -1,20 +1,5 @@
 [
   {
-    "title": "E2E 已编辑",
-    "year": "2026",
-    "description": "已编辑",
-    "tags": [
-      "测试",
-      "E2E",
-      "编辑"
-    ],
-    "featured": false,
-    "url": "",
-    "previewUrl": "",
-    "sourceUrl": "https://github.com/ZhangYiFei12",
-    "id": "E2E-测试项目"
-  },
-  {
     "id": "personal-blog",
     "title": "个人博客系统",
     "year": "2025",
