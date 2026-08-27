@@ -248,6 +248,7 @@
           </div>
           <div style="display:flex;gap:10px;margin-top:8px;">
             <button class="btn" id="saveProjectBtn">➕ 添加项目</button>
+            <button class="btn btn-outline" id="projDraftBtn">💾 存草稿</button>
             <button class="btn btn-outline" id="resetProjectBtn" style="display:none;">新建项目</button>
             <span id="projectStatus" style="font-size:11px;color:var(--text-dim);align-self:center;margin-left:8px;"></span>
           </div>
@@ -257,6 +258,11 @@
         <!-- 右侧：项目列表 -->
         <div class="article-list">
           <h3>🛠️ 所有项目</h3>
+          <div class="admin-tabs" id="projectFilter" style="margin-bottom:10px;">
+            <button class="tab active" data-pfilter="">全部</button>
+            <button class="tab" data-pfilter="published">已发布</button>
+            <button class="tab" data-pfilter="draft">草稿</button>
+          </div>
           <div id="projectList"></div>
           <div id="projectListLoading" class="loading">加载中</div>
         </div>
@@ -268,7 +274,7 @@
   <!-- 浮动消息 -->
   <div id="toast" class="toast" style="display:none;"></div>
 
-  <script src="js/admin.js?v=4"></script>
+  <script src="js/admin.js?v=5"></script>
   <script>
     (function () {
       function cur() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }

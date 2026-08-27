@@ -40,9 +40,12 @@
   var projectList = $("projectList");
   var projectListLoading = $("projectListLoading");
   var saveProjectBtn = $("saveProjectBtn");
+  var projDraftBtn = $("projDraftBtn");
   var resetProjectBtn = $("resetProjectBtn");
   var projectId = $("projectId");
   var projectsCache = [];
+  var projectFilterEl = $("projectFilter");
+  var projectFilterStatus = "";
   var pendingDeleteId = null;
   var pendingDeleteBtn = null;
   var pendingDeleteTimer = null;
@@ -441,12 +444,15 @@
           projectList.innerHTML = '<div class="empty-state">暂无项目<br/>添加一个吧 🛠️</div>';
           return;
         }
-        projectsCache.forEach(function (p) {
+        var filtered = projectsCache;
+        if (projectFilterStatus === "published") filtered = filtered.filter(function (p) { return p.published !== false; });
+        else if (projectFilterStatus === "draft") filtered = filtered.filter(function (p) { return p.published === false; });
+        filtered.forEach(function (p) {
           var item = document.createElement("div");
           item.className = "item";
           item.innerHTML =
             '<div class="info">' +
-              '<div class="title">' + escapeHtml(p.title || "(无标题)") + (p.featured ? ' <span style="color:var(--accent);font-size:10px;">★精选</span>' : "") + "</div>" +
+              '<div class="title">' + escapeHtml(p.title || "(无标题)") + (p.featured ? ' <span style="color:var(--accent);font-size:10px;">★精选</span>' : "") + (p.published === false ? ' <span style="color:var(--accent);font-size:10px;border:1px solid var(--accent);border-radius:3px;padding:1px 6px;">草稿</span>' : "") + "</div>" +
               '<div class="date">' + escapeHtml(p.year || "") + (p.tags && p.tags.length ? " · " + escapeHtml(p.tags.join(" / ")) : "") + "</div>" +
             "</div>" +
             '<div class="actions">' +
@@ -455,6 +461,9 @@
             "</div>";
           projectList.appendChild(item);
         });
+        if (!filtered.length) {
+          projectList.innerHTML = '<div class="empty-state">没有匹配的项目</div>';
+        }
       })
       .catch(function (err) {
         projectListLoading.style.display = "none";
@@ -473,6 +482,18 @@
       deleteProject(id, btn);
     }
   });
+
+  // 项目列表筛选（全部 / 已发布 / 草稿）
+  if (projectFilterEl) {
+    projectFilterEl.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-pfilter]");
+      if (!btn) return;
+      projectFilterStatus = btn.getAttribute("data-pfilter") || "";
+      projectFilterEl.querySelectorAll(".tab").forEach(function (t) { t.classList.remove("active"); });
+      btn.classList.add("active");
+      loadProjects();
+    });
+  }
 
   /* ---------- 项目表单 ---------- */
 
@@ -515,7 +536,7 @@
     showToast("已载入《" + p.title + "》", "success");
   }
 
-  function saveProject() {
+  function saveProject(isPublished) {
     var title = $("projTitleField").value.trim();
     if (!title) { showToast("请填写项目名称", "error"); return; }
     var payload = {
@@ -527,10 +548,12 @@
       previewUrl: $("projPreviewField").value.trim(),
       sourceUrl: $("projSourceField").value.trim(),
       featured: $("projFeatured").checked,
+      published: isPublished,
     };
     if (projectId.value) payload.id = projectId.value;
 
     saveProjectBtn.disabled = true;
+    projDraftBtn.disabled = true;
     saveProjectBtn.textContent = "提交中…";
     $("projectStatus").textContent = "";
 
@@ -544,11 +567,13 @@
       .catch(function (err) { showToast(err.message, "error"); })
       .finally(function () {
         saveProjectBtn.disabled = false;
-        saveProjectBtn.textContent = projectId.value ? "💾 保存修改" : "➕ 添加项目";
+        projDraftBtn.disabled = false;
+        saveProjectBtn.textContent = "➕ 添加项目";
       });
   }
 
-  saveProjectBtn.addEventListener("click", saveProject);
+  saveProjectBtn.addEventListener("click", function () { saveProject(true); });
+  projDraftBtn.addEventListener("click", function () { saveProject(false); });
 
   /* ---------- 删除项目（两步确认：先点一次进入待确认，4 秒内再点一次才删除） ---------- */
 

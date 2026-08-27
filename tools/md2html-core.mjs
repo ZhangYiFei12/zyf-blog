@@ -384,11 +384,17 @@ ${meta}
 }
 
 export function renderFeatured(projects) {
-  return projects.filter(p => p.featured).map(p => buildFeaturedCard(p)).join("\n\n");
+  return (Array.isArray(projects) ? projects : [])
+    .filter(p => p.published !== false && p.featured) // 草稿不渲染到首页精选区
+    .map(p => buildFeaturedCard(p))
+    .join("\n\n");
 }
 
 export function renderProjects(projects) {
-  return projects.map(p => buildProjectCard(p)).join("\n\n");
+  return (Array.isArray(projects) ? projects : [])
+    .filter(p => p.published !== false) // 草稿不渲染到公开 projects.html
+    .map(p => buildProjectCard(p))
+    .join("\n\n");
 }
 
 /* ---------- 文章索引（data/posts.json，供客户端上一篇/下一篇、搜索等使用） ---------- */

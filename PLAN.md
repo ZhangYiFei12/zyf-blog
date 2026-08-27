@@ -46,8 +46,9 @@
 
 - **站内搜索**：博客列表页顶部搜索框，客户端全文搜索（`data/search-index.json`：标题 + 标签 + 正文前 800 字纯文本），与标签筛选联动（可组合筛选），200ms 防抖实时过滤，无结果空状态提示「没有找到与…相关的文章」；搜索索引由后台发布/编辑/删除自动同步，本地工具同样生成
 - **后台草稿**：文章 front matter 新增 `published` 字段（默认 true）；后台编辑区新增「💾 存草稿」按钮，文章列表右上新增筛选（全部/已发布/草稿）并给草稿加「草稿」徽标；草稿不进入公开列表/首页/sitemap/feed/search-index，只在后台可见；编辑区打开草稿可继续编辑并一键转发布
+  - **项目也支持草稿**：`projects.json` 每条新增 `published` 字段（默认 true），`renderProjects`/`renderFeatured` 渲染时过滤草稿（projects.html 与首页精选区不显示）；后台项目表单新增「💾 存草稿」按钮 + 项目列表筛选（全部/已发布/草稿）+ 草稿徽标；GET /projects 返回 published 字段
 - **图片上传**：后台编辑器新增「🖼️ 上传图片」按钮，选图（≤2MB）→ base64 提交 → 后台提交到 `images/uploads/` → 返回可引用 URL 并自动插入正文（`![文件名](/images/uploads/...)`）；部署后（约 30 秒）文章预览/页面即可显示
-- 其他：`data/search-index.json` 由 `buildSearchIndex()` 生成（含 `&lt;…&gt;` 转义标签剥离）；CSS `?v=7`、main.js `?v=5`、admin.js `?v=4`；新增 `tools/test-tier3.mjs` 回归测试（核心函数草稿过滤 + 浏览器搜索 UI）
+- 其他：`data/search-index.json` 由 `buildSearchIndex()` 生成（含 `&lt;…&gt;` 转义标签剥离）；CSS `?v=7`、main.js `?v=5`、admin.js `?v=5`；新增 `tools/test-tier3.mjs` 回归测试（核心函数草稿过滤 + 浏览器搜索 UI）
 
 ## ✅ 访问统计：已开启（2026-08-27）
 

@@ -247,6 +247,7 @@ function normalizeProject(input) {
     description: String(input.description || "").trim(),
     tags: Array.isArray(input.tags) ? input.tags.map(String).filter(Boolean) : [],
     featured: !!input.featured,
+    published: input.published !== false,
     url: String(input.url || "").trim(),
     previewUrl: String(input.previewUrl || "").trim(),
     sourceUrl: String(input.sourceUrl || "").trim(),
@@ -496,7 +497,7 @@ export async function onRequest(context) {
       { path: "index.html", content: newIndexHtml },
     ]);
 
-    return json({ ok: true, id: project.id, commitSha, message: "已提交，Cloudflare 正在自动部署（约 30 秒~1 分钟）" });
+    return json({ ok: true, id: project.id, commitSha, message: project.published === false ? "草稿已保存（仅后台可见）" : "已提交，Cloudflare 正在自动部署（约 30 秒~1 分钟）" });
   }
 
   // ---- DELETE /api/admin/projects（按 id）----
