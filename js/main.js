@@ -5,6 +5,47 @@
 (function () {
   "use strict";
 
+  /* ---- 自动注入：粒子画布 + 滚动进度条（全站生效） ---- */
+  if (!document.getElementById("particles")) {
+    var pc = document.createElement("canvas");
+    pc.id = "particles";
+    pc.setAttribute("aria-hidden", "true");
+    document.body.insertBefore(pc, document.body.firstChild);
+  }
+  if (!document.querySelector(".scroll-progress")) {
+    var sp = document.createElement("div");
+    sp.className = "scroll-progress";
+    sp.setAttribute("aria-hidden", "true");
+    sp.innerHTML = '<div class="bar"></div>';
+    document.body.appendChild(sp);
+  }
+
+  /* ---- 自动增强：卡片 3D 倾斜 + 光效 + 涟漪 ---- */
+  document.querySelectorAll(".card").forEach(function (card) {
+    if (!card.classList.contains("tilt")) card.classList.add("tilt");
+    if (!card.classList.contains("ripple-js")) card.classList.add("ripple-js");
+    if (!card.querySelector(".card-shine")) {
+      var shine = document.createElement("div");
+      shine.className = "card-shine";
+      card.appendChild(shine);
+    }
+  });
+  // 交互按钮涟漪
+  [".theme-toggle", ".nav-toggle", ".back-top", ".tag-filter .chip"].forEach(function (sel) {
+    document.querySelectorAll(sel).forEach(function (el) {
+      if (!el.classList.contains("ripple-js")) el.classList.add("ripple-js");
+    });
+  });
+
+  /* ---- 文章列表交错浮现 ---- */
+  var postItems = document.querySelectorAll(".post-item");
+  if (postItems.length) {
+    postItems.forEach(function (item, i) {
+      item.style.transitionDelay = Math.min(i * 0.06, 0.6) + "s";
+      item.classList.add("stagger-in");
+    });
+  }
+
   /* ---- 深浅色主题切换 ---- */
   var themeBtn = document.getElementById("themeToggle");
   function currentTheme() {
@@ -335,4 +376,180 @@
     var href = a.getAttribute("href");
     if (href === path) a.classList.add("active");
   });
+
+  /* ---- 鼠标跟随光晕（spotlight，仅桌面端） ---- */
+  if (window.matchMedia("(pointer: fine)").matches) {
+    var root = document.documentElement;
+    var ticking = false;
+    document.addEventListener("mousemove", function (e) {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(function () {
+        root.style.setProperty("--cursor-x", e.clientX + "px");
+        root.style.setProperty("--cursor-y", e.clientY + "px");
+        ticking = false;
+      });
+    });
+  }
+
+  /* ---- 导航栏滚动阴影 ---- */
+  var navbar = document.querySelector(".navbar");
+  if (navbar) {
+    function updateNavbar() {
+      navbar.classList.toggle("scrolled", (window.pageYOffset || document.documentElement.scrollTop || 0) > 10);
+    }
+    document.addEventListener("scroll", updateNavbar, { passive: true });
+    updateNavbar();
+  }
+
+  /* ---- 主题切换旋转动画 ---- */
+  if (themeBtn) {
+    themeBtn.addEventListener("click", function () {
+      themeBtn.classList.remove("spin");
+      void themeBtn.offsetWidth;
+      themeBtn.classList.add("spin");
+    });
+  }
+
+  /* ---- Canvas 粒子背景（全站浮动光点） ---- */
+  var particlesCanvas = document.getElementById("particles");
+  if (particlesCanvas && window.matchMedia("(min-width: 768px)").matches) {
+    var ctx = particlesCanvas.getContext("2d");
+    var pr = window.devicePixelRatio || 1;
+    var w = window.innerWidth, h = window.innerHeight;
+    particlesCanvas.width = w * pr;
+    particlesCanvas.height = h * pr;
+    ctx.scale(pr, pr);
+    var particles = [];
+    var count = Math.min(80, Math.floor((w * h) / 12000));
+    for (var i = 0; i < count; i++) {
+      particles.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        r: 1 + Math.random() * 1.5,
+        dx: (Math.random() - 0.5) * 0.3,
+        dy: (Math.random() - 0.5) * 0.3,
+        o: 0.15 + Math.random() * 0.35,
+        hue: 170 + Math.random() * 60, // 青 ~ 紫
+      });
+    }
+    function drawParticles() {
+      ctx.clearRect(0, 0, w, h);
+      particles.forEach(function (p, pi) {
+        p.x += p.dx;
+        p.y += p.dy;
+        if (p.x < 0) p.x = w;
+        if (p.x > w) p.x = 0;
+        if (p.y < 0) p.y = h;
+        if (p.y > h) p.y = 0;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = "hsla(" + p.hue + ", 80%, 70%, " + p.o + ")";
+        ctx.fill();
+        // 连线（近距离粒子）
+        for (var j = pi + 1; j < particles.length; j++) {
+          var p2 = particles[j];
+          var dx = p.x - p2.x, dy = p.y - p2.y;
+          var dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 120) {
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.strokeStyle = "hsla(186, 80%, 70%, " + (0.08 * (1 - dist / 120)) + ")";
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
+      });
+      requestAnimationFrame(drawParticles);
+    }
+    drawParticles();
+    var resizeTimer;
+    window.addEventListener("resize", function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () {
+        w = window.innerWidth;
+        h = window.innerHeight;
+        particlesCanvas.width = w * pr;
+        particlesCanvas.height = h * pr;
+        ctx.scale(pr, pr);
+      }, 300);
+    });
+  }
+
+  /* ---- 3D 卡片倾斜 ---- */
+  document.querySelectorAll(".card.tilt").forEach(function (card) {
+    card.addEventListener("mousemove", function (e) {
+      var rect = card.getBoundingClientRect();
+      var cx = rect.left + rect.width / 2;
+      var cy = rect.top + rect.height / 2;
+      var x = (e.clientX - cx) / (rect.width / 2);
+      var y = (e.clientY - cy) / (rect.height / 2);
+      card.style.transform = "rotateX(" + (-y * 8) + "deg) rotateY(" + (x * 8) + "deg) translateY(-4px)";
+      card.style.setProperty("--mx", (e.clientX - rect.left) / rect.width * 100 + "%");
+      card.style.setProperty("--my", (e.clientY - rect.top) / rect.height * 100 + "%");
+    });
+    card.addEventListener("mouseleave", function () {
+      card.style.transform = "";
+    });
+  });
+
+  /* ---- 点击涟漪 ---- */
+  document.addEventListener("click", function (e) {
+    var rippleEl = e.target.closest(".ripple-js");
+    if (!rippleEl) return;
+    var r = document.createElement("span");
+    r.className = "ripple";
+    var rect = rippleEl.getBoundingClientRect();
+    var size = Math.max(rect.width, rect.height);
+    r.style.width = r.style.height = size + "px";
+    r.style.left = (e.clientX - rect.left - size / 2) + "px";
+    r.style.top = (e.clientY - rect.top - size / 2) + "px";
+    rippleEl.appendChild(r);
+    setTimeout(function () { r.remove(); }, 700);
+  });
+
+  /* ---- 交错浮现（增强滚动 reveal） ---- */
+  var staggerEls = document.querySelectorAll(".reveal-stagger");
+  if (staggerEls.length && "IntersectionObserver" in window) {
+    var staggerIO = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) {
+          en.target.classList.add("in-view");
+          staggerIO.unobserve(en.target);
+        }
+      });
+    }, { threshold: 0.1 });
+    staggerEls.forEach(function (el) { staggerIO.observe(el); });
+  }
+
+  /* ---- 滚动进度竖条 ---- */
+  var scrollBar = document.querySelector(".scroll-progress .bar");
+  if (scrollBar) {
+    function updateScrollBar() {
+      var doc = document.documentElement;
+      var total = doc.scrollHeight - doc.clientHeight;
+      var scrolled = doc.scrollTop || document.body.scrollTop || 0;
+      scrollBar.style.height = (total > 0 ? (scrolled / total) * 100 : 0) + "%";
+    }
+    document.addEventListener("scroll", updateScrollBar, { passive: true });
+    window.addEventListener("resize", updateScrollBar);
+    updateScrollBar();
+  }
+
+  /* ---- 磁吸按钮 ---- */
+  document.querySelectorAll(".magnetic").forEach(function (btn) {
+    btn.addEventListener("mousemove", function (e) {
+      var rect = btn.getBoundingClientRect();
+      var x = (e.clientX - rect.left - rect.width / 2) * 0.25;
+      var y = (e.clientY - rect.top - rect.height / 2) * 0.25;
+      btn.style.transform = "translate(" + x + "px, " + y + "px)";
+    });
+    btn.addEventListener("mouseleave", function () {
+      btn.style.transform = "";
+    });
+  });
+
+  /* ---- 标题光带扫过（手动触发重新计算） ---- */
+  // 纯 CSS 动画，无需 JS
 })();
