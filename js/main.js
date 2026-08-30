@@ -429,6 +429,32 @@
         gallerySection.style.display = "";
       })
       .catch(function () {});
+
+    /* 相册导航链接：空相册时弹出提示，有内容则正常跳转 */
+    (function () {
+      var link = document.querySelector('.nav-links a[href="index.html#gallerySection"]');
+      if (!link) return;
+      link.addEventListener("click", function (e) {
+        if (gallerySection.style.display !== "none") return;
+        e.preventDefault();
+        var toast = document.createElement("div");
+        toast.style.cssText = "position:fixed;bottom:30px;left:50%;transform:translateX(-50%);z-index:999;" +
+          "background:var(--bg-card,#1a1a2e);color:var(--text,#e0f2fe);border:1px solid var(--accent-dim,#0e7490);" +
+          "border-radius:12px;padding:10px 22px;font-size:13px;box-shadow:0 0 30px rgba(0,0,0,0.4);" +
+          "opacity:0;transition:opacity .3s;white-space:nowrap;cursor:pointer;";
+        toast.textContent = "📷 相册还没内容，去后台上传吧 →";
+        document.body.appendChild(toast);
+        requestAnimationFrame(function () { toast.style.opacity = "1"; });
+        toast.addEventListener("click", function () {
+          toast.style.opacity = "0";
+          setTimeout(function () { toast.remove(); }, 300);
+        });
+        setTimeout(function () {
+          toast.style.opacity = "0";
+          setTimeout(function () { toast.remove(); }, 300);
+        }, 5000);
+      });
+    })();
   }
 
   /* ---- 当前年份导航高亮 ---- */
