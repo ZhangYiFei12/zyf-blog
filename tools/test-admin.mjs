@@ -50,7 +50,7 @@ const EXISTING_BLOG_HTML = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>博客 · 张义飞 | 个人博客</title>
+  <title>博客 | ZH</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -91,7 +91,7 @@ const EXISTING_INDEX_HTML = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>张义飞 · Yifei Zhang | 个人博客</title>
+  <title>ZH | 个人博客</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>

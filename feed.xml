@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>张义飞博客</title>
+    <title>ZH | 个人博客</title>
     <link>https://zyf2026.pages.dev/blog.html</link>
-    <description>张义飞（Yifei Zhang）的个人博客：技术分享、项目实践与生活随笔。</description>
+    <description>ZH（张义飞）的个人博客：技术分享、项目实践与生活随笔。</description>
     <language>zh-CN</language>
     <atom:link href="https://zyf2026.pages.dev/feed.xml" rel="self" type="application/rss+xml" />
     <item>

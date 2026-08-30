@@ -258,7 +258,7 @@ export function buildPage(meta, bodyHtml, opts = {}) {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${escapeHtml(meta.title)} · 张义飞</title>
+  <title>${escapeHtml(meta.title)} | ZH</title>
   <meta name="description" content="${escapeAttr(excerpt)}" />
   <link rel="stylesheet" href="../css/style.css?v=14" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
@@ -267,7 +267,7 @@ export function buildPage(meta, bodyHtml, opts = {}) {
   <meta property="og:description" content="${escapeAttr(excerpt)}" />
   <meta property="og:url" content="${pageUrl}" />
   <meta property="og:image" content="${SITE}/images/avatar.png" />
-  <meta property="og:site_name" content="张义飞博客" />
+  <meta property="og:site_name" content="ZH 博客" />
   <meta name="twitter:card" content="summary" />
   <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
 </head>
@@ -424,7 +424,7 @@ export function buildRss(posts, base = "https://zyf2026.pages.dev") {
       return `    <item>\n      <title>${title}</title>\n      <link>${url}</link>\n      <guid isPermaLink="true">${url}</guid>\n      <pubDate>${rfc822(p.meta.date)}</pubDate>\n      <description>${desc}</description>\n    </item>`;
     })
     .join("\n");
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n  <channel>\n    <title>张义飞博客</title>\n    <link>${base}/blog.html</link>\n    <description>张义飞（Yifei Zhang）的个人博客：技术分享、项目实践与生活随笔。</description>\n    <language>zh-CN</language>\n    <atom:link href="${base}/feed.xml" rel="self" type="application/rss+xml" />\n${items}\n  </channel>\n</rss>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n  <channel>\n    <title>ZH | 个人博客</title>\n    <link>${base}/blog.html</link>\n    <description>ZH（张义飞）的个人博客：技术分享、项目实践与生活随笔。</description>\n    <language>zh-CN</language>\n    <atom:link href="${base}/feed.xml" rel="self" type="application/rss+xml" />\n${items}\n  </channel>\n</rss>\n`;
 }
 
 /* ---------- 站点地图 sitemap.xml ---------- */
