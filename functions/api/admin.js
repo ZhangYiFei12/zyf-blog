@@ -452,8 +452,8 @@ export async function onRequest(context) {
     const ext = String((input && input.ext) || mime.split("/")[1] || "png")
       .replace(/[^a-z0-9]/gi, "")
       .toLowerCase() || "png";
-    if (!b64 || b64.length > 3 * 1024 * 1024) {
-      return json({ error: "图片数据无效或过大（>2MB）" }, 400);
+    if (!b64 || b64.length > 7 * 1024 * 1024) {
+      return json({ error: "图片数据无效或过大（>5MB）" }, 400);
     }
     const filename = `img-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
     const path = `images/uploads/${filename}`;

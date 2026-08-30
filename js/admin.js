@@ -372,8 +372,8 @@
   imgFileInput.addEventListener("change", function () {
     var file = imgFileInput.files && imgFileInput.files[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      showToast("图片超过 2MB，请压缩后上传", "error");
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("图片超过 5MB，请压缩后上传", "error");
       imgFileInput.value = "";
       return;
     }
