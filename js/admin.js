@@ -27,6 +27,8 @@
   var articleFilter = $("articleFilter");
   var uploadImgBtn = $("uploadImgBtn");
   var imgFileInput = $("imgFileInput");
+  var compressTarget = $("compressTarget");
+  var compressQuality = $("compressQuality");
 
   var previewTimer = null;
 
@@ -365,26 +367,80 @@
   publishBtn.addEventListener("click", function () { submitArticle(true); });
   draftBtn.addEventListener("click", function () { submitArticle(false); });
 
-  /* ---------- 图片上传 ---------- */
+  /* ---------- 图片压缩（Canvas，超限自动执行） ---------- */
+
+  function formatSize(bytes) {
+    if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(2) + "MB";
+    if (bytes >= 1024) return Math.round(bytes / 1024) + "KB";
+    return bytes + "B";
+  }
+
+  /**
+   * 用 Canvas 压缩图片到目标字节数以下。
+   * 策略：先用所选质量绘制原图，超限则逐步缩小尺寸（保持所选质量），
+   * 缩到下限仍超限再逐步降低质量，直到达标或达到迭代上限。
+   * 输出统一为 image/jpeg（透明背景填白底）。
+   */
+  function compressImage(dataUrl, targetBytes, quality) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var canvas = document.createElement("canvas");
+          var w = img.naturalWidth || img.width;
+          var h = img.naturalHeight || img.height;
+          if (!w || !h) { reject(new Error("无法读取图片尺寸")); return; }
+          // 预缩：面积超过 16M 像素时先压到限制内（兼容 iOS canvas 限制）
+          var MAX_AREA = 16 * 1024 * 1024;
+          if (w * h > MAX_AREA) {
+            var k0 = Math.sqrt(MAX_AREA / (w * h));
+            w = Math.floor(w * k0); h = Math.floor(h * k0);
+          }
+          var q = quality;
+          var out = "", b64 = "", bytes = 0, ctx;
+          for (var iter = 0; iter < 14; iter++) {
+            canvas.width = w; canvas.height = h;
+            ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#ffffff"; // JPEG 无透明通道，白底
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+            out = canvas.toDataURL("image/jpeg", q);
+            b64 = out.split(",")[1] || "";
+            bytes = Math.floor(b64.length * 3 / 4);
+            if (bytes <= targetBytes) break;
+            if (w > 400) {          // 优先缩尺寸，保持所选质量
+              w = Math.floor(w * 0.85); h = Math.floor(h * 0.85);
+            } else if (q > 0.3) {   // 尺寸到底后降质量
+              q = Math.max(0.3, q - 0.15);
+            } else {
+              break;                // 已到底，返回当前结果
+            }
+          }
+          resolve({ dataUrl: out, bytes: bytes });
+        } catch (err) { reject(err); }
+      };
+      img.onerror = function () { reject(new Error("图片解码失败")); };
+      img.src = dataUrl;
+    });
+  }
 
   uploadImgBtn.addEventListener("click", function () { imgFileInput.click(); });
 
   imgFileInput.addEventListener("change", function () {
     var file = imgFileInput.files && imgFileInput.files[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      showToast("图片超过 5MB，请压缩后上传", "error");
+    var HARD_LIMIT = 5 * 1024 * 1024;
+    var targetBytes = (parseInt((compressTarget && compressTarget.value) || "5120", 10) || 5120) * 1024;
+    var quality = parseFloat((compressQuality && compressQuality.value) || "0.8") || 0.8;
+
+    var resetBtn = function () {
+      uploadImgBtn.disabled = false;
+      uploadImgBtn.textContent = "🖼️ 上传图片";
       imgFileInput.value = "";
-      return;
-    }
-    var reader = new FileReader();
-    reader.onload = function (e) {
-      var result = e.target && e.target.result;
-      if (!result) { showToast("读取图片失败", "error"); imgFileInput.value = ""; return; }
-      var b64 = result.split(",")[1] || "";
-      var parts = result.split(",")[0] || "";
-      var mime = (parts.match(/data:([^;]+)/) || ["", "image/png"])[1];
-      var ext = file.name.split(".").pop() || "png";
+    };
+
+    var proceedUpload = function (dataUrl, mime, ext, note) {
+      var b64 = (dataUrl.split(",")[1]) || "";
       uploadImgBtn.disabled = true;
       uploadImgBtn.textContent = "上传中…";
       api("/upload", { method: "POST", body: { data: b64, mime: mime, ext: ext } })
@@ -393,16 +449,47 @@
           var body = $("bodyField");
           var pos = body.selectionStart || body.value.length;
           body.value = body.value.slice(0, pos) + md + body.value.slice(body.selectionEnd || pos);
-          showToast("图片已上传，部署后即可显示（约 30 秒）", "success");
+          showToast(note || "图片已上传，部署后即可显示（约 30 秒）", "success");
         })
         .catch(function (err) { showToast(err.message, "error"); })
-        .finally(function () {
-          uploadImgBtn.disabled = false;
-          uploadImgBtn.textContent = "🖼️ 上传图片";
-          imgFileInput.value = "";
-        });
+        .finally(resetBtn);
     };
-    reader.onerror = function () { showToast("读取图片失败", "error"); imgFileInput.value = ""; };
+
+    // 未超过压缩目标：直接上传原图
+    if (file.size <= targetBytes) {
+      var reader0 = new FileReader();
+      reader0.onload = function (e) {
+        var result = e.target && e.target.result;
+        if (!result) { showToast("读取图片失败", "error"); resetBtn(); return; }
+        var mime0 = (result.split(",")[0].match(/data:([^;]+)/) || ["", "image/png"])[1];
+        var ext0 = file.name.split(".").pop() || "png";
+        proceedUpload(result, mime0, ext0);
+      };
+      reader0.onerror = function () { showToast("读取图片失败", "error"); resetBtn(); };
+      reader0.readAsDataURL(file);
+      return;
+    }
+
+    // 超过压缩目标：自动压缩后上传（JPEG 白底输出）
+    uploadImgBtn.disabled = true;
+    uploadImgBtn.textContent = "压缩中…";
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var result = e.target && e.target.result;
+      if (!result) { showToast("读取图片失败", "error"); resetBtn(); return; }
+      compressImage(result, targetBytes, quality)
+        .then(function (out) {
+          if (out.bytes > HARD_LIMIT) {
+            showToast("压缩后仍超过 5MB（" + formatSize(out.bytes) + "），请换更小的图片", "error");
+            resetBtn();
+            return;
+          }
+          var note = "已压缩 " + formatSize(file.size) + " → " + formatSize(out.bytes) + "，部署后即可显示（约 30 秒）";
+          proceedUpload(out.dataUrl, "image/jpeg", "jpg", note);
+        })
+        .catch(function () { showToast("图片压缩失败，请手动压缩后上传", "error"); resetBtn(); });
+    };
+    reader.onerror = function () { showToast("读取图片失败", "error"); resetBtn(); };
     reader.readAsDataURL(file);
   });
 

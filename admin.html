@@ -148,7 +148,23 @@
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
               <button class="btn btn-outline btn-sm" id="uploadMdBtn">📄 上传 .md 文件</button>
               <button class="btn btn-outline btn-sm" id="uploadImgBtn">🖼️ 上传图片</button>
-              <span style="font-size:11px;color:var(--text-dim);">图片 ≤5MB，上传后自动插入正文，部署后生效（约 30 秒）</span>
+              <span style="font-size:11px;color:var(--text-dim);display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;">
+                压缩
+                <select id="compressTarget" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:11px;font-family:var(--mono);">
+                  <option value="5120" selected>≤5MB</option>
+                  <option value="3072">≤3MB</option>
+                  <option value="2048">≤2MB</option>
+                  <option value="1024">≤1MB</option>
+                  <option value="512">≤512KB</option>
+                </select>
+                质量
+                <select id="compressQuality" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:11px;font-family:var(--mono);">
+                  <option value="0.92">高 92%</option>
+                  <option value="0.8" selected>中 80%</option>
+                  <option value="0.6">低 60%</option>
+                </select>
+              </span>
+              <span style="font-size:11px;color:var(--text-dim);">图片超限时自动压缩后上传，部署后生效（约 30 秒）</span>
               <input type="file" id="mdFileInput" accept=".md,.markdown,text/markdown" style="display:none;" />
               <input type="file" id="imgFileInput" accept="image/*" style="display:none;" />
             </div>
@@ -274,7 +290,7 @@
   <!-- 浮动消息 -->
   <div id="toast" class="toast" style="display:none;"></div>
 
-  <script src="js/admin.js?v=6"></script>
+  <script src="js/admin.js?v=7"></script>
   <script>
     (function () {
       function cur() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }
