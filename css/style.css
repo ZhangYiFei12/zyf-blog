@@ -2020,7 +2020,7 @@ pre code.hljs {
 }
 
 /* ============================================================
-   相册（首页，数据来自 data/gallery.json）
+   相册（首页 + 独立页 gallery.html，数据来自 data/gallery.json）
    ============================================================ */
 #gallerySection {
   scroll-margin-top: 84px; /* 抵消 sticky 导航栏，锚点滚动不被遮挡 */
@@ -2164,6 +2164,18 @@ pre code.hljs {
   color: var(--accent);
   box-shadow: 0 0 16px var(--glow-strong);
   transform: rotate(90deg);
+}
+
+/* 相册空状态（独立页 gallery.html） */
+.gallery-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 56px 20px;
+  color: var(--text-dim);
+  font-size: 15px;
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius);
+  background: var(--bg-card);
 }
 
 @media (prefers-reduced-motion: reduce) {

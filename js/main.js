@@ -370,10 +370,10 @@
       .catch(function () {});
   }
 
-  /* ---- 首页相册（数据来自 data/gallery.json） ---- */
-  var gallerySection = document.getElementById("gallerySection");
-  if (gallerySection) {
-    var galleryGridEl = document.getElementById("galleryGrid");
+  /* ---- 相册（首页 #gallerySection + 独立页 gallery.html） ---- */
+  var galleryGridEl = document.getElementById("galleryGrid");
+  if (galleryGridEl) {
+    var gallerySection = document.getElementById("gallerySection"); // 仅首页有，独立页为 null
     var lightboxEl = null;
     var lightboxImg = null;
     var lightboxCapEl = null;
@@ -392,7 +392,6 @@
         document.body.appendChild(lightboxEl);
         lightboxImg = lightboxEl.querySelector("img");
         lightboxCapEl = lightboxEl.querySelector(".lightbox-cap");
-        /* 点击遮罩/图片/关闭按钮均可关闭 */
         lightboxEl.addEventListener("click", closeLightbox);
         document.addEventListener("keydown", function (e) {
           if (e.key === "Escape") closeLightbox();
@@ -404,52 +403,22 @@
       lightboxEl.classList.add("open");
     };
 
-    if (galleryGridEl) {
-      galleryGridEl.addEventListener("click", function (e) {
-        var item = e.target.closest(".gallery-item");
-        if (!item) return;
-        openLightbox(item.getAttribute("data-url"), item.getAttribute("data-cap") || "");
-      });
-    }
+    galleryGridEl.addEventListener("click", function (e) {
+      var item = e.target.closest(".gallery-item");
+      if (!item) return;
+      openLightbox(item.getAttribute("data-url"), item.getAttribute("data-cap") || "");
+    });
 
-    /* ---- 相册状态：pending（加载中）/ full（有内容）/ empty（无内容） ---- */
-    var galleryState = "pending";
-    var pendingNav = false;
-
-    var scrollToGallery = function () {
-      gallerySection.scrollIntoView({ behavior: "smooth", block: "start" });
-    };
-
-    var showEmptyToast = function () {
-      var toast = document.createElement("div");
-      toast.style.cssText = "position:fixed;bottom:30px;left:50%;transform:translateX(-50%);z-index:999;" +
-        "background:var(--bg-card,#1a1a2e);color:var(--text,#e0f2fe);border:1px solid var(--accent-dim,#0e7490);" +
-        "border-radius:12px;padding:10px 22px;font-size:13px;box-shadow:0 0 30px rgba(0,0,0,0.4);" +
-        "opacity:0;transition:opacity .3s;white-space:nowrap;cursor:pointer;";
-      toast.textContent = "📷 相册还没内容，去后台上传吧 →";
-      document.body.appendChild(toast);
-      requestAnimationFrame(function () { toast.style.opacity = "1"; });
-      toast.addEventListener("click", function () {
-        toast.style.opacity = "0";
-        setTimeout(function () { toast.remove(); }, 300);
-      });
-      setTimeout(function () {
-        toast.style.opacity = "0";
-        setTimeout(function () { toast.remove(); }, 300);
-      }, 5000);
-    };
-
-    /* 相册导航：full 滚动，empty 弹提示，pending 等待加载完成后处理 */
-    var handleGalleryNav = function () {
-      if (galleryState === "full") { scrollToGallery(); return; }
-      if (galleryState === "empty") { showEmptyToast(); return; }
-      pendingNav = true; // 加载中：等 fetch 完成后自动处理
+    /* 空相册处理：首页隐藏 section，独立页显示占位提示 */
+    var renderEmpty = function () {
+      if (gallerySection) { gallerySection.style.display = "none"; return; }
+      galleryGridEl.innerHTML = '<div class="gallery-empty">📷 相册还没内容，去后台上传吧 →</div>';
     };
 
     fetch("data/gallery.json", { cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("no gallery")); })
       .then(function (list) {
-        if (!Array.isArray(list) || !galleryGridEl) { galleryState = "empty"; return; }
+        if (!Array.isArray(list)) { renderEmpty(); return; }
         var html = "";
         list.forEach(function (g) {
           if (!g || !g.url) return;
@@ -458,29 +427,21 @@
                     (g.caption ? '<figcaption class="gallery-cap">' + esc(g.caption) + "</figcaption>" : "") +
                   "</figure>";
         });
-        if (!html) { galleryState = "empty"; return; }
+        if (!html) { renderEmpty(); return; }
         galleryGridEl.innerHTML = html;
-        gallerySection.style.display = "";
-        galleryState = "full";
-        if (pendingNav) { pendingNav = false; scrollToGallery(); }
+        if (gallerySection) gallerySection.style.display = "";
       })
-      .catch(function () {
-        galleryState = "empty";
-        if (pendingNav) { pendingNav = false; showEmptyToast(); }
-      });
+      .catch(renderEmpty);
 
-    /* 相册导航链接（导航栏 + 站点导航卡片）：有内容滚动，空相册提示 */
-    var galleryNavLinks = document.querySelectorAll('a[href="index.html#gallerySection"], a[href="#gallerySection"]');
-    galleryNavLinks.forEach(function (gLink) {
-      gLink.addEventListener("click", function (e) {
-        e.preventDefault();
-        handleGalleryNav();
-      });
-    });
-
-    /* 直接访问 /index.html#gallerySection 时，等相册加载完成后滚动到位 */
-    if (window.location.hash === "#gallerySection" && galleryState === "pending") {
-      pendingNav = true;
+    /* 首页保留旧锚点兼容：直接访问 index.html#gallerySection 时滚动到位 */
+    if (gallerySection && window.location.hash === "#gallerySection") {
+      var t = setInterval(function () {
+        if (gallerySection.style.display !== "none") {
+          clearInterval(t);
+          gallerySection.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 100);
+      setTimeout(function () { clearInterval(t); }, 5000);
     }
   }
 
