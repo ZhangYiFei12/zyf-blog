@@ -1,5 +1,19 @@
 [
   {
+    "title": "桌面课件整理助手",
+    "year": "2026",
+    "description": "Windows 桌面课件管理软件，基于 Python 3.12 + PySide6 + SQLite FTS5 构建，支持全格式课件导入、全文检索、学科自动识别、标签分类、一键归档等完整工作流。",
+    "tags": [
+      "Python3.12 PySide6 SQLite FTS5"
+    ],
+    "featured": false,
+    "published": true,
+    "url": "",
+    "previewUrl": "",
+    "sourceUrl": "https://github.com/ZhangYiFei12/Courseware-Organization-Assistant",
+    "id": "桌面课件整理助手"
+  },
+  {
     "title": "MirrorSync 双向同步工具",
     "year": "2026",
     "description": "实时双向同步，任一侧变更自动镜像到另一侧；文件系统双目录实时监控，带去抖与防循环机制；手动全量同步，一键扫描对比并显示进度。\n删除策略支持弹窗确认、自动同步删除、永不删除三种；冲突策略支持弹窗询问、最新时间优先、保留双方副本、跳过四种；支持按扩展名、文件夹名、隐藏、系统、临时文件进行过滤。\n通过清单机制区分新增与删除，防止误删；校验方式支持快速（大小+时间）与完整（SHA-256 哈希）两种；关闭最小化到系统托盘，支持开机自启；界面实时日志加文件日志，保留七天。\n支持命令行模式，一键执行同步并将结果输出为 JSON，便于自动化与批量脚本。",
