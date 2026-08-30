@@ -49,7 +49,6 @@
     "id": "AI文件阅读器"
   },
   {
-    "id": "personal-blog",
     "title": "个人博客系统",
     "year": "2025",
     "description": "就是你正在浏览的这个网站！基于纯静态 HTML + CSS + JavaScript 构建，支持 Markdown 写作与科技简约风格主题。",
@@ -58,9 +57,11 @@
       "TypeScript",
       "Tailwind CSS"
     ],
-    "featured": true,
+    "featured": false,
+    "published": true,
     "url": "index.html",
     "previewUrl": "index.html",
-    "sourceUrl": "https://github.com/ZhangYiFei12/zyf-blog"
+    "sourceUrl": "https://github.com/ZhangYiFei12/zyf-blog",
+    "id": "personal-blog"
   }
 ]
