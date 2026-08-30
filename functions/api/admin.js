@@ -239,6 +239,17 @@ async function getProjects(env) {
   }
 }
 
+/* 读取 data/gallery.json */
+async function getGallery(env) {
+  try {
+    const raw = await getFile(env, "data/gallery.json");
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 /* 校验并规整项目对象 */
 function normalizeProject(input) {
   const project = {
@@ -461,6 +472,57 @@ export async function onRequest(context) {
       { path, content: b64, encoding: "base64" },
     ]);
     return json({ ok: true, url: `/images/uploads/${filename}`, commitSha, message: "图片已提交，部署完成后即可引用（约 30 秒）" });
+  }
+
+  // ---- GET /api/admin/gallery（相册列表）----
+  if (method === "GET" && rest.length === 1 && rest[0] === "gallery") {
+    const gallery = await getGallery(env);
+    return json({ gallery });
+  }
+
+  // ---- POST /api/admin/gallery（批量上传相册图片，单 commit 提交全部）----
+  if (method === "POST" && rest.length === 1 && rest[0] === "gallery") {
+    const input = await request.json().catch(() => null);
+    const images = Array.isArray(input && input.images) ? input.images : [];
+    if (!images.length) return json({ error: "没有图片数据" }, 400);
+    if (images.length > 20) return json({ error: "单次最多 20 张" }, 400);
+    const gallery = await getGallery(env);
+    const changes = [];
+    const added = [];
+    for (const img of images) {
+      const b64 = img && img.data ? String(img.data) : "";
+      if (!b64 || b64.length > 7 * 1024 * 1024) {
+        return json({ error: "有图片数据无效或过大（>5MB）" }, 400);
+      }
+      const mime = img && img.mime ? String(img.mime) : "image/jpeg";
+      const ext = String((img && img.ext) || mime.split("/")[1] || "jpg").replace(/[^a-z0-9]/gi, "").toLowerCase() || "jpg";
+      const filename = `gal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      changes.push({ path: `images/uploads/${filename}`, content: b64, encoding: "base64" });
+      added.push({
+        file: filename,
+        url: `/images/uploads/${filename}`,
+        caption: String((img && img.caption) || "").trim(),
+        date: new Date().toISOString().slice(0, 10),
+      });
+    }
+    const newGallery = added.concat(gallery); // 新图在前
+    changes.push({ path: "data/gallery.json", content: JSON.stringify(newGallery, null, 2) });
+    const commitSha = await commitFiles(env, `🖼️ 后台相册上传 ${added.length} 张图片`, changes);
+    return json({ ok: true, added, commitSha, message: `已提交 ${added.length} 张图片，部署完成后首页相册即可显示（约 1 分钟）` });
+  }
+
+  // ---- DELETE /api/admin/gallery/<filename>（删除相册图片）----
+  if (method === "DELETE" && rest.length === 2 && rest[0] === "gallery") {
+    const filename = String(rest[1] || "").replace(/[^a-z0-9.\-]/gi, "");
+    if (!filename) return json({ error: "文件名无效" }, 400);
+    const gallery = await getGallery(env);
+    const remaining = gallery.filter(g => g && g.file !== filename);
+    if (remaining.length === gallery.length) return json({ error: "相册中未找到该图片" }, 404);
+    const commitSha = await commitFiles(env, `🗑️ 后台删除相册图片：${filename}`, [
+      { path: `images/uploads/${filename}`, delete: true },
+      { path: "data/gallery.json", content: JSON.stringify(remaining, null, 2) },
+    ]);
+    return json({ ok: true, commitSha, message: "已删除并提交，等待自动部署" });
   }
 
   // ---- GET /api/admin/projects ----

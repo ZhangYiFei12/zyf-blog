@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台 · 张义飞博客</title>
-  <link rel="stylesheet" href="css/style.css?v=11" />
+  <link rel="stylesheet" href="css/style.css?v=12" />
   <link rel="icon" type="image/png" href="images/avatar.png" />
   <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
   <style>
@@ -138,6 +138,7 @@
       <div class="admin-tabs">
         <button class="tab active" id="tabArticles">📝 文章</button>
         <button class="tab" id="tabProjects">🛠️ 项目</button>
+        <button class="tab" id="tabGallery">🖼️ 相册</button>
       </div>
 
       <div id="viewArticles">
@@ -166,7 +167,7 @@
               </span>
               <span style="font-size:11px;color:var(--text-dim);">图片超限时自动压缩后上传，部署后生效（约 30 秒）</span>
               <input type="file" id="mdFileInput" accept=".md,.markdown,text/markdown" style="display:none;" />
-              <input type="file" id="imgFileInput" accept="image/*" style="display:none;" />
+              <input type="file" id="imgFileInput" accept="image/*" multiple style="display:none;" />
             </div>
             <label>标题</label>
             <input type="text" id="titleField" class="field" placeholder="文章标题" />
@@ -284,13 +285,27 @@
         </div>
       </div>
       </div>
+
+      <div id="viewGallery" style="display:none;">
+        <div class="article-list" style="max-width:1100px;">
+          <h3>🖼️ 相册管理</h3>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
+            <button class="btn btn-outline btn-sm" id="galleryUploadBtn">📤 批量上传图片</button>
+            <input type="file" id="galleryFileInput" accept="image/*" multiple style="display:none;" />
+            <span id="galleryCount" style="font-size:11px;color:var(--text-dim);"></span>
+            <span style="font-size:11px;color:var(--text-dim);">单张 ≤5MB，超限自动压缩（压缩目标/质量在文章页设置），部署后首页相册更新（约 1 分钟）</span>
+          </div>
+          <div id="galleryGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:12px;"></div>
+          <div id="galleryLoading" class="loading">加载中</div>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- 浮动消息 -->
   <div id="toast" class="toast" style="display:none;"></div>
 
-  <script src="js/admin.js?v=7"></script>
+  <script src="js/admin.js?v=8"></script>
   <script>
     (function () {
       function cur() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }

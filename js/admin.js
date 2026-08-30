@@ -37,8 +37,16 @@
 
   var tabArticles = $("tabArticles");
   var tabProjects = $("tabProjects");
+  var tabGallery = $("tabGallery");
   var viewArticles = $("viewArticles");
   var viewProjects = $("viewProjects");
+  var viewGallery = $("viewGallery");
+  var galleryGrid = $("galleryGrid");
+  var galleryLoading = $("galleryLoading");
+  var galleryUploadBtn = $("galleryUploadBtn");
+  var galleryFileInput = $("galleryFileInput");
+  var galleryCount = $("galleryCount");
+  var galleryCache = [];
   var projectList = $("projectList");
   var projectListLoading = $("projectListLoading");
   var saveProjectBtn = $("saveProjectBtn");
@@ -427,11 +435,14 @@
   uploadImgBtn.addEventListener("click", function () { imgFileInput.click(); });
 
   imgFileInput.addEventListener("change", function () {
-    var file = imgFileInput.files && imgFileInput.files[0];
-    if (!file) return;
+    var files = Array.prototype.slice.call(imgFileInput.files || []);
+    if (!files.length) return;
     var HARD_LIMIT = 5 * 1024 * 1024;
     var targetBytes = (parseInt((compressTarget && compressTarget.value) || "5120", 10) || 5120) * 1024;
     var quality = parseFloat((compressQuality && compressQuality.value) || "0.8") || 0.8;
+    var okCount = 0, failCount = 0, compressedNote = null;
+
+    uploadImgBtn.disabled = true;
 
     var resetBtn = function () {
       uploadImgBtn.disabled = false;
@@ -439,58 +450,69 @@
       imgFileInput.value = "";
     };
 
-    var proceedUpload = function (dataUrl, mime, ext, note) {
-      var b64 = (dataUrl.split(",")[1]) || "";
-      uploadImgBtn.disabled = true;
-      uploadImgBtn.textContent = "上传中…";
-      api("/upload", { method: "POST", body: { data: b64, mime: mime, ext: ext } })
-        .then(function (data) {
-          var md = "![" + (file.name.replace(/\.[^.]*$/, "") || "图片") + "](" + data.url + ")";
-          var body = $("bodyField");
-          var pos = body.selectionStart || body.value.length;
-          body.value = body.value.slice(0, pos) + md + body.value.slice(body.selectionEnd || pos);
-          showToast(note || "图片已上传，部署后即可显示（约 30 秒）", "success");
-        })
-        .catch(function (err) { showToast(err.message, "error"); })
-        .finally(resetBtn);
+    var finish = function () {
+      resetBtn();
+      if (failCount && !okCount) return; // 失败时已逐个提示，不再覆盖
+      if (okCount === 1 && compressedNote) {
+        showToast("已压缩 " + compressedNote + "，部署后即可显示（约 30 秒）", "success");
+      } else if (okCount > 1) {
+        showToast("已上传 " + okCount + " 张图片" + (compressedNote ? "（已压缩）" : "") + "，部署后即可显示（约 30 秒）", "success");
+      }
     };
 
-    // 未超过压缩目标：直接上传原图
-    if (file.size <= targetBytes) {
-      var reader0 = new FileReader();
-      reader0.onload = function (e) {
-        var result = e.target && e.target.result;
-        if (!result) { showToast("读取图片失败", "error"); resetBtn(); return; }
-        var mime0 = (result.split(",")[0].match(/data:([^;]+)/) || ["", "image/png"])[1];
-        var ext0 = file.name.split(".").pop() || "png";
-        proceedUpload(result, mime0, ext0);
+    var processNext = function (i) {
+      if (i >= files.length) { finish(); return; }
+      var file = files[i];
+      uploadImgBtn.textContent = files.length > 1 ? "上传中 " + (i + 1) + "/" + files.length : "上传中…";
+
+      var insertMd = function (data) {
+        var md = "![" + (file.name.replace(/\.[^.]*$/, "") || "图片") + "](" + data.url + ")";
+        var body = $("bodyField");
+        var pos = body.selectionStart || body.value.length;
+        body.value = body.value.slice(0, pos) + md + body.value.slice(body.selectionEnd || pos);
+        okCount++;
+        processNext(i + 1);
       };
-      reader0.onerror = function () { showToast("读取图片失败", "error"); resetBtn(); };
-      reader0.readAsDataURL(file);
-      return;
-    }
+      var fail = function (msg) {
+        failCount++;
+        showToast((files.length > 1 ? "[" + file.name + "] " : "") + msg, "error");
+        processNext(i + 1);
+      };
 
-    // 超过压缩目标：自动压缩后上传（JPEG 白底输出）
-    uploadImgBtn.disabled = true;
-    uploadImgBtn.textContent = "压缩中…";
-    var reader = new FileReader();
-    reader.onload = function (e) {
-      var result = e.target && e.target.result;
-      if (!result) { showToast("读取图片失败", "error"); resetBtn(); return; }
-      compressImage(result, targetBytes, quality)
-        .then(function (out) {
-          if (out.bytes > HARD_LIMIT) {
-            showToast("压缩后仍超过 5MB（" + formatSize(out.bytes) + "），请换更小的图片", "error");
-            resetBtn();
-            return;
-          }
-          var note = "已压缩 " + formatSize(file.size) + " → " + formatSize(out.bytes) + "，部署后即可显示（约 30 秒）";
-          proceedUpload(out.dataUrl, "image/jpeg", "jpg", note);
-        })
-        .catch(function () { showToast("图片压缩失败，请手动压缩后上传", "error"); resetBtn(); });
+      // 未超过压缩目标：直接上传原图
+      if (file.size <= targetBytes) {
+        var reader0 = new FileReader();
+        reader0.onload = function (e) {
+          var result = e.target && e.target.result;
+          if (!result) { fail("读取图片失败"); return; }
+          var mime0 = (result.split(",")[0].match(/data:([^;]+)/) || ["", "image/png"])[1];
+          var ext0 = file.name.split(".").pop() || "png";
+          api("/upload", { method: "POST", body: { data: (result.split(",")[1]) || "", mime: mime0, ext: ext0 } })
+            .then(insertMd).catch(function (err) { fail(err.message); });
+        };
+        reader0.onerror = function () { fail("读取图片失败"); };
+        reader0.readAsDataURL(file);
+        return;
+      }
+
+      // 超过压缩目标：自动压缩后上传
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var result = e.target && e.target.result;
+        if (!result) { fail("读取图片失败"); return; }
+        compressImage(result, targetBytes, quality)
+          .then(function (out) {
+            if (out.bytes > HARD_LIMIT) { fail("压缩后仍超过 5MB（" + formatSize(out.bytes) + "）"); return; }
+            compressedNote = formatSize(file.size) + " → " + formatSize(out.bytes);
+            return api("/upload", { method: "POST", body: { data: (out.dataUrl.split(",")[1]) || "", mime: "image/jpeg", ext: "jpg" } })
+              .then(insertMd);
+          })
+          .catch(function () { fail("图片压缩失败"); });
+      };
+      reader.onerror = function () { fail("读取图片失败"); };
+      reader.readAsDataURL(file);
     };
-    reader.onerror = function () { showToast("读取图片失败", "error"); resetBtn(); };
-    reader.readAsDataURL(file);
+    processNext(0);
   });
 
   function deleteArticle(slug) {
@@ -506,17 +528,20 @@
   /* ---------- Tab 切换（文章 / 项目） ---------- */
 
   function switchTab(name) {
-    var isArticles = name === "articles";
     resetDeleteConfirm();
-    tabArticles.className = "tab" + (isArticles ? " active" : "");
-    tabProjects.className = "tab" + (isArticles ? "" : " active");
-    viewArticles.style.display = isArticles ? "block" : "none";
-    viewProjects.style.display = isArticles ? "none" : "block";
-    if (!isArticles) loadProjects();
+    tabArticles.className = "tab" + (name === "articles" ? " active" : "");
+    tabProjects.className = "tab" + (name === "projects" ? " active" : "");
+    tabGallery.className = "tab" + (name === "gallery" ? " active" : "");
+    viewArticles.style.display = name === "articles" ? "block" : "none";
+    viewProjects.style.display = name === "projects" ? "block" : "none";
+    viewGallery.style.display = name === "gallery" ? "block" : "none";
+    if (name === "projects") loadProjects();
+    if (name === "gallery") loadGallery();
   }
 
   tabArticles.addEventListener("click", function () { switchTab("articles"); });
   tabProjects.addEventListener("click", function () { switchTab("projects"); });
+  tabGallery.addEventListener("click", function () { switchTab("gallery"); });
 
   /* ---------- 项目列表 ---------- */
 
@@ -698,6 +723,174 @@
     btn.classList.add("btn-confirming");
     pendingDeleteTimer = setTimeout(resetDeleteConfirm, 4000);
   }
+
+  /* ---------- 相册管理 ---------- */
+
+  function loadGallery() {
+    galleryGrid.innerHTML = "";
+    galleryLoading.style.display = "block";
+    api("/gallery")
+      .then(function (data) {
+        galleryLoading.style.display = "none";
+        galleryCache = data.gallery || [];
+        renderGallery();
+      })
+      .catch(function (err) {
+        galleryLoading.style.display = "none";
+        galleryGrid.innerHTML = '<div class="empty-state" style="color:var(--danger);">加载失败：' + escapeHtml(err.message) + "</div>";
+      });
+  }
+
+  function renderGallery() {
+    galleryCount.textContent = galleryCache.length ? "共 " + galleryCache.length + " 张" : "";
+    if (!galleryCache.length) {
+      galleryGrid.innerHTML = '<div class="empty-state">相册还没有图片<br/>点击上方「批量上传图片」添加 🖼️</div>';
+      return;
+    }
+    galleryGrid.innerHTML = "";
+    galleryCache.forEach(function (g) {
+      var cell = document.createElement("div");
+      cell.style.cssText = "position:relative;border:1px solid var(--border);border-radius:10px;overflow:hidden;aspect-ratio:1/1;background:var(--bg-soft);";
+      cell.innerHTML =
+        '<img src="' + escapeAttr(g.url) + '" alt="' + escapeAttr(g.caption || g.file) + '" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy" />' +
+        '<button class="btn btn-danger btn-sm" data-action="del" data-file="' + escapeAttr(g.file) + '" style="position:absolute;top:6px;right:6px;">删除</button>';
+      galleryGrid.appendChild(cell);
+    });
+  }
+
+  galleryGrid.addEventListener("click", function (e) {
+    var btn = e.target.closest("button[data-action='del']");
+    if (!btn) return;
+    deleteGalleryImage(btn.getAttribute("data-file"), btn);
+  });
+
+  function deleteGalleryImage(file, btn) {
+    if (!file) return;
+    // 第二步：待确认状态下再点同一个「删除」→ 真正删除
+    if (pendingDeleteId === file) {
+      resetDeleteConfirm();
+      btn.disabled = true;
+      api("/gallery/" + encodeURIComponent(file), { method: "DELETE" })
+        .then(function (data) {
+          showToast(data.message, "success");
+          loadGallery();
+        })
+        .catch(function (err) { showToast(err.message, "error"); btn.disabled = false; });
+      return;
+    }
+    // 第一步：进入待确认状态
+    resetDeleteConfirm();
+    if (!btn) { showToast("删除失败：按钮状态异常", "error"); return; }
+    pendingDeleteId = file;
+    pendingDeleteBtn = btn;
+    btn.textContent = "⚠ 再点一次确认";
+    btn.classList.add("btn-confirming");
+    pendingDeleteTimer = setTimeout(resetDeleteConfirm, 4000);
+  }
+
+  galleryUploadBtn.addEventListener("click", function () { galleryFileInput.click(); });
+
+  galleryFileInput.addEventListener("change", function () {
+    var files = Array.prototype.slice.call(galleryFileInput.files || []);
+    if (!files.length) return;
+    var HARD_LIMIT = 5 * 1024 * 1024;
+    var targetBytes = (parseInt((compressTarget && compressTarget.value) || "5120", 10) || 5120) * 1024;
+    var quality = parseFloat((compressQuality && compressQuality.value) || "0.8") || 0.8;
+    var results = []; // {data, mime, ext}
+    var failCount = 0;
+
+    galleryUploadBtn.disabled = true;
+
+    var resetBtn = function () {
+      galleryUploadBtn.disabled = false;
+      galleryUploadBtn.textContent = "📤 批量上传图片";
+      galleryFileInput.value = "";
+    };
+
+    /* 分批提交：每批最多 8 张且总 base64 ≤ 24MB，避免请求体过大 */
+    var submitAll = function () {
+      if (!results.length) {
+        resetBtn();
+        if (failCount) showToast(failCount + " 张图片处理失败，未提交", "error");
+        return;
+      }
+      var chunks = [], cur = [], curSize = 0;
+      results.forEach(function (r) {
+        if (cur.length >= 8 || (cur.length && curSize + r.data.length > 24 * 1024 * 1024)) {
+          chunks.push(cur); cur = []; curSize = 0;
+        }
+        cur.push(r); curSize += r.data.length;
+      });
+      if (cur.length) chunks.push(cur);
+
+      var submitted = 0;
+      var submitNext = function (ci) {
+        if (ci >= chunks.length) {
+          resetBtn();
+          showToast("已提交 " + submitted + " 张图片" + (failCount ? "，" + failCount + " 张失败" : "") + "，部署后首页相册即可显示（约 1 分钟）", failCount ? "error" : "success");
+          loadGallery();
+          return;
+        }
+        galleryUploadBtn.textContent = "提交中 " + (ci + 1) + "/" + chunks.length + " 批…";
+        api("/gallery", { method: "POST", body: { images: chunks[ci] } })
+          .then(function () {
+            submitted += chunks[ci].length;
+            submitNext(ci + 1);
+          })
+          .catch(function (err) {
+            resetBtn();
+            showToast("提交失败：" + err.message, "error");
+            loadGallery();
+          });
+      };
+      submitNext(0);
+    };
+
+    var processNext = function (i) {
+      if (i >= files.length) { submitAll(); return; }
+      var file = files[i];
+      galleryUploadBtn.textContent = "处理中 " + (i + 1) + "/" + files.length + "…";
+
+      var push = function (dataUrl, mime, ext) {
+        results.push({ data: (dataUrl.split(",")[1]) || "", mime: mime, ext: ext });
+        processNext(i + 1);
+      };
+      var failOne = function (msg) {
+        failCount++;
+        showToast("[" + file.name + "] " + msg, "error");
+        processNext(i + 1);
+      };
+
+      if (file.size <= targetBytes) {
+        var reader0 = new FileReader();
+        reader0.onload = function (e) {
+          var result = e.target && e.target.result;
+          if (!result) { failOne("读取失败"); return; }
+          var mime0 = (result.split(",")[0].match(/data:([^;]+)/) || ["", "image/png"])[1];
+          var ext0 = file.name.split(".").pop() || "png";
+          push(result, mime0, ext0);
+        };
+        reader0.onerror = function () { failOne("读取失败"); };
+        reader0.readAsDataURL(file);
+        return;
+      }
+
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var result = e.target && e.target.result;
+        if (!result) { failOne("读取失败"); return; }
+        compressImage(result, targetBytes, quality)
+          .then(function (out) {
+            if (out.bytes > HARD_LIMIT) { failOne("压缩后仍超过 5MB（" + formatSize(out.bytes) + "）"); return; }
+            push(out.dataUrl, "image/jpeg", "jpg");
+          })
+          .catch(function () { failOne("压缩失败"); });
+      };
+      reader.onerror = function () { failOne("读取失败"); };
+      reader.readAsDataURL(file);
+    };
+    processNext(0);
+  });
 
   /* ---------- 转义 ---------- */
 

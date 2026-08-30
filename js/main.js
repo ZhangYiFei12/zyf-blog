@@ -370,6 +370,67 @@
       .catch(function () {});
   }
 
+  /* ---- 首页相册（数据来自 data/gallery.json） ---- */
+  var gallerySection = document.getElementById("gallerySection");
+  if (gallerySection) {
+    var galleryGridEl = document.getElementById("galleryGrid");
+    var lightboxEl = null;
+    var lightboxImg = null;
+    var lightboxCapEl = null;
+
+    var closeLightbox = function () {
+      if (lightboxEl) lightboxEl.classList.remove("open");
+    };
+
+    var openLightbox = function (url, cap) {
+      if (!lightboxEl) {
+        lightboxEl = document.createElement("div");
+        lightboxEl.className = "lightbox";
+        lightboxEl.setAttribute("role", "dialog");
+        lightboxEl.setAttribute("aria-label", "图片预览");
+        lightboxEl.innerHTML = '<button class="lightbox-close" aria-label="关闭">✕</button><img alt="查看大图" /><div class="lightbox-cap"></div>';
+        document.body.appendChild(lightboxEl);
+        lightboxImg = lightboxEl.querySelector("img");
+        lightboxCapEl = lightboxEl.querySelector(".lightbox-cap");
+        /* 点击遮罩/图片/关闭按钮均可关闭 */
+        lightboxEl.addEventListener("click", closeLightbox);
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "Escape") closeLightbox();
+        });
+      }
+      lightboxImg.src = url;
+      lightboxCapEl.textContent = cap || "";
+      lightboxCapEl.style.display = cap ? "" : "none";
+      lightboxEl.classList.add("open");
+    };
+
+    if (galleryGridEl) {
+      galleryGridEl.addEventListener("click", function (e) {
+        var item = e.target.closest(".gallery-item");
+        if (!item) return;
+        openLightbox(item.getAttribute("data-url"), item.getAttribute("data-cap") || "");
+      });
+    }
+
+    fetch("data/gallery.json", { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("no gallery")); })
+      .then(function (list) {
+        if (!Array.isArray(list) || !list.length || !galleryGridEl) return;
+        var html = "";
+        list.forEach(function (g) {
+          if (!g || !g.url) return;
+          html += '<figure class="gallery-item" data-url="' + esc(g.url) + '" data-cap="' + esc(g.caption || "") + '">' +
+                    '<img src="' + esc(g.url) + '" alt="' + esc(g.caption || "相册图片") + '" loading="lazy" />' +
+                    (g.caption ? '<figcaption class="gallery-cap">' + esc(g.caption) + "</figcaption>" : "") +
+                  "</figure>";
+        });
+        if (!html) return;
+        galleryGridEl.innerHTML = html;
+        gallerySection.style.display = "";
+      })
+      .catch(function () {});
+  }
+
   /* ---- 当前年份导航高亮 ---- */
   var path = window.location.pathname.split("/").pop() || "index.html";
   document.querySelectorAll(".nav-links a").forEach(function (a) {
