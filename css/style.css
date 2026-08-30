@@ -2022,6 +2022,10 @@ pre code.hljs {
 /* ============================================================
    相册（首页，数据来自 data/gallery.json）
    ============================================================ */
+#gallerySection {
+  scroll-margin-top: 84px; /* 抵消 sticky 导航栏，锚点滚动不被遮挡 */
+}
+
 .gallery-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

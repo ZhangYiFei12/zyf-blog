@@ -412,10 +412,44 @@
       });
     }
 
+    /* ---- 相册状态：pending（加载中）/ full（有内容）/ empty（无内容） ---- */
+    var galleryState = "pending";
+    var pendingNav = false;
+
+    var scrollToGallery = function () {
+      gallerySection.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    var showEmptyToast = function () {
+      var toast = document.createElement("div");
+      toast.style.cssText = "position:fixed;bottom:30px;left:50%;transform:translateX(-50%);z-index:999;" +
+        "background:var(--bg-card,#1a1a2e);color:var(--text,#e0f2fe);border:1px solid var(--accent-dim,#0e7490);" +
+        "border-radius:12px;padding:10px 22px;font-size:13px;box-shadow:0 0 30px rgba(0,0,0,0.4);" +
+        "opacity:0;transition:opacity .3s;white-space:nowrap;cursor:pointer;";
+      toast.textContent = "📷 相册还没内容，去后台上传吧 →";
+      document.body.appendChild(toast);
+      requestAnimationFrame(function () { toast.style.opacity = "1"; });
+      toast.addEventListener("click", function () {
+        toast.style.opacity = "0";
+        setTimeout(function () { toast.remove(); }, 300);
+      });
+      setTimeout(function () {
+        toast.style.opacity = "0";
+        setTimeout(function () { toast.remove(); }, 300);
+      }, 5000);
+    };
+
+    /* 相册导航：full 滚动，empty 弹提示，pending 等待加载完成后处理 */
+    var handleGalleryNav = function () {
+      if (galleryState === "full") { scrollToGallery(); return; }
+      if (galleryState === "empty") { showEmptyToast(); return; }
+      pendingNav = true; // 加载中：等 fetch 完成后自动处理
+    };
+
     fetch("data/gallery.json", { cache: "no-store" })
       .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("no gallery")); })
       .then(function (list) {
-        if (!Array.isArray(list) || !list.length || !galleryGridEl) return;
+        if (!Array.isArray(list) || !galleryGridEl) { galleryState = "empty"; return; }
         var html = "";
         list.forEach(function (g) {
           if (!g || !g.url) return;
@@ -424,37 +458,30 @@
                     (g.caption ? '<figcaption class="gallery-cap">' + esc(g.caption) + "</figcaption>" : "") +
                   "</figure>";
         });
-        if (!html) return;
+        if (!html) { galleryState = "empty"; return; }
         galleryGridEl.innerHTML = html;
         gallerySection.style.display = "";
+        galleryState = "full";
+        if (pendingNav) { pendingNav = false; scrollToGallery(); }
       })
-      .catch(function () {});
-
-    /* 相册导航链接：空相册时弹出提示，有内容则正常跳转 */
-    (function () {
-      var link = document.querySelector('.nav-links a[href="index.html#gallerySection"]');
-      if (!link) return;
-      link.addEventListener("click", function (e) {
-        if (gallerySection.style.display !== "none") return;
-        e.preventDefault();
-        var toast = document.createElement("div");
-        toast.style.cssText = "position:fixed;bottom:30px;left:50%;transform:translateX(-50%);z-index:999;" +
-          "background:var(--bg-card,#1a1a2e);color:var(--text,#e0f2fe);border:1px solid var(--accent-dim,#0e7490);" +
-          "border-radius:12px;padding:10px 22px;font-size:13px;box-shadow:0 0 30px rgba(0,0,0,0.4);" +
-          "opacity:0;transition:opacity .3s;white-space:nowrap;cursor:pointer;";
-        toast.textContent = "📷 相册还没内容，去后台上传吧 →";
-        document.body.appendChild(toast);
-        requestAnimationFrame(function () { toast.style.opacity = "1"; });
-        toast.addEventListener("click", function () {
-          toast.style.opacity = "0";
-          setTimeout(function () { toast.remove(); }, 300);
-        });
-        setTimeout(function () {
-          toast.style.opacity = "0";
-          setTimeout(function () { toast.remove(); }, 300);
-        }, 5000);
+      .catch(function () {
+        galleryState = "empty";
+        if (pendingNav) { pendingNav = false; showEmptyToast(); }
       });
-    })();
+
+    /* 相册导航链接（导航栏 + 站点导航卡片）：有内容滚动，空相册提示 */
+    var galleryNavLinks = document.querySelectorAll('a[href="index.html#gallerySection"], a[href="#gallerySection"]');
+    galleryNavLinks.forEach(function (gLink) {
+      gLink.addEventListener("click", function (e) {
+        e.preventDefault();
+        handleGalleryNav();
+      });
+    });
+
+    /* 直接访问 /index.html#gallerySection 时，等相册加载完成后滚动到位 */
+    if (window.location.hash === "#gallerySection" && galleryState === "pending") {
+      pendingNav = true;
+    }
   }
 
   /* ---- 当前年份导航高亮 ---- */
