@@ -382,16 +382,22 @@
       if (lightboxEl) lightboxEl.classList.remove("open");
     };
 
-    var openLightbox = function (url, cap) {
+    var openLightbox = function (url, cap, file) {
       if (!lightboxEl) {
         lightboxEl = document.createElement("div");
         lightboxEl.className = "lightbox";
         lightboxEl.setAttribute("role", "dialog");
         lightboxEl.setAttribute("aria-label", "图片预览");
-        lightboxEl.innerHTML = '<button class="lightbox-close" aria-label="关闭">✕</button><img alt="查看大图" /><div class="lightbox-cap"></div>';
+        lightboxEl.innerHTML = '<button class="lightbox-close" aria-label="关闭">✕</button>' +
+          '<button class="lightbox-download" aria-label="下载原图" title="下载原图">⬇</button>' +
+          '<img alt="查看大图" /><div class="lightbox-cap"></div>';
         document.body.appendChild(lightboxEl);
         lightboxImg = lightboxEl.querySelector("img");
         lightboxCapEl = lightboxEl.querySelector(".lightbox-cap");
+        lightboxEl.querySelector(".lightbox-download").addEventListener("click", function (e) {
+          e.stopPropagation();
+          downloadOriginal(url, file);
+        });
         lightboxEl.addEventListener("click", closeLightbox);
         document.addEventListener("keydown", function (e) {
           if (e.key === "Escape") closeLightbox();
@@ -403,10 +409,26 @@
       lightboxEl.classList.add("open");
     };
 
+    /* 下载原图：fetch 转 blob 触发浏览器下载 */
+    var downloadOriginal = function (url, file) {
+      var name = file || url.split("/").pop() || "photo.jpg";
+      fetch(url, { cache: "force-cache" })
+        .then(function (r) { if (!r.ok) throw new Error("下载失败"); return r.blob(); })
+        .then(function (blob) {
+          var a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = name;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        })
+        .catch(function () { showToast("下载失败，请重试", "error"); });
+    };
+
     galleryGridEl.addEventListener("click", function (e) {
       var item = e.target.closest(".gallery-item");
       if (!item) return;
-      openLightbox(item.getAttribute("data-url"), item.getAttribute("data-cap") || "");
+      openLightbox(item.getAttribute("data-url"), item.getAttribute("data-cap") || "", item.getAttribute("data-file") || "");
     });
 
     /* 空相册处理：首页隐藏 section，独立页显示占位提示 */
@@ -422,8 +444,9 @@
         var html = "";
         list.forEach(function (g) {
           if (!g || !g.url) return;
-          html += '<figure class="gallery-item" data-url="' + esc(g.url) + '" data-cap="' + esc(g.caption || "") + '">' +
-                    '<img src="' + esc(g.url) + '" alt="' + esc(g.caption || "相册图片") + '" loading="lazy" />' +
+          var thumb = g.thumbUrl || g.url; // 优先缩略图（webp 小图），无则回退原图
+          html += '<figure class="gallery-item" data-url="' + esc(g.url) + '" data-cap="' + esc(g.caption || "") + '" data-file="' + esc(g.file || "") + '">' +
+                    '<img src="' + esc(thumb) + '" alt="' + esc(g.caption || "相册图片") + '" loading="lazy" decoding="async" />' +
                     (g.caption ? '<figcaption class="gallery-cap">' + esc(g.caption) + "</figcaption>" : "") +
                   "</figure>";
         });

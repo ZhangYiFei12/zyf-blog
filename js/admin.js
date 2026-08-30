@@ -432,13 +432,42 @@
     });
   }
 
+  /**
+   * 生成 480px 缩略图（webp），用于相册网格快速加载。
+   */
+  function makeThumbnail(dataUrl) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () {
+        try {
+          var w = img.naturalWidth || img.width;
+          var h = img.naturalHeight || img.height;
+          if (!w || !h) { reject(new Error("无法读取图片尺寸")); return; }
+          var MAX_W = 480;
+          if (w > MAX_W) {
+            h = Math.round(h * MAX_W / w); w = MAX_W;
+          }
+          var canvas = document.createElement("canvas");
+          canvas.width = w; canvas.height = h;
+          var ctx = canvas.getContext("2d");
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve({ dataUrl: canvas.toDataURL("image/webp", 0.8) });
+        } catch (err) { reject(err); }
+      };
+      img.onerror = function () { reject(new Error("图片解码失败")); };
+      img.src = dataUrl;
+    });
+  }
+
   uploadImgBtn.addEventListener("click", function () { imgFileInput.click(); });
 
   imgFileInput.addEventListener("change", function () {
     var files = Array.prototype.slice.call(imgFileInput.files || []);
     if (!files.length) return;
     var HARD_LIMIT = 5 * 1024 * 1024;
-    var targetBytes = (parseInt((compressTarget && compressTarget.value) || "5120", 10) || 5120) * 1024;
+    var targetBytes = (parseInt((compressTarget && compressTarget.value) || "2048", 10) || 2048) * 1024;
     var quality = parseFloat((compressQuality && compressQuality.value) || "0.8") || 0.8;
     var okCount = 0, failCount = 0, compressedNote = null;
 
@@ -794,9 +823,9 @@
     var files = Array.prototype.slice.call(galleryFileInput.files || []);
     if (!files.length) return;
     var HARD_LIMIT = 5 * 1024 * 1024;
-    var targetBytes = (parseInt((compressTarget && compressTarget.value) || "5120", 10) || 5120) * 1024;
+    var targetBytes = (parseInt((compressTarget && compressTarget.value) || "2048", 10) || 2048) * 1024;
     var quality = parseFloat((compressQuality && compressQuality.value) || "0.8") || 0.8;
-    var results = []; // {data, mime, ext}
+    var results = []; // {data, mime, ext, thumb, thumbExt}
     var failCount = 0;
 
     galleryUploadBtn.disabled = true;
@@ -861,6 +890,24 @@
         processNext(i + 1);
       };
 
+      /* 生成缩略图（480px webp） */
+      var pushWithThumb = function (dataUrl, mime, ext) {
+        makeThumbnail(dataUrl).then(function (thumb) {
+          results.push({
+            data: (dataUrl.split(",")[1]) || "",
+            mime: mime,
+            ext: ext,
+            thumb: (thumb.dataUrl.split(",")[1]) || "",
+            thumbExt: "webp"
+          });
+          processNext(i + 1);
+        }).catch(function () {
+          // 缩略图失败仍继续，只上传原图
+          results.push({ data: (dataUrl.split(",")[1]) || "", mime: mime, ext: ext });
+          processNext(i + 1);
+        });
+      };
+
       if (file.size <= targetBytes) {
         var reader0 = new FileReader();
         reader0.onload = function (e) {
@@ -868,7 +915,7 @@
           if (!result) { failOne("读取失败"); return; }
           var mime0 = (result.split(",")[0].match(/data:([^;]+)/) || ["", "image/png"])[1];
           var ext0 = file.name.split(".").pop() || "png";
-          push(result, mime0, ext0);
+          pushWithThumb(result, mime0, ext0);
         };
         reader0.onerror = function () { failOne("读取失败"); };
         reader0.readAsDataURL(file);
@@ -882,7 +929,7 @@
         compressImage(result, targetBytes, quality)
           .then(function (out) {
             if (out.bytes > HARD_LIMIT) { failOne("压缩后仍超过 5MB（" + formatSize(out.bytes) + "）"); return; }
-            push(out.dataUrl, "image/jpeg", "jpg");
+            pushWithThumb(out.dataUrl, "image/jpeg", "jpg");
           })
           .catch(function () { failOne("压缩失败"); });
       };

@@ -498,12 +498,21 @@ export async function onRequest(context) {
       const ext = String((img && img.ext) || mime.split("/")[1] || "jpg").replace(/[^a-z0-9]/gi, "").toLowerCase() || "jpg";
       const filename = `gal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
       changes.push({ path: `images/uploads/${filename}`, content: b64, encoding: "base64" });
-      added.push({
+      const entry = {
         file: filename,
         url: `/images/uploads/${filename}`,
         caption: String((img && img.caption) || "").trim(),
         date: new Date().toISOString().slice(0, 10),
-      });
+      };
+      // 缩略图（webp，480px）：有则随原图一起提交，并写入 thumbUrl
+      const thumbB64 = img && img.thumb ? String(img.thumb) : "";
+      const thumbExt = String((img && img.thumbExt) || "webp").replace(/[^a-z0-9]/gi, "").toLowerCase() || "webp";
+      if (thumbB64 && thumbB64.length <= 1024 * 1024) {
+        const thumbName = `thumb-${filename.replace(/\.[^.]+$/, "")}.${thumbExt}`;
+        changes.push({ path: `images/uploads/${thumbName}`, content: thumbB64, encoding: "base64" });
+        entry.thumbUrl = `/images/uploads/${thumbName}`;
+      }
+      added.push(entry);
     }
     const newGallery = added.concat(gallery); // 新图在前
     changes.push({ path: "data/gallery.json", content: JSON.stringify(newGallery, null, 2) });
@@ -518,8 +527,14 @@ export async function onRequest(context) {
     const gallery = await getGallery(env);
     const remaining = gallery.filter(g => g && g.file !== filename);
     if (remaining.length === gallery.length) return json({ error: "相册中未找到该图片" }, 404);
+    const target = gallery.find(g => g && g.file === filename) || {};
+    const deletes = [{ path: `images/uploads/${filename}`, delete: true }];
+    if (target.thumbUrl) {
+      const t = String(target.thumbUrl).replace(/^\//, "");
+      if (t) deletes.push({ path: t, delete: true });
+    }
     const commitSha = await commitFiles(env, `🗑️ 后台删除相册图片：${filename}`, [
-      { path: `images/uploads/${filename}`, delete: true },
+      ...deletes,
       { path: "data/gallery.json", content: JSON.stringify(remaining, null, 2) },
     ]);
     return json({ ok: true, commitSha, message: "已删除并提交，等待自动部署" });

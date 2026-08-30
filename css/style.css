@@ -2166,6 +2166,29 @@ pre code.hljs {
   transform: rotate(90deg);
 }
 
+.lightbox .lightbox-download {
+  position: absolute;
+  top: 18px;
+  right: 72px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(2, 6, 16, 0.55);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 1;
+  line-height: 40px;
+  text-align: center;
+}
+.lightbox .lightbox-download:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 16px var(--glow-strong);
+}
+
 /* 相册空状态（独立页 gallery.html） */
 .gallery-empty {
   grid-column: 1 / -1;

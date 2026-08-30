@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台 | ZH</title>
-  <link rel="stylesheet" href="css/style.css?v=14" />
+  <link rel="stylesheet" href="css/style.css?v=15" />
   <link rel="icon" type="image/png" href="images/avatar.png" />
   <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
   <style>
@@ -152,9 +152,9 @@
               <span style="font-size:11px;color:var(--text-dim);display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;">
                 压缩
                 <select id="compressTarget" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:11px;font-family:var(--mono);">
-                  <option value="5120" selected>≤5MB</option>
+                  <option value="5120">≤5MB</option>
                   <option value="3072">≤3MB</option>
-                  <option value="2048">≤2MB</option>
+                  <option value="2048" selected>≤2MB</option>
                   <option value="1024">≤1MB</option>
                   <option value="512">≤512KB</option>
                 </select>
@@ -305,7 +305,7 @@
   <!-- 浮动消息 -->
   <div id="toast" class="toast" style="display:none;"></div>
 
-  <script src="js/admin.js?v=8"></script>
+  <script src="js/admin.js?v=9"></script>
   <script>
     (function () {
       function cur() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }

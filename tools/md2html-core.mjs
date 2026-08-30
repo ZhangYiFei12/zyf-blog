@@ -260,7 +260,7 @@ export function buildPage(meta, bodyHtml, opts = {}) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${escapeHtml(meta.title)} | ZH</title>
   <meta name="description" content="${escapeAttr(excerpt)}" />
-  <link rel="stylesheet" href="../css/style.css?v=14" />
+  <link rel="stylesheet" href="../css/style.css?v=15" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
   <meta property="og:type" content="article" />
   <meta property="og:title" content="${escapeAttr(meta.title)}" />
@@ -313,7 +313,7 @@ ${articleHtml}
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
   <script src="../js/highlight.min.js?v=1"></script>
-  <script src="../js/main.js?v=12"></script>
+  <script src="../js/main.js?v=13"></script>
 </body>
 </html>
 `;
