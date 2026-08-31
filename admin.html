@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台 | ZH</title>
-  <link rel="stylesheet" href="css/style.css?v=15" />
+  <link rel="stylesheet" href="css/style.css?v=16" />
   <link rel="icon" type="image/png" href="images/avatar.png" />
   <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
   <style>
@@ -134,6 +134,37 @@
     .img-settings-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; }
     .img-settings-item { display: flex; flex-direction: column; gap: 4px; }
     .img-settings-item label { font-size: 11px; color: var(--text-dim); }
+
+    /* 🔧 重新压缩已上传图片：设置弹窗 */
+    .opt-modal-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(2, 6, 16, 0.6);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .opt-modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      max-width: 420px; width: 100%;
+      box-shadow: 0 24px 70px rgba(0,0,0,0.5);
+    }
+    .opt-modal h4 { margin: 0 0 12px; font-size: 14px; }
+    .opt-modal .opt-preview {
+      width: 100%; height: 160px; object-fit: cover;
+      border-radius: 8px; margin-bottom: 12px;
+      border: 1px solid var(--border); background: var(--bg-soft);
+    }
+    .opt-modal .opt-field { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .opt-modal .opt-field label { font-size: 12px; color: var(--text-dim); min-width: 72px; }
+    .opt-modal .opt-field select {
+      flex: 1; background: var(--bg-card); color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 5px 8px; font-size: 12px; font-family: var(--mono);
+    }
+    .opt-modal .opt-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+    .opt-modal .opt-note { font-size: 11px; color: var(--text-dim); margin-top: 8px; }
   </style>
 </head>
 <body class="admin-body">
@@ -366,7 +397,40 @@
   <!-- 浮动消息 -->
   <div id="toast" class="toast" style="display:none;"></div>
 
-  <script src="js/admin.js?v=10"></script>
+  <!-- 🔧 重新压缩已上传图片：设置弹窗 -->
+  <div id="optModalOverlay" class="opt-modal-overlay" style="display:none;">
+    <div class="opt-modal">
+      <h4>🖼️ 重新压缩图片</h4>
+      <img id="optPreview" class="opt-preview" alt="" />
+      <div class="opt-field"><label>文件名</label><span id="optFileName" style="font-size:12px;color:var(--text-dim);word-break:break-all;"></span></div>
+      <div class="opt-field"><label>当前大小</label><span id="optCurrentSize" style="font-size:12px;color:var(--text-dim);"></span></div>
+      <div class="opt-field">
+        <label>压缩到</label>
+        <select id="optModalTarget">
+          <option value="5120">≤5MB</option>
+          <option value="3072">≤3MB</option>
+          <option value="2048" selected>≤2MB</option>
+          <option value="1024">≤1MB</option>
+          <option value="512">≤512KB</option>
+        </select>
+      </div>
+      <div class="opt-field">
+        <label>质量</label>
+        <select id="optModalQuality">
+          <option value="0.92">高 92%</option>
+          <option value="0.8" selected>中 80%</option>
+          <option value="0.6">低 60%</option>
+        </select>
+      </div>
+      <div class="opt-actions">
+        <button class="btn btn-outline btn-sm" id="optModalCancel">取消</button>
+        <button class="btn btn-primary btn-sm" id="optModalConfirm">开始压缩</button>
+      </div>
+      <div class="opt-note">压缩后覆盖原文件，URL 不变；部署后生效（约 1 分钟）</div>
+    </div>
+  </div>
+
+  <script src="js/admin.js?v=11"></script>
   <script>
     (function () {
       function cur() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }

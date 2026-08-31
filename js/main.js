@@ -377,6 +377,23 @@
     var lightboxEl = null;
     var lightboxImg = null;
     var lightboxCapEl = null;
+    var currentDownloadUrl = "";
+    var currentDownloadFile = "";
+
+    /* 简易 toast（前台页面无 #toast 元素） */
+    var showToast = function (msg, type) {
+      var el = document.querySelector(".main-toast");
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "main-toast";
+        document.body.appendChild(el);
+      }
+      el.textContent = msg;
+      el.className = "main-toast " + (type === "error" ? "toast-error" : "toast-info");
+      el.style.display = "block";
+      if (showToast._t) clearTimeout(showToast._t);
+      showToast._t = setTimeout(function () { el.style.display = "none"; }, type === "error" ? 6000 : 3500);
+    };
 
     var closeLightbox = function () {
       if (lightboxEl) lightboxEl.classList.remove("open");
@@ -396,7 +413,7 @@
         lightboxCapEl = lightboxEl.querySelector(".lightbox-cap");
         lightboxEl.querySelector(".lightbox-download").addEventListener("click", function (e) {
           e.stopPropagation();
-          downloadOriginal(url, file);
+          downloadOriginal(currentDownloadUrl || lightboxImg.src, currentDownloadFile);
         });
         lightboxEl.addEventListener("click", closeLightbox);
         document.addEventListener("keydown", function (e) {
@@ -406,6 +423,8 @@
       lightboxImg.src = url;
       lightboxCapEl.textContent = cap || "";
       lightboxCapEl.style.display = cap ? "" : "none";
+      currentDownloadUrl = url;
+      currentDownloadFile = file || "";
       lightboxEl.classList.add("open");
     };
 

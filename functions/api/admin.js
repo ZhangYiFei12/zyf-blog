@@ -520,6 +520,46 @@ export async function onRequest(context) {
     return json({ ok: true, added, commitSha, message: `已提交 ${added.length} 张图片，部署完成后首页相册即可显示（约 1 分钟）` });
   }
 
+  // ---- POST /api/admin/gallery/optimize（重新压缩已上传图片，覆盖原文件，URL 不变）----
+  if (method === "POST" && rest.length === 2 && rest[0] === "gallery" && rest[1] === "optimize") {
+    const input = await request.json().catch(() => null);
+    const filename = String((input && input.file) || "").replace(/[^a-z0-9.\-]/gi, "");
+    if (!filename) return json({ error: "文件名无效" }, 400);
+    const b64 = input && input.data ? String(input.data) : "";
+    if (!b64 || b64.length > 7 * 1024 * 1024) return json({ error: "图片数据无效或过大（>5MB）" }, 400);
+    const gallery = await getGallery(env);
+    const target = gallery.find(g => g && g.file === filename);
+    if (!target) return json({ error: "相册中未找到该图片" }, 404);
+
+    const mime = input && input.mime ? String(input.mime) : "image/jpeg";
+    const ext = String((input && input.ext) || mime.split("/")[1] || "jpg").replace(/[^a-z0-9]/gi, "").toLowerCase() || "jpg";
+    const changes = [
+      { path: `images/uploads/${filename}`, content: b64, encoding: "base64" },
+    ];
+
+    // 缩略图：已有则覆盖原路径，否则新建并记入 gallery.json
+    let thumbUrl = target.thumbUrl || "";
+    const thumbB64 = input && input.thumb ? String(input.thumb) : "";
+    const thumbExt = String((input && input.thumbExt) || "webp").replace(/[^a-z0-9]/gi, "").toLowerCase() || "webp";
+    if (thumbB64 && thumbB64.length <= 1024 * 1024) {
+      if (target.thumbUrl) {
+        const tp = String(target.thumbUrl).replace(/^\//, "");
+        if (tp) changes.push({ path: tp, content: thumbB64, encoding: "base64" });
+      } else {
+        const thumbName = `thumb-${filename.replace(/\.[^.]+$/, "")}.${thumbExt}`;
+        changes.push({ path: `images/uploads/${thumbName}`, content: thumbB64, encoding: "base64" });
+        thumbUrl = `/images/uploads/${thumbName}`;
+      }
+    }
+    if (thumbUrl !== target.thumbUrl) {
+      target.thumbUrl = thumbUrl;
+      changes.push({ path: "data/gallery.json", content: JSON.stringify(gallery, null, 2) });
+    }
+
+    const commitSha = await commitFiles(env, `⚙️ 后台重新压缩相册图片：${filename}`, changes);
+    return json({ ok: true, commitSha, message: "已重新压缩并提交，部署后生效（约 1 分钟）" });
+  }
+
   // ---- DELETE /api/admin/gallery/<filename>（删除相册图片）----
   if (method === "DELETE" && rest.length === 2 && rest[0] === "gallery") {
     const filename = String(rest[1] || "").replace(/[^a-z0-9.\-]/gi, "");

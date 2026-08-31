@@ -832,15 +832,19 @@
       cell.style.cssText = "position:relative;border:1px solid var(--border);border-radius:10px;overflow:hidden;aspect-ratio:1/1;background:var(--bg-soft);";
       cell.innerHTML =
         '<img src="' + escapeAttr(g.url) + '" alt="' + escapeAttr(g.caption || g.file) + '" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy" />' +
-        '<button class="btn btn-danger btn-sm" data-action="del" data-file="' + escapeAttr(g.file) + '" style="position:absolute;top:6px;right:6px;">删除</button>';
+        '<div style="position:absolute;top:6px;right:6px;display:flex;gap:4px;">' +
+        '<button class="btn btn-outline btn-sm" data-action="opt" data-file="' + escapeAttr(g.file) + '" title="重新压缩（可设置大小/质量）">压缩</button>' +
+        '<button class="btn btn-danger btn-sm" data-action="del" data-file="' + escapeAttr(g.file) + '">删除</button>' +
+        '</div>';
       galleryGrid.appendChild(cell);
     });
   }
 
   galleryGrid.addEventListener("click", function (e) {
     var btn = e.target.closest("button[data-action='del']");
-    if (!btn) return;
-    deleteGalleryImage(btn.getAttribute("data-file"), btn);
+    if (btn) { deleteGalleryImage(btn.getAttribute("data-file"), btn); return; }
+    var optBtn = e.target.closest("button[data-action='opt']");
+    if (optBtn) optimizeGalleryImage(optBtn.getAttribute("data-file"), optBtn);
   });
 
   function deleteGalleryImage(file, btn) {
@@ -866,6 +870,106 @@
     btn.classList.add("btn-confirming");
     pendingDeleteTimer = setTimeout(resetDeleteConfirm, 4000);
   }
+
+  /* ---------- 重新压缩已上传图片（设置弹窗 → 覆盖原文件） ---------- */
+  var optModalOverlay = $("optModalOverlay");
+  var optPreview = $("optPreview");
+  var optFileName = $("optFileName");
+  var optCurrentSize = $("optCurrentSize");
+  var optModalTarget = $("optModalTarget");
+  var optModalQuality = $("optModalQuality");
+  var optModalConfirm = $("optModalConfirm");
+  var optModalCancel = $("optModalCancel");
+  var optPendingFile = "";
+  var optPendingUrl = "";
+  var optPendingThumb = "";
+
+  var closeOptModal = function () {
+    if (optModalOverlay) optModalOverlay.style.display = "none";
+    if (optModalConfirm) { optModalConfirm.disabled = false; optModalConfirm.textContent = "开始压缩"; }
+  };
+
+  var openOptModal = function (file, url) {
+    optPendingFile = file;
+    optPendingUrl = url;
+    if (optFileName) optFileName.textContent = file;
+    if (optCurrentSize) optCurrentSize.textContent = "—";
+    if (optPreview) { optPreview.src = url; optPreview.alt = file; }
+    // 同步面板参数
+    if (optModalTarget) optModalTarget.value = String(imgSettings.target);
+    if (optModalQuality) optModalQuality.value = String(imgSettings.quality);
+    if (optModalOverlay) optModalOverlay.style.display = "flex";
+    // 读取当前文件大小
+    if (url) {
+      fetch(url, { cache: "force-cache" })
+        .then(function (r) { return r.ok ? r.blob() : null; })
+        .then(function (blob) { if (blob && optCurrentSize) optCurrentSize.textContent = formatSize(blob.size); })
+        .catch(function () { /* 忽略 */ });
+    }
+  };
+
+  var optimizeGalleryImage = function (file) {
+    if (!file) return;
+    var g = null;
+    galleryCache.forEach(function (x) { if (x && x.file === file) g = x; });
+    if (!g || !g.url) { showToast("未找到该图片信息", "error"); return; }
+    openOptModal(file, g.url);
+  };
+
+  var doOptimize = function () {
+    if (!optPendingFile) { closeOptModal(); return; }
+    var targetBytes = (parseInt(optModalTarget && optModalTarget.value, 10) || 2048) * 1024;
+    var quality = parseFloat(optModalQuality && optModalQuality.value) || 0.8;
+    if (optModalConfirm) { optModalConfirm.disabled = true; optModalConfirm.textContent = "压缩中…"; }
+
+    fetch(optPendingUrl, { cache: "force-cache" })
+      .then(function (r) { if (!r.ok) throw new Error("读取原图失败"); return r.blob(); })
+      .then(function (blob) {
+        return new Promise(function (resolve, reject) {
+          var fr = new FileReader();
+          fr.onload = function () { resolve(fr.result); };
+          fr.onerror = function () { reject(new Error("读取原图失败")); };
+          fr.readAsDataURL(blob);
+        });
+      })
+      .then(function (dataUrl) {
+        return compressImage(dataUrl, targetBytes, quality).then(function (out) {
+          if (out.bytes > 5 * 1024 * 1024) throw new Error("压缩后仍超过 5MB（" + formatSize(out.bytes) + "）");
+          return out;
+        });
+      })
+      .then(function (out) {
+        var payload = {
+          file: optPendingFile,
+          data: out.dataUrl.split(",")[1] || "",
+          mime: "image/jpeg",
+          ext: "jpg",
+        };
+        if (imgSettings.makeThumb) {
+          return makeThumbnail(out.dataUrl, imgSettings.thumbWidth, imgSettings.thumbQuality).then(function (thumb) {
+            payload.thumb = thumb.dataUrl.split(",")[1] || "";
+            payload.thumbExt = "webp";
+            return payload;
+          }).catch(function () { return payload; });
+        }
+        return payload;
+      })
+      .then(function (payload) { return api("/gallery/optimize", { method: "POST", body: payload }); })
+      .then(function (data) {
+        closeOptModal();
+        showToast(data.message || "已重新压缩", "success");
+        loadGallery();
+      })
+      .catch(function (err) {
+        closeOptModal();
+        showToast(err.message || "压缩失败", "error");
+      });
+  };
+
+  if (optModalConfirm) optModalConfirm.addEventListener("click", doOptimize);
+  if (optModalCancel) optModalCancel.addEventListener("click", closeOptModal);
+  if (optModalOverlay) optModalOverlay.addEventListener("click", function (e) { if (e.target === optModalOverlay) closeOptModal(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && optModalOverlay && optModalOverlay.style.display !== "none") closeOptModal(); });
 
   galleryUploadBtn.addEventListener("click", function () { galleryFileInput.click(); });
 
