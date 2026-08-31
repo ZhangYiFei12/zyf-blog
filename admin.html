@@ -109,6 +109,31 @@
     .preview-wrap::-webkit-scrollbar { width: 4px; }
     .preview-wrap::-webkit-scrollbar-track { background: transparent; }
     .preview-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ⚙️ 图片优化设置面板 */
+    .img-settings {
+      margin: 0 0 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-card);
+      overflow: hidden;
+    }
+    .img-settings-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text);
+      user-select: none;
+    }
+    .img-settings-header:hover { background: rgba(255,255,255,0.03); }
+    .img-settings-arrow { transition: transform 0.2s ease; color: var(--text-dim); font-size: 10px; }
+    .img-settings.collapsed .img-settings-arrow { transform: rotate(-90deg); }
+    .img-settings.collapsed .img-settings-body { display: none; }
+    .img-settings-body { padding: 0 16px 14px; }
+    .img-settings-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; }
+    .img-settings-item { display: flex; flex-direction: column; gap: 4px; }
+    .img-settings-item label { font-size: 11px; color: var(--text-dim); }
   </style>
 </head>
 <body class="admin-body">
@@ -141,6 +166,58 @@
         <button class="tab" id="tabGallery">🖼️ 相册</button>
       </div>
 
+      <!-- ⚙️ 图片优化设置（全局，localStorage 持久化） -->
+      <div class="img-settings">
+        <div class="img-settings-header" id="imgSettingsToggle">
+          <span>⚙️ 图片优化设置</span>
+          <span class="img-settings-arrow">▾</span>
+        </div>
+        <div class="img-settings-body" id="imgSettingsBody">
+          <div class="img-settings-row">
+            <div class="img-settings-item">
+              <label>压缩目标</label>
+              <select id="optTarget" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:11px;font-family:var(--mono);">
+                <option value="5120">≤5MB</option>
+                <option value="3072">≤3MB</option>
+                <option value="2048" selected>≤2MB</option>
+                <option value="1024">≤1MB</option>
+                <option value="512">≤512KB</option>
+              </select>
+            </div>
+            <div class="img-settings-item">
+              <label>压缩质量</label>
+              <select id="optQuality" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:11px;font-family:var(--mono);">
+                <option value="0.92">高 92%</option>
+                <option value="0.8" selected>中 80%</option>
+                <option value="0.6">低 60%</option>
+              </select>
+            </div>
+            <div class="img-settings-item">
+              <label>缩略图宽度</label>
+              <select id="optThumbWidth" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:11px;font-family:var(--mono);">
+                <option value="640">640px</option>
+                <option value="480" selected>480px</option>
+                <option value="320">320px</option>
+                <option value="240">240px</option>
+              </select>
+            </div>
+            <div class="img-settings-item">
+              <label>缩略图质量</label>
+              <select id="optThumbQuality" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:11px;font-family:var(--mono);">
+                <option value="0.9">高 90%</option>
+                <option value="0.8" selected>中 80%</option>
+                <option value="0.7">低 70%</option>
+              </select>
+            </div>
+            <div class="img-settings-item">
+              <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;">
+                <input type="checkbox" id="optMakeThumb" checked /> 自动生成缩略图
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="viewArticles">
       <div class="admin-grid">
         <!-- 左侧：编辑器 -->
@@ -149,22 +226,6 @@
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
               <button class="btn btn-outline btn-sm" id="uploadMdBtn">📄 上传 .md 文件</button>
               <button class="btn btn-outline btn-sm" id="uploadImgBtn">🖼️ 上传图片</button>
-              <span style="font-size:11px;color:var(--text-dim);display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;">
-                压缩
-                <select id="compressTarget" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:11px;font-family:var(--mono);">
-                  <option value="5120">≤5MB</option>
-                  <option value="3072">≤3MB</option>
-                  <option value="2048" selected>≤2MB</option>
-                  <option value="1024">≤1MB</option>
-                  <option value="512">≤512KB</option>
-                </select>
-                质量
-                <select id="compressQuality" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:11px;font-family:var(--mono);">
-                  <option value="0.92">高 92%</option>
-                  <option value="0.8" selected>中 80%</option>
-                  <option value="0.6">低 60%</option>
-                </select>
-              </span>
               <span style="font-size:11px;color:var(--text-dim);">图片超限时自动压缩后上传，部署后生效（约 30 秒）</span>
               <input type="file" id="mdFileInput" accept=".md,.markdown,text/markdown" style="display:none;" />
               <input type="file" id="imgFileInput" accept="image/*" multiple style="display:none;" />
@@ -293,7 +354,7 @@
             <button class="btn btn-outline btn-sm" id="galleryUploadBtn">📤 批量上传图片</button>
             <input type="file" id="galleryFileInput" accept="image/*" multiple style="display:none;" />
             <span id="galleryCount" style="font-size:11px;color:var(--text-dim);"></span>
-            <span style="font-size:11px;color:var(--text-dim);">单张 ≤5MB，超限自动压缩（压缩目标/质量在文章页设置），部署后首页相册更新（约 1 分钟）</span>
+            <span style="font-size:11px;color:var(--text-dim);">单张 ≤5MB，超限自动压缩（优化设置见上方⚙️面板），部署后首页相册更新（约 1 分钟）</span>
           </div>
           <div id="galleryGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:12px;"></div>
           <div id="galleryLoading" class="loading">加载中</div>
@@ -305,7 +366,7 @@
   <!-- 浮动消息 -->
   <div id="toast" class="toast" style="display:none;"></div>
 
-  <script src="js/admin.js?v=9"></script>
+  <script src="js/admin.js?v=10"></script>
   <script>
     (function () {
       function cur() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }

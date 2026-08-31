@@ -27,8 +27,55 @@
   var articleFilter = $("articleFilter");
   var uploadImgBtn = $("uploadImgBtn");
   var imgFileInput = $("imgFileInput");
-  var compressTarget = $("compressTarget");
-  var compressQuality = $("compressQuality");
+
+  /* ⚙️ 图片优化设置（localStorage 持久化） */
+  var IMG_SETTINGS_KEY = "zyf-img-settings";
+  var imgSettings = {
+    target: 2048,          // 压缩目标 KB
+    quality: 0.8,          // 压缩质量
+    thumbWidth: 480,       // 缩略图宽度 px
+    thumbQuality: 0.8,     // 缩略图质量
+    makeThumb: true        // 是否自动生成缩略图
+  };
+  function loadImgSettings() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(IMG_SETTINGS_KEY) || "{}") || {};
+      imgSettings.target = parseInt(saved.target, 10) || 2048;
+      imgSettings.quality = parseFloat(saved.quality) || 0.8;
+      imgSettings.thumbWidth = parseInt(saved.thumbWidth, 10) || 480;
+      imgSettings.thumbQuality = parseFloat(saved.thumbQuality) || 0.8;
+      imgSettings.makeThumb = saved.makeThumb !== false;
+    } catch (e) { /* 忽略损坏数据 */ }
+  }
+  function saveImgSettings() {
+    try { localStorage.setItem(IMG_SETTINGS_KEY, JSON.stringify(imgSettings)); } catch (e) {}
+  }
+  function bindImgSettings() {
+    var els = {
+      target: $("optTarget"),
+      quality: $("optQuality"),
+      thumbWidth: $("optThumbWidth"),
+      thumbQuality: $("optThumbQuality"),
+      makeThumb: $("optMakeThumb")
+    };
+    function applyToUI() {
+      if (els.target) els.target.value = String(imgSettings.target);
+      if (els.quality) els.quality.value = String(imgSettings.quality);
+      if (els.thumbWidth) els.thumbWidth.value = String(imgSettings.thumbWidth);
+      if (els.thumbQuality) els.thumbQuality.value = String(imgSettings.thumbQuality);
+      if (els.makeThumb) els.makeThumb.checked = !!imgSettings.makeThumb;
+    }
+    if (els.target) els.target.addEventListener("change", function () { imgSettings.target = parseInt(els.target.value, 10) || 2048; saveImgSettings(); });
+    if (els.quality) els.quality.addEventListener("change", function () { imgSettings.quality = parseFloat(els.quality.value) || 0.8; saveImgSettings(); });
+    if (els.thumbWidth) els.thumbWidth.addEventListener("change", function () { imgSettings.thumbWidth = parseInt(els.thumbWidth.value, 10) || 480; saveImgSettings(); });
+    if (els.thumbQuality) els.thumbQuality.addEventListener("change", function () { imgSettings.thumbQuality = parseFloat(els.thumbQuality.value) || 0.8; saveImgSettings(); });
+    if (els.makeThumb) els.makeThumb.addEventListener("change", function () { imgSettings.makeThumb = els.makeThumb.checked; saveImgSettings(); });
+    var toggle = $("imgSettingsToggle");
+    if (toggle) toggle.addEventListener("click", function () { document.querySelector(".img-settings").classList.toggle("collapsed"); });
+    applyToUI();
+  }
+  loadImgSettings();
+  bindImgSettings();
 
   var previewTimer = null;
 
@@ -433,9 +480,12 @@
   }
 
   /**
-   * 生成 480px 缩略图（webp），用于相册网格快速加载。
+   * 生成缩略图（webp），用于相册网格快速加载。
+   * @param {string} dataUrl 原图 dataURL
+   * @param {number} maxWidth 缩略图最大宽度
+   * @param {number} quality webp 质量 0-1
    */
-  function makeThumbnail(dataUrl) {
+  function makeThumbnail(dataUrl, maxWidth, quality) {
     return new Promise(function (resolve, reject) {
       var img = new Image();
       img.onload = function () {
@@ -443,9 +493,9 @@
           var w = img.naturalWidth || img.width;
           var h = img.naturalHeight || img.height;
           if (!w || !h) { reject(new Error("无法读取图片尺寸")); return; }
-          var MAX_W = 480;
-          if (w > MAX_W) {
-            h = Math.round(h * MAX_W / w); w = MAX_W;
+          maxWidth = parseInt(maxWidth, 10) || 480;
+          if (w > maxWidth) {
+            h = Math.round(h * maxWidth / w); w = maxWidth;
           }
           var canvas = document.createElement("canvas");
           canvas.width = w; canvas.height = h;
@@ -453,7 +503,7 @@
           ctx.fillStyle = "#ffffff";
           ctx.fillRect(0, 0, w, h);
           ctx.drawImage(img, 0, 0, w, h);
-          resolve({ dataUrl: canvas.toDataURL("image/webp", 0.8) });
+          resolve({ dataUrl: canvas.toDataURL("image/webp", quality || 0.8) });
         } catch (err) { reject(err); }
       };
       img.onerror = function () { reject(new Error("图片解码失败")); };
@@ -467,8 +517,8 @@
     var files = Array.prototype.slice.call(imgFileInput.files || []);
     if (!files.length) return;
     var HARD_LIMIT = 5 * 1024 * 1024;
-    var targetBytes = (parseInt((compressTarget && compressTarget.value) || "2048", 10) || 2048) * 1024;
-    var quality = parseFloat((compressQuality && compressQuality.value) || "0.8") || 0.8;
+    var targetBytes = imgSettings.target * 1024;
+    var quality = imgSettings.quality;
     var okCount = 0, failCount = 0, compressedNote = null;
 
     uploadImgBtn.disabled = true;
@@ -823,8 +873,8 @@
     var files = Array.prototype.slice.call(galleryFileInput.files || []);
     if (!files.length) return;
     var HARD_LIMIT = 5 * 1024 * 1024;
-    var targetBytes = (parseInt((compressTarget && compressTarget.value) || "2048", 10) || 2048) * 1024;
-    var quality = parseFloat((compressQuality && compressQuality.value) || "0.8") || 0.8;
+    var targetBytes = imgSettings.target * 1024;
+    var quality = imgSettings.quality;
     var results = []; // {data, mime, ext, thumb, thumbExt}
     var failCount = 0;
 
@@ -890,9 +940,15 @@
         processNext(i + 1);
       };
 
-      /* 生成缩略图（480px webp） */
+      /* 生成缩略图（用户设置参数） */
       var pushWithThumb = function (dataUrl, mime, ext) {
-        makeThumbnail(dataUrl).then(function (thumb) {
+        if (!imgSettings.makeThumb) {
+          // 关闭缩略图：只上传原图
+          results.push({ data: (dataUrl.split(",")[1]) || "", mime: mime, ext: ext });
+          processNext(i + 1);
+          return;
+        }
+        makeThumbnail(dataUrl, imgSettings.thumbWidth, imgSettings.thumbQuality).then(function (thumb) {
           results.push({
             data: (dataUrl.split(",")[1]) || "",
             mime: mime,
