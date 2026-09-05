@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台 | ZH</title>
-  <link rel="stylesheet" href="css/style.css?v=17" />
+  <link rel="stylesheet" href="css/style.css?v=18" />
   <link rel="icon" type="image/png" href="images/avatar.png" />
   <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
   <style>
@@ -195,6 +195,7 @@
         <button class="tab active" id="tabArticles">📝 文章</button>
         <button class="tab" id="tabProjects">🛠️ 项目</button>
         <button class="tab" id="tabGallery">🖼️ 相册</button>
+        <button class="tab" id="tabDownloads">📦 下载</button>
       </div>
 
       <!-- ⚙️ 图片优化设置（全局，localStorage 持久化） -->
@@ -391,6 +392,20 @@
           <div id="galleryLoading" class="loading">加载中</div>
         </div>
       </div>
+
+      <div id="viewDownloads" style="display:none;">
+        <div class="article-list" style="max-width:1100px;">
+          <h3>📦 下载文件管理</h3>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap;">
+            <button class="btn btn-outline btn-sm" id="downloadsUploadBtn">📤 上传文件</button>
+            <input type="file" id="downloadsFileInput" style="display:none;" />
+            <span id="downloadsCount" style="font-size:11px;color:var(--text-dim);"></span>
+            <span style="font-size:11px;color:var(--text-dim);">支持最大 2GB 大文件，直传对象存储不经过服务器；上传后填写名称/版本/说明</span>
+          </div>
+          <div style="margin-top:10px;" id="downloadsGrid"></div>
+          <div id="downloadsLoading" class="loading">加载中</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -430,7 +445,7 @@
     </div>
   </div>
 
-  <script src="js/admin.js?v=11"></script>
+  <script src="js/admin.js?v=12"></script>
   <script>
     (function () {
       function cur() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }

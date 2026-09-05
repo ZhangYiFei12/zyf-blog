@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>下载 | ZH</title>
+  <meta name="description" content="软件与工具下载" />
+  <link rel="stylesheet" href="css/style.css?v=18" />
+  <link rel="icon" type="image/png" href="images/avatar.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="下载 · 张义飞 | 个人博客" />
+  <meta property="og:description" content="软件与工具下载" />
+  <meta property="og:url" content="https://zyf2026.pages.dev/downloads.html" />
+  <meta property="og:image" content="https://zyf2026.pages.dev/images/avatar.png" />
+  <meta property="og:site_name" content="张义飞博客" />
+  <meta name="twitter:card" content="summary" />
+  <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-inner">
+      <a href="index.html" class="brand">
+        <span class="prompt">&gt;_</span>ZH<span class="cursor"></span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html">首页</a></li>
+        <li><a href="blog.html">博客</a></li>
+        <li><a href="projects.html">项目</a></li>
+        <li><a href="downloads.html">下载</a></li>
+        <li><a href="about.html">关于</a></li>
+        <li><a href="gallery.html">相册</a></li>
+      </ul>
+      <div class="nav-actions">
+        <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
+        <button class="nav-toggle" aria-label="菜单">☰ 菜单</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container">
+
+    <div class="page-head">
+      <h1>下<span class="accent">载</span></h1>
+      <p>软件与工具发布 —— 点击下载即可获取。</p>
+    </div>
+
+    <section class="section" style="border-top:none;padding-top:0;">
+      <div class="grid grid-bento" id="downloadsGrid"></div>
+      <div class="downloads-hint mt-2" style="font-size:12px;color:var(--text-dim);text-align:center;" id="downloadsHint"></div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>© <span data-year>2025</span> 张义飞 · Built with <span class="heart">♥</span> and a lot of coffee</p>
+      <p style="margin-top:6px;font-size:11px;color:#4b5a6e;">&gt;_ zhangyifei · 用代码记录世界</p>
+    </div>
+  </footer>
+
+  <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
+  <script src="js/main.js?v=16"></script>
+  <script>
+    /* 下载列表渲染（data/downloads.json 由后台管理，发布后即时生效） */
+    (function () {
+      var grid = document.getElementById("downloadsGrid");
+      var hint = document.getElementById("downloadsHint");
+      if (!grid) return;
+
+      function esc(s) {
+        return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+      }
+      function fmtSize(n) {
+        n = Number(n) || 0;
+        if (n >= 1073741824) return (n / 1073741824).toFixed(2) + " GB";
+        if (n >= 1048576) return (n / 1048576).toFixed(1) + " MB";
+        if (n >= 1024) return (n / 1024).toFixed(0) + " KB";
+        return n + " B";
+      }
+      function fmtDate(d) {
+        if (!d) return "";
+        var s = String(d).replace(/[T].*$/, "").replace(/-/g, "-");
+        return s;
+      }
+
+      fetch("data/downloads.json", { cache: "no-store" })
+        .then(function (r) { if (!r.ok) throw new Error("load fail"); return r.json(); })
+        .then(function (list) {
+          if (!Array.isArray(list) || !list.length) {
+            grid.innerHTML = '<div class="gallery-empty" style="grid-column:1/-1;">📦 暂无下载内容，敬请期待</div>';
+            return;
+          }
+          var html = "";
+          list.forEach(function (d) {
+            if (!d || !d.url) return;
+            html += '<div class="card reveal download-card">' +
+                      '<div class="download-top">' +
+                        '<span class="download-type">' + esc(d.category || "软件") + '</span>' +
+                        '<span class="year">' + esc(d.version || "") + '</span>' +
+                      '</div>' +
+                      '<h3>' + esc(d.filename) + '</h3>' +
+                      (d.desc ? '<p class="desc">' + esc(d.desc) + '</p>' : '') +
+                      '<div class="meta">' +
+                        '<span class="tag">' + fmtSize(d.size) + '</span>' +
+                        (d.date ? '<span class="tag">' + fmtDate(d.date) + '</span>' : '') +
+                      '</div>' +
+                      '<div class="links">' +
+                        '<a class="download-link" href="' + esc(d.url) + '" download="' + esc(d.filename) + '" rel="noopener">⬇ 下载</a>' +
+                      '</div>' +
+                    '</div>';
+          });
+          grid.innerHTML = html || '<div class="gallery-empty" style="grid-column:1/-1;">📦 暂无下载内容，敬请期待</div>';
+          if (hint) hint.textContent = "点击「下载」获取文件 · " + list.length + " 个文件";
+        })
+        .catch(function () {
+          grid.innerHTML = '<div class="gallery-empty" style="grid-column:1/-1;">📦 暂无下载内容，敬请期待</div>';
+        });
+    })();
+  </script>
+</body>
+</html>

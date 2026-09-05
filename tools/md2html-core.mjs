@@ -260,7 +260,7 @@ export function buildPage(meta, bodyHtml, opts = {}) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${escapeHtml(meta.title)} | ZH</title>
   <meta name="description" content="${escapeAttr(excerpt)}" />
-  <link rel="stylesheet" href="../css/style.css?v=17" />
+  <link rel="stylesheet" href="../css/style.css?v=18" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
   <meta property="og:type" content="article" />
   <meta property="og:title" content="${escapeAttr(meta.title)}" />
@@ -285,6 +285,7 @@ export function buildPage(meta, bodyHtml, opts = {}) {
         <li><a href="../blog.html">博客</a></li>
         <li><a href="../projects.html">项目</a></li>
         <li><a href="../about.html">关于</a></li>
+        <li><a href="../downloads.html">下载</a></li>
         <li><a href="../gallery.html">相册</a></li>
       </ul>
       <div class="nav-actions">
@@ -313,7 +314,7 @@ ${articleHtml}
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
   <script src="../js/highlight.min.js?v=1"></script>
-  <script src="../js/main.js?v=15"></script>
+  <script src="../js/main.js?v=16"></script>
 </body>
 </html>
 `;
@@ -434,6 +435,8 @@ export function buildSitemap(posts, base = "https://zyf2026.pages.dev") {
     { loc: base + "/", lastmod: today, pri: "1.0", freq: "weekly" },
     { loc: base + "/blog.html", lastmod: today, pri: "0.8", freq: "weekly" },
     { loc: base + "/projects.html", lastmod: today, pri: "0.8", freq: "monthly" },
+    { loc: base + "/downloads.html", lastmod: today, pri: "0.8", freq: "monthly" },
+    { loc: base + "/gallery.html", lastmod: today, pri: "0.6", freq: "monthly" },
     { loc: base + "/about.html", lastmod: today, pri: "0.6", freq: "monthly" },
   ];
   for (const p of (Array.isArray(posts) ? posts : [])) {

@@ -267,6 +267,133 @@ function normalizeProject(input) {
   return project;
 }
 
+/* ---------------- R2 对象存储（软件下载大文件） ----------------
+ * 方案：后台签发 S3 SigV4 presigned PUT URL → 浏览器直传 R2（不经 Functions 中转，
+ * 突破请求体限制，支持最大 2GB+）。元数据存 data/downloads.json 并经 GitHub commit。
+ * 环境变量：R2_ACCOUNT_ID / R2_ACCESS_KEY / R2_SECRET_KEY / R2_BUCKET
+ *           R2_PUBLIC_BASE（可选，公开桶访问基址，如 https://pub-xxx.r2.dev）
+ */
+
+function hmac(secret, data) {
+  const enc = new TextEncoder();
+  return crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"])
+    .then(key => crypto.subtle.sign("HMAC", key, enc.encode(data)))
+    .then(buf => {
+      const b = new Uint8Array(buf);
+      let hex = "";
+      for (let i = 0; i < b.length; i++) hex += b[i].toString(16).padStart(2, "0");
+      return hex;
+    });
+}
+
+function sha256hex(data) {
+  const enc = new TextEncoder();
+  return crypto.subtle.digest("SHA-256", enc.encode(data)).then(buf => {
+    const b = new Uint8Array(buf);
+    let hex = "";
+    for (let i = 0; i < b.length; i++) hex += b[i].toString(16).padStart(2, "0");
+    return hex;
+  });
+}
+
+function r2cfg(env) {
+  return {
+    accountId: String(env.R2_ACCOUNT_ID || "").trim(),
+    accessKey: String(env.R2_ACCESS_KEY || "").trim(),
+    secretKey: String(env.R2_SECRET_KEY || "").trim(),
+    bucket: String(env.R2_BUCKET || "").trim(),
+    publicBase: String(env.R2_PUBLIC_BASE || "").trim().replace(/\/$/, ""),
+  };
+}
+
+function r2Ready(env) {
+  const c = r2cfg(env);
+  return !!(c.accountId && c.accessKey && c.secretKey && c.bucket);
+}
+
+/* 为 R2 对象签发 S3 SigV4 presigned URL（method 可为 PUT / DELETE 等） */
+async function presignR2(env, method, key, contentType, expiresSec = 3600) {
+  const c = r2cfg(env);
+  const host = `${c.bucket}.${c.accountId}.r2.cloudflarestorage.com`;
+  const endpoint = `https://${host}`;
+  const region = "auto";
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
+  const dateStamp = amzDate.slice(0, 8);
+  const service = "s3";
+
+  const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const payloadHash = "UNSIGNED-PAYLOAD";
+  const canonicalUri = `/${c.bucket}/${key}`;
+
+  const query = [
+    `X-Amz-Algorithm=AWS4-HMAC-SHA256`,
+    `X-Amz-Credential=${encodeURIComponent(`${c.accessKey}/${credentialScope}`)}`,
+    `X-Amz-Date=${amzDate}`,
+    `X-Amz-Expires=${expiresSec}`,
+    `X-Amz-SignedHeaders=host`,
+  ].join("&");
+
+  const canonicalRequest = [
+    method,
+    canonicalUri,
+    query,
+    `host:${host}`,
+    "",
+    "host",
+    payloadHash,
+  ].join("\n");
+
+  const stringToSign = [
+    "AWS4-HMAC-SHA256",
+    amzDate,
+    credentialScope,
+    await sha256hex(canonicalRequest),
+  ].join("\n");
+
+  const kDate = await hmac("AWS4" + c.secretKey, dateStamp);
+  const kRegion = await hmac(kDate, region);
+  const kService = await hmac(kRegion, service);
+  const kSigning = await hmac(kService, "aws4_request");
+  const signature = await hmac(kSigning, stringToSign);
+
+  const signedUrl = `${endpoint}/${c.bucket}/${key}?${query}&X-Amz-Signature=${signature}`;
+  return { signedUrl, url: c.publicBase ? `${c.publicBase}/${key}` : `${endpoint}/${c.bucket}/${key}` };
+}
+
+/* 读取 data/downloads.json */
+async function getDownloads(env) {
+  try {
+    const raw = await getFile(env, "data/downloads.json");
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function genFileKey(origName) {
+  const ts = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 8);
+  const ext = (origName.match(/\.([^.]+)$/) || [])[1] || "bin";
+  return `dl-${ts}-${rand}.${ext.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+}
+
+function normFileMeta(input) {
+  const f = {
+    id: String(input.id || "").trim() || `f-${Date.now()}`,
+    key: String(input.key || "").trim(),
+    url: String(input.url || "").trim(),
+    filename: String(input.filename || "").trim() || "未命名",
+    size: Number(input.size) || 0,
+    version: String(input.version || "").trim(),
+    desc: String(input.desc || "").trim(),
+    category: String(input.category || "软件").trim() || "软件",
+    date: String(input.date || new Date().toISOString().slice(0, 10)),
+  };
+  return f;
+}
+
 /* ---------------- 主处理器 ---------------- */
 
 export async function onRequest(context) {
@@ -640,6 +767,79 @@ export async function onRequest(context) {
     ]);
 
     return json({ ok: true, id, commitSha, message: "已删除并提交，等待自动部署" });
+  }
+
+  // ---- GET /api/admin/files（列出下载文件）----
+  if (method === "GET" && rest.length === 1 && rest[0] === "files") {
+    const files = await getDownloads(env);
+    return json({ files });
+  }
+
+  // ---- POST /api/admin/files/presign（签发 R2 直传 URL）----
+  if (method === "POST" && rest.length === 2 && rest[0] === "files" && rest[1] === "presign") {
+    if (!r2Ready(env)) {
+      return json({ error: "R2 未配置：请在 Cloudflare Pages 设置 R2_ACCOUNT_ID / R2_ACCESS_KEY / R2_SECRET_KEY / R2_BUCKET" }, 500);
+    }
+    const input = await request.json().catch(() => null);
+    const filename = input && input.filename ? String(input.filename).trim() : "";
+    const size = Number(input && input.size) || 0;
+    if (!filename) return json({ error: "缺少文件名" }, 400);
+    // 预留大小上限校验（前端也校验；此处兜底）
+    if (size > 2 * 1024 * 1024 * 1024) return json({ error: "文件超过 2GB 上限" }, 400);
+    const key = genFileKey(filename);
+    const ext = (key.match(/\.([^.]+)$/) || [])[1] || "bin";
+    const contentType = String(input.contentType || "application/octet-stream").trim();
+    try {
+      const { signedUrl: putUrl, url } = await presignR2(env, "PUT", key, contentType);
+      return json({ ok: true, key, putUrl, url, expiresIn: 3600, ext });
+    } catch (e) {
+      return json({ error: `签发直传 URL 失败：${e.message || e}` }, 500);
+    }
+  }
+
+  // ---- POST /api/admin/files/record（提交元数据到 data/downloads.json）----
+  if (method === "POST" && rest.length === 2 && rest[0] === "files" && rest[1] === "record") {
+    const input = await request.json().catch(() => null);
+    if (!input || !input.key) return json({ error: "缺少文件 key" }, 400);
+    const files = await getDownloads(env);
+    const entry = normFileMeta(input);
+    // 同 key 已存在则更新，否则插入最前
+    const idx = files.findIndex(f => f.key === entry.key);
+    if (idx >= 0) files[idx] = entry; else files.unshift(entry);
+    const commitSha = await commitFiles(env, `📦 后台${idx >= 0 ? "更新" : "新增"}下载文件：${entry.filename}`, [
+      { path: "data/downloads.json", content: JSON.stringify(files, null, 2) + "\n" },
+    ]);
+    return json({ ok: true, id: entry.id, commitSha, message: "已记录并提交，下载页将在部署后更新" });
+  }
+
+  // ---- DELETE /api/admin/files（删除 R2 对象 + 元数据）----
+  if (method === "DELETE" && rest.length === 1 && rest[0] === "files") {
+    const input = await request.json().catch(() => null);
+    const id = input && input.id ? String(input.id).trim() : "";
+    if (!id) return json({ error: "缺少文件 ID" }, 400);
+    const files = await getDownloads(env);
+    const target = files.find(f => f.id === id);
+    if (!target) return json({ error: "文件记录不存在" }, 404);
+    const remaining = files.filter(f => f.id !== id);
+
+    // 删除 R2 对象（尽力而为；失败不阻断元数据删除，但记录提示）
+    let r2Note = "";
+    if (r2Ready(env) && target.key) {
+      try {
+        const c = r2cfg(env);
+        const host = `${c.bucket}.${c.accountId}.r2.cloudflarestorage.com`;
+        const { signedUrl } = await presignR2(env, "DELETE", target.key);
+        const res = await fetch(signedUrl, { method: "DELETE" });
+        if (!res.ok && res.status !== 404) r2Note = `（R2 对象删除失败 ${res.status}）`;
+      } catch (e) {
+        r2Note = `（R2 对象删除失败：${e.message || e}）`;
+      }
+    }
+
+    const commitSha = await commitFiles(env, `🗑️ 后台删除下载文件：${target.filename}`, [
+      { path: "data/downloads.json", content: JSON.stringify(remaining, null, 2) + "\n" },
+    ]);
+    return json({ ok: true, id, commitSha, message: `已删除并提交${r2Note}` });
   }
 
   return json({ error: "not found" }, 404);

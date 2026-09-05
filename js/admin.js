@@ -85,15 +85,23 @@
   var tabArticles = $("tabArticles");
   var tabProjects = $("tabProjects");
   var tabGallery = $("tabGallery");
+  var tabDownloads = $("tabDownloads");
   var viewArticles = $("viewArticles");
   var viewProjects = $("viewProjects");
   var viewGallery = $("viewGallery");
+  var viewDownloads = $("viewDownloads");
   var galleryGrid = $("galleryGrid");
   var galleryLoading = $("galleryLoading");
   var galleryUploadBtn = $("galleryUploadBtn");
   var galleryFileInput = $("galleryFileInput");
   var galleryCount = $("galleryCount");
   var galleryCache = [];
+  var downloadsGrid = $("downloadsGrid");
+  var downloadsLoading = $("downloadsLoading");
+  var downloadsUploadBtn = $("downloadsUploadBtn");
+  var downloadsFileInput = $("downloadsFileInput");
+  var downloadsCount = $("downloadsCount");
+  var downloadsCache = [];
   var projectList = $("projectList");
   var projectListLoading = $("projectListLoading");
   var saveProjectBtn = $("saveProjectBtn");
@@ -611,16 +619,20 @@
     tabArticles.className = "tab" + (name === "articles" ? " active" : "");
     tabProjects.className = "tab" + (name === "projects" ? " active" : "");
     tabGallery.className = "tab" + (name === "gallery" ? " active" : "");
+    tabDownloads.className = "tab" + (name === "downloads" ? " active" : "");
     viewArticles.style.display = name === "articles" ? "block" : "none";
     viewProjects.style.display = name === "projects" ? "block" : "none";
     viewGallery.style.display = name === "gallery" ? "block" : "none";
+    viewDownloads.style.display = name === "downloads" ? "block" : "none";
     if (name === "projects") loadProjects();
     if (name === "gallery") loadGallery();
+    if (name === "downloads") loadDownloads();
   }
 
   tabArticles.addEventListener("click", function () { switchTab("articles"); });
   tabProjects.addEventListener("click", function () { switchTab("projects"); });
   tabGallery.addEventListener("click", function () { switchTab("gallery"); });
+  tabDownloads.addEventListener("click", function () { switchTab("downloads"); });
 
   /* ---------- 项目列表 ---------- */
 
@@ -970,6 +982,155 @@
   if (optModalCancel) optModalCancel.addEventListener("click", closeOptModal);
   if (optModalOverlay) optModalOverlay.addEventListener("click", function (e) { if (e.target === optModalOverlay) closeOptModal(); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape" && optModalOverlay && optModalOverlay.style.display !== "none") closeOptModal(); });
+
+  /* ---------- 📦 下载文件管理（R2 大文件直传） ---------- */
+
+  function fmtBytes(n) {
+    n = Number(n) || 0;
+    if (n >= 1073741824) return (n / 1073741824).toFixed(2) + " GB";
+    if (n >= 1048576) return (n / 1048576).toFixed(1) + " MB";
+    if (n >= 1024) return (n / 1024).toFixed(0) + " KB";
+    return n + " B";
+  }
+
+  function loadDownloads() {
+    downloadsGrid.innerHTML = "";
+    downloadsLoading.style.display = "block";
+    api("/files")
+      .then(function (data) {
+        downloadsLoading.style.display = "none";
+        downloadsCache = data.files || [];
+        downloadsCount.textContent = downloadsCache.length ? "共 " + downloadsCache.length + " 个" : "";
+        if (!downloadsCache.length) {
+          downloadsGrid.innerHTML = '<div class="empty-state">还没有上传下载文件<br/>点击上方「上传文件」添加 📦</div>';
+          return;
+        }
+        downloadsCache.forEach(function (d) {
+          var item = document.createElement("div");
+          item.className = "item";
+          item.style.cssText = "display:flex;align-items:center;gap:12px;flex-wrap:wrap;";
+          item.innerHTML =
+            '<div style="flex:1;min-width:200px;">' +
+              '<div style="font-weight:600;font-size:14px;">' + escapeAttr(d.filename || "未命名") +
+                (d.version ? ' <span style="color:var(--accent);font-size:11px;">v' + escapeAttr(d.version) + "</span>" : "") +
+              "</div>" +
+              (d.desc ? '<div style="font-size:12px;color:var(--text-dim);margin-top:2px;">' + escapeAttr(d.desc) + "</div>" : "") +
+              '<div style="font-size:11px;color:var(--text-dim);margin-top:4px;">' +
+                '<span class="tag">' + escapeAttr(d.category || "软件") + "</span> " +
+                fmtBytes(d.size) + " · " + escapeAttr(d.date || "") +
+              "</div>" +
+            "</div>" +
+            '<div style="display:flex;gap:6px;align-items:center;">' +
+              '<a href="' + escapeAttr(d.url) + '" target="_blank" rel="noopener" class="btn btn-outline btn-sm">🔗 链接</a>' +
+              '<button class="btn btn-danger btn-sm" data-action="deldl" data-id="' + escapeAttr(d.id) + '" data-name="' + escapeAttr(d.filename) + '">删除</button>' +
+            "</div>";
+          downloadsGrid.appendChild(item);
+        });
+      })
+      .catch(function (err) {
+        downloadsLoading.style.display = "none";
+        showToast(err.message || "加载失败", "error");
+      });
+  }
+
+  /* 删除下载文件：两步确认（复用 pendingDelete 状态） */
+  downloadsGrid.addEventListener("click", function (e) {
+    var btn = e.target.closest("button[data-action='deldl']");
+    if (!btn) return;
+    var id = btn.getAttribute("data-id");
+    var name = btn.getAttribute("data-name");
+    if (!id) return;
+    if (pendingDeleteId === "dl:" + id) {
+      resetDeleteConfirm();
+      btn.disabled = true;
+      api("/files", { method: "DELETE", body: { id: id } })
+        .then(function (data) {
+          showToast(data.message || "已删除", "success");
+          loadDownloads();
+        })
+        .catch(function (err) { showToast(err.message, "error"); btn.disabled = false; });
+      return;
+    }
+    resetDeleteConfirm();
+    pendingDeleteId = "dl:" + id;
+    pendingDeleteBtn = btn;
+    btn.textContent = "⚠ 再点一次确认";
+    btn.classList.add("btn-confirming");
+    pendingDeleteTimer = setTimeout(resetDeleteConfirm, 4000);
+  });
+
+  /* 上传流程：presign → 浏览器直传 R2 → 填元数据 → record */
+  downloadsUploadBtn.addEventListener("click", function () { downloadsFileInput.click(); });
+
+  downloadsFileInput.addEventListener("change", function () {
+    var file = downloadsFileInput.files && downloadsFileInput.files[0];
+    if (!file) return;
+    var MAX = 2 * 1024 * 1024 * 1024; // 2GB
+    if (file.size > MAX) {
+      showToast("文件超过 2GB 上限", "error");
+      downloadsFileInput.value = "";
+      return;
+    }
+    downloadsUploadBtn.disabled = true;
+    downloadsUploadBtn.textContent = "⏳ 上传中…";
+
+    var name = file.name;
+    var size = file.size;
+    var ext = (name.match(/\.([^.]+)$/) || [])[1] || "";
+    var ctMap = { zip: "application/zip", exe: "application/octet-stream", msi: "application/octet-stream", apk: "application/vnd.android.package-archive", pdf: "application/pdf", dmg: "application/octet-stream", "7z": "application/x-7z-compressed", rar: "application/vnd.rar", tar: "application/x-tar", gz: "application/gzip", deb: "application/vnd.debian.binary-package" };
+    var contentType = ctMap[String(ext).toLowerCase()] || "application/octet-stream";
+
+    api("/files/presign", { method: "POST", body: { filename: name, size: size, contentType: contentType } })
+      .then(function (res) {
+        if (!res.ok || !res.putUrl) throw new Error("获取上传地址失败");
+        return fetch(res.putUrl, { method: "PUT", body: file, headers: { "Content-Type": contentType } }).then(function (r) {
+          if (!r.ok) throw new Error("上传到存储失败 (HTTP " + r.status + ")");
+          return res;
+        });
+      })
+      .then(function (res) {
+        // 直传成功 → 弹窗填元数据 → record
+        downloadsUploadBtn.textContent = "✅ 已上传，填写信息…";
+        askDownloadMeta(res.key, res.url, name, size, contentType).then(function (meta) {
+          return api("/files/record", {
+            method: "POST",
+            body: {
+              key: res.key,
+              url: res.url,
+              filename: meta.filename || name,
+              size: size,
+              version: meta.version,
+              desc: meta.desc,
+              category: meta.category,
+            },
+          });
+        });
+      })
+      .then(function (data) {
+        downloadsUploadBtn.disabled = false;
+        downloadsUploadBtn.textContent = "📤 上传文件";
+        downloadsFileInput.value = "";
+        showToast((data && data.message) || "已提交", "success");
+        loadDownloads();
+      })
+      .catch(function (err) {
+        downloadsUploadBtn.disabled = false;
+        downloadsUploadBtn.textContent = "📤 上传文件";
+        downloadsFileInput.value = "";
+        showToast(err.message || "上传失败", "error");
+      });
+  });
+
+  /* 上传后填写元数据（prompt 形式） */
+  function askDownloadMeta(key, url, defName, size, contentType) {
+    var name = window.prompt("下载显示名称：", defName);
+    if (name === null) return Promise.reject(new Error("已取消"));
+    name = (name || defName).trim();
+    var version = (window.prompt("版本号（如 1.0.0，可留空）：", "") || "").trim();
+    var category = (window.prompt("分类（如 软件 / 文档，可留空默认软件）：", "软件") || "软件").trim();
+    var desc = (window.prompt("简介说明（可留空）：", "") || "").trim();
+    return Promise.resolve({ filename: name, version: version, category: category || "软件", desc: desc });
+  }
 
   galleryUploadBtn.addEventListener("click", function () { galleryFileInput.click(); });
 

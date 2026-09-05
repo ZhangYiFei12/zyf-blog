@@ -2234,3 +2234,40 @@ pre code.hljs {
   }
   .gallery-item { animation: none !important; }
 }
+
+/* 下载页卡片 */
+.download-card .download-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 8px;
+}
+.download-type {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: var(--accent-dim, rgba(56, 189, 248, 0.12));
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  letter-spacing: 0.05em;
+}
+.download-card .download-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #04121a !important;
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none !important;
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+.download-card .download-link:hover {
+  box-shadow: 0 0 18px var(--glow-strong);
+  transform: translateY(-1px);
+}
+.download-card .download-link::after { display: none !important; }
