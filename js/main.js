@@ -399,7 +399,8 @@
       if (lightboxEl) lightboxEl.classList.remove("open");
     };
 
-    var openLightbox = function (url, cap, file) {
+    var openToken = 0;
+    var openLightbox = function (url, cap, file, thumb) {
       if (!lightboxEl) {
         lightboxEl = document.createElement("div");
         lightboxEl.className = "lightbox";
@@ -420,10 +421,22 @@
           if (e.key === "Escape") closeLightbox();
         });
       }
-      lightboxImg.src = url;
+      openToken++;
+      var myToken = openToken;
+      if (thumb && thumb !== url) {
+        // 渐进加载：先显示缩略图（秒开），原图加载完成后无缝替换
+        lightboxImg.src = thumb;
+        var full = new Image();
+        full.onload = function () {
+          if (myToken === openToken) lightboxImg.src = url;
+        };
+        full.src = url;
+      } else {
+        lightboxImg.src = url;
+      }
       lightboxCapEl.textContent = cap || "";
       lightboxCapEl.style.display = cap ? "" : "none";
-      currentDownloadUrl = url;
+      currentDownloadUrl = url; // 下载始终用原图
       currentDownloadFile = file || "";
       lightboxEl.classList.add("open");
     };
@@ -447,7 +460,7 @@
     galleryGridEl.addEventListener("click", function (e) {
       var item = e.target.closest(".gallery-item");
       if (!item) return;
-      openLightbox(item.getAttribute("data-url"), item.getAttribute("data-cap") || "", item.getAttribute("data-file") || "");
+      openLightbox(item.getAttribute("data-url"), item.getAttribute("data-cap") || "", item.getAttribute("data-file") || "", item.getAttribute("data-thumb") || "");
     });
 
     /* 空相册处理：首页隐藏 section，独立页显示占位提示 */
@@ -464,7 +477,7 @@
         list.forEach(function (g) {
           if (!g || !g.url) return;
           var thumb = g.thumbUrl || g.url; // 优先缩略图（webp 小图），无则回退原图
-          html += '<figure class="gallery-item" data-url="' + esc(g.url) + '" data-cap="' + esc(g.caption || "") + '" data-file="' + esc(g.file || "") + '">' +
+          html += '<figure class="gallery-item" data-url="' + esc(g.url) + '" data-cap="' + esc(g.caption || "") + '" data-file="' + esc(g.file || "") + '" data-thumb="' + esc(thumb) + '">' +
                     '<img src="' + esc(thumb) + '" alt="' + esc(g.caption || "相册图片") + '" loading="lazy" decoding="async" />' +
                     (g.caption ? '<figcaption class="gallery-cap">' + esc(g.caption) + "</figcaption>" : "") +
                   "</figure>";
