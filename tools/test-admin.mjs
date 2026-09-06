@@ -374,6 +374,60 @@ mockServer_.listen(mockPort, async () => {
     if (data.slug !== "详细介绍与技术文档") throw new Error("slug 不应改变");
   });
 
+  // 11. 下载文件管理（files 路由）
+  setFile("data/downloads.json", "[]");
+  const ENV = { ADMIN_PASS: "test123", SESSION_SECRET: "test-secret-key-1234567890", GITHUB_TOKEN: "x", GITHUB_REPO: "test/test", GITHUB_BRANCH: "main", GITHUB_API_BASE: "http://localhost:18999" };
+
+  await test("列出下载文件（初始空）", async () => {
+    const req = new Request("http://localhost/api/admin/files", { headers: { Authorization: "Bearer " + token } });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status);
+    if (!Array.isArray(data.files) || data.files.length !== 0) throw new Error("初始应为空列表");
+  });
+
+  let uploadedId = "";
+  await test("上传小文件到仓库（files/repo）", async () => {
+    const req = new Request("http://localhost/api/admin/files/repo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ name: "test-tool.zip", filename: "测试工具", size: 12345, data: Buffer.from("hello download").toString("base64"), version: "1.0.0", desc: "测试文件", category: "工具" }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + " " + JSON.stringify(data));
+    if (!data.ok || !data.id) throw new Error("未返回 ok/id");
+    uploadedId = data.id;
+    // 验证文件确实写入 mock 仓库
+    if (getFile("files/test-tool.zip") !== Buffer.from("hello download").toString("base64")) throw new Error("仓库文件未正确写入");
+    const dl = JSON.parse(getFile("data/downloads.json"));
+    if (!dl.length || dl[0].name !== "test-tool.zip") throw new Error("downloads.json 未记录");
+  });
+
+  await test("列出下载文件（含刚上传）", async () => {
+    const req = new Request("http://localhost/api/admin/files", { headers: { Authorization: "Bearer " + token } });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200");
+    if (data.files.length !== 1) throw new Error("期望 1 条记录");
+  });
+
+  await test("删除下载文件（files DELETE）", async () => {
+    const req = new Request("http://localhost/api/admin/files", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ id: uploadedId }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + " " + JSON.stringify(data));
+    if (!data.ok) throw new Error("未返回 ok");
+    // 仓库文件应已删除
+    if (getFile("files/test-tool.zip") !== null) throw new Error("仓库文件未删除");
+    const dl = JSON.parse(getFile("data/downloads.json"));
+    if (dl.length !== 0) throw new Error("downloads.json 应已清空");
+  });
+
   // 结果
   console.log(`\n🎯 结果：${passed} 通过，${failed} 失败，共 ${passed + failed} 项`);
   mockServer_.close();

@@ -400,7 +400,7 @@
             <button class="btn btn-outline btn-sm" id="downloadsUploadBtn">📤 上传文件</button>
             <input type="file" id="downloadsFileInput" style="display:none;" />
             <span id="downloadsCount" style="font-size:11px;color:var(--text-dim);"></span>
-            <span style="font-size:11px;color:var(--text-dim);">支持最大 2GB 大文件，直传对象存储不经过服务器；上传后填写名称/版本/说明</span>
+            <span style="font-size:11px;color:var(--text-dim);">≤100MB 直接网页上传（存仓库 files/）；超过 100MB 请用本机脚本发布到 GitHub Release（tools/publish-release.mjs）</span>
           </div>
           <div style="margin-top:10px;" id="downloadsGrid"></div>
           <div id="downloadsLoading" class="loading">加载中</div>
@@ -445,7 +445,7 @@
     </div>
   </div>
 
-  <script src="js/admin.js?v=12"></script>
+  <script src="js/admin.js?v=13"></script>
   <script>
     (function () {
       function cur() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }

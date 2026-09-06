@@ -1021,7 +1021,7 @@
               "</div>" +
             "</div>" +
             '<div style="display:flex;gap:6px;align-items:center;">' +
-              '<a href="' + escapeAttr(d.url) + '" target="_blank" rel="noopener" class="btn btn-outline btn-sm">🔗 链接</a>' +
+              '<a href="' + (d.store === "repo" && d.url.indexOf("://") === -1 ? window.location.origin + "/" + d.url.replace(/^\//, "") : d.url) + '" target="_blank" rel="noopener" class="btn btn-outline btn-sm">🔗 链接</a>' +
               '<button class="btn btn-danger btn-sm" data-action="deldl" data-id="' + escapeAttr(d.id) + '" data-name="' + escapeAttr(d.filename) + '">删除</button>' +
             "</div>";
           downloadsGrid.appendChild(item);
@@ -1059,16 +1059,22 @@
     pendingDeleteTimer = setTimeout(resetDeleteConfirm, 4000);
   });
 
-  /* 上传流程：presign → 浏览器直传 R2 → 填元数据 → record */
+  /* 上传流程：≤100MB 直接 base64 上传仓库 files/；>100MB 提示用本机脚本 */
   downloadsUploadBtn.addEventListener("click", function () { downloadsFileInput.click(); });
+
+  function dlResetBtn() {
+    downloadsUploadBtn.disabled = false;
+    downloadsUploadBtn.textContent = "📤 上传文件";
+    downloadsFileInput.value = "";
+  }
 
   downloadsFileInput.addEventListener("change", function () {
     var file = downloadsFileInput.files && downloadsFileInput.files[0];
     if (!file) return;
-    var MAX = 2 * 1024 * 1024 * 1024; // 2GB
-    if (file.size > MAX) {
-      showToast("文件超过 2GB 上限", "error");
-      downloadsFileInput.value = "";
+    var MAX_WEB = 100 * 1024 * 1024; // 100MB（仓库单文件硬限）
+    if (file.size > MAX_WEB) {
+      dlResetBtn();
+      showToast("超过 100MB 请用本机脚本发布（tools/publish-release.mjs）", "error", 9000);
       return;
     }
     downloadsUploadBtn.disabled = true;
@@ -1076,55 +1082,47 @@
 
     var name = file.name;
     var size = file.size;
-    var ext = (name.match(/\.([^.]+)$/) || [])[1] || "";
-    var ctMap = { zip: "application/zip", exe: "application/octet-stream", msi: "application/octet-stream", apk: "application/vnd.android.package-archive", pdf: "application/pdf", dmg: "application/octet-stream", "7z": "application/x-7z-compressed", rar: "application/vnd.rar", tar: "application/x-tar", gz: "application/gzip", deb: "application/vnd.debian.binary-package" };
-    var contentType = ctMap[String(ext).toLowerCase()] || "application/octet-stream";
 
-    api("/files/presign", { method: "POST", body: { filename: name, size: size, contentType: contentType } })
-      .then(function (res) {
-        if (!res.ok || !res.putUrl) throw new Error("获取上传地址失败");
-        return fetch(res.putUrl, { method: "PUT", body: file, headers: { "Content-Type": contentType } }).then(function (r) {
-          if (!r.ok) throw new Error("上传到存储失败 (HTTP " + r.status + ")");
-          return res;
-        });
-      })
-      .then(function (res) {
-        // 直传成功 → 弹窗填元数据 → record
-        downloadsUploadBtn.textContent = "✅ 已上传，填写信息…";
-        askDownloadMeta(res.key, res.url, name, size, contentType).then(function (meta) {
-          return api("/files/record", {
+    var fr = new FileReader();
+    fr.onload = function () {
+      var b64 = String(fr.result).split(",")[1] || "";
+      askDownloadMeta(name)
+        .then(function (meta) {
+          downloadsUploadBtn.textContent = "⏳ 提交中…";
+          return api("/files/repo", {
             method: "POST",
             body: {
-              key: res.key,
-              url: res.url,
+              name: name,
               filename: meta.filename || name,
               size: size,
+              data: b64,
               version: meta.version,
               desc: meta.desc,
               category: meta.category,
             },
           });
+        })
+        .then(function (data) {
+          dlResetBtn();
+          showToast((data && data.message) || "已上传", "success");
+          loadDownloads();
+        })
+        .catch(function (err) {
+          dlResetBtn();
+          showToast(err.message || "上传失败", "error");
         });
-      })
-      .then(function (data) {
-        downloadsUploadBtn.disabled = false;
-        downloadsUploadBtn.textContent = "📤 上传文件";
-        downloadsFileInput.value = "";
-        showToast((data && data.message) || "已提交", "success");
-        loadDownloads();
-      })
-      .catch(function (err) {
-        downloadsUploadBtn.disabled = false;
-        downloadsUploadBtn.textContent = "📤 上传文件";
-        downloadsFileInput.value = "";
-        showToast(err.message || "上传失败", "error");
-      });
+    };
+    fr.onerror = function () {
+      dlResetBtn();
+      showToast("读取文件失败", "error");
+    };
+    fr.readAsDataURL(file);
   });
 
   /* 上传后填写元数据（prompt 形式） */
-  function askDownloadMeta(key, url, defName, size, contentType) {
+  function askDownloadMeta(defName) {
     var name = window.prompt("下载显示名称：", defName);
-    if (name === null) return Promise.reject(new Error("已取消"));
+    if (name === null) return Promise.reject(new Error("已取消上传"));
     name = (name || defName).trim();
     var version = (window.prompt("版本号（如 1.0.0，可留空）：", "") || "").trim();
     var category = (window.prompt("分类（如 软件 / 文档，可留空默认软件）：", "软件") || "软件").trim();

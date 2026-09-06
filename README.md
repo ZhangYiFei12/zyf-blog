@@ -9,6 +9,7 @@
 - 🔐 **在线后台**：`/admin` 密码保护，浏览器里写 Markdown 发布/编辑/删除文章
 - 🚀 **项目展示**：`projects.html` 中展示个人作品
 - 👤 **关于页**：个人简介
+- 📦 **软件下载**：`downloads.html` 发布安装包（小文件网页后台上传 / 大文件 Release 脚本）
 
 ## 📁 目录结构
 
@@ -17,6 +18,10 @@
 ├── blog.html                   # 博客列表（"全部文章"自动同步）
 ├── blog/详细介绍与技术文档.html # 文章页
 ├── blog/posts/*.md             # 文章 Markdown 源文件
+├── gallery.html               # 相册
+├── downloads.html             # 下载页
+├── files/                     # 下载文件仓库（≤100MB 上传目标）
+├── data/downloads.json        # 下载文件元数据
 ├── admin.html                  # 后台登录页（隐藏路径，不在导航栏）
 ├── js/admin.js                 # 后台交互逻辑
 ├── functions/api/admin.js      # 后台 API（Cloudflare Pages Functions）
@@ -26,6 +31,7 @@
 ├── js/main.js                  # 交互
 ├── tools/md2html.mjs           # Markdown 一键转 HTML（CLI）
 ├── tools/md2html-core.mjs      # Markdown 渲染核心（CLI 与后台共用）
+├── tools/publish-release.mjs   # 大文件发布脚本（>100MB → GitHub Release）
 └── images/avatar.png           # 头像
 ```
 
@@ -87,6 +93,36 @@ npx serve .
 - 首页"最新文章"与博客页"全部文章"列表由服务端自动重写，无需手动改 HTML
 - 预览与线上渲染使用**同一个** Markdown 转换器（`tools/md2html-core.mjs`），所见即所得
 - 本地调试：`npx wrangler pages dev`（读取 `.dev.vars`，见注释）
+
+## 📦 下载文件管理
+
+网站导航栏「下载」（`downloads.html`）展示可下载的软件/文档，数据来自 `data/downloads.json`，由后台「📦 下载」页管理。
+
+### 方式一：小文件（≤100MB）—— 网页后台上传
+
+后台「📦 下载」→「📤 上传文件」→ 选文件 → 填名称/版本/分类/说明。
+文件存入仓库 `files/` 目录，下载走本站域名（Cloudflare CDN，国内快、不限速）。
+
+> 受 GitHub 单文件 100MB 硬限制；仓库体积会随文件增大，请勿上传过多大文件。
+
+### 方式二：大文件（>100MB ~ 2GB）—— 本机脚本发布到 GitHub Release
+
+GitHub 无浏览器直传接口，超过 Cloudflare Functions 请求体上限（~100MB）的
+大文件只能在本机上传（GitHub 硬限制）。需要**已经登录 gh CLI**（`gh auth status` 检查）：
+
+```bash
+node tools/publish-release.mjs dist/MyApp-Setup.exe \
+  --tag v1.0.0 \
+  --name "我的应用安装包" \
+  --desc "Windows 安装版，支持 x64" \
+  --category "软件"
+```
+
+脚本会：创建/复用 GitHub Release → 上传资产 → 登记 `data/downloads.json` → git push 自动部署。
+下载链接指向 GitHub Release 资产（国内访问较慢，属 GitHub 网络限制）。
+
+删除：网页后台「📦 下载」→ 删除（会同时删除 Release 资产）。
+
 
 ## 📝 如何新增文章
 

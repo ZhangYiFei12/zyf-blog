@@ -94,21 +94,24 @@
           var html = "";
           list.forEach(function (d) {
             if (!d || !d.url) return;
+            var href = d.store === "repo" && d.url.indexOf("://") === -1
+              ? new URL(d.url, window.location.origin).href
+              : d.url;
             html += '<div class="card reveal download-card">' +
                       '<div class="download-top">' +
-                        '<span class="download-type">' + esc(d.category || "软件") + '</span>' +
-                        '<span class="year">' + esc(d.version || "") + '</span>' +
-                      '</div>' +
-                      '<h3>' + esc(d.filename) + '</h3>' +
-                      (d.desc ? '<p class="desc">' + esc(d.desc) + '</p>' : '') +
+                        '<span class="download-type">' + esc(d.category || "软件") + "</span>" +
+                        '<span class="year">' + esc(d.version || "") + "</span>" +
+                      "</div>" +
+                      "<h3>" + esc(d.filename) + "</h3>" +
+                      (d.desc ? '<p class="desc">' + esc(d.desc) + "</p>" : "") +
                       '<div class="meta">' +
-                        '<span class="tag">' + fmtSize(d.size) + '</span>' +
-                        (d.date ? '<span class="tag">' + fmtDate(d.date) + '</span>' : '') +
-                      '</div>' +
+                        '<span class="tag">' + fmtSize(d.size) + "</span>" +
+                        (d.date ? '<span class="tag">' + fmtDate(d.date) + "</span>" : "") +
+                      "</div>" +
                       '<div class="links">' +
-                        '<a class="download-link" href="' + esc(d.url) + '" download="' + esc(d.filename) + '" rel="noopener">⬇ 下载</a>' +
-                      '</div>' +
-                    '</div>';
+                        '<a class="download-link" href="' + esc(href) + '" download="' + esc(d.filename) + '" rel="noopener">⬇ 下载</a>' +
+                      "</div>" +
+                    "</div>";
           });
           grid.innerHTML = html || '<div class="gallery-empty" style="grid-column:1/-1;">📦 暂无下载内容，敬请期待</div>';
           if (hint) hint.textContent = "点击「下载」获取文件 · " + list.length + " 个文件";
