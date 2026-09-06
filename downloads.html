@@ -97,7 +97,7 @@
             var href = d.store === "repo" && d.url.indexOf("://") === -1
               ? new URL(d.url, window.location.origin).href
               : d.url;
-            html += '<div class="card reveal download-card">' +
+            html += '<div class="card download-card">' +
                       '<div class="download-top">' +
                         '<span class="download-type">' + esc(d.category || "软件") + "</span>" +
                         '<span class="year">' + esc(d.version || "") + "</span>" +
@@ -109,7 +109,7 @@
                         (d.date ? '<span class="tag">' + fmtDate(d.date) + "</span>" : "") +
                       "</div>" +
                       '<div class="links">' +
-                        '<a class="download-link" href="' + esc(href) + '" download="' + esc(d.filename) + '" rel="noopener">⬇ 下载</a>' +
+                        '<a class="download-link" href="' + esc(href) + '" download="' + esc(d.filename) + '" rel="noopener" target="_blank">⬇ 下载</a>' +
                       "</div>" +
                     "</div>";
           });
