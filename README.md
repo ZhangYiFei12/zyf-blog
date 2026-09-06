@@ -123,6 +123,8 @@ node tools/publish-release.mjs dist/MyApp-Setup.exe \
 
 删除：网页后台「📦 下载」→ 删除（会同时删除 Release 资产）。
 
+> 📖 完整图文教程见 [`docs/发布脚本教程.md`](docs/发布脚本教程.md)。
+
 
 ## 📝 如何新增文章
 
