@@ -55,7 +55,15 @@ function ensureGitClean() {
   }
 }
 
-function main() {
+/* 中文/特殊字符文件名 → ASCII 安全资产名（保留下载链接稳定） */
+function assetName(origName) {
+  const m = String(origName || "").match(/\.([^.]+)$/);
+  const ext = (m && m[1] || "bin").toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
+  const ts = Date.now().toString(36);
+  return `file-${ts}.${ext}`;
+}
+
+async function main() {
   const o = parseArgs();
   const file = o.file;
   try { statSync(file); } catch (e) { console.error(`❌ 文件不存在: ${file}`); process.exit(1); }
@@ -93,11 +101,27 @@ function main() {
     console.log(`   ✅ 复用 Release #${release.id}`);
   }
 
-  // 2) 上传资产
+  // 2) 上传资产（Node fetch 直传 uploads.github.com，支持中文文件名）
   console.log("   ⬆️ 上传资产中（大文件可能需要几分钟）...");
-  const asset = JSON.parse(sh(`gh release upload ${JSON.stringify(tag)} ${JSON.stringify(file)} --repo ${REPO} --clobber`));
-  // gh release upload 输出可能是多行，取最后一个 json
-  const assetObj = Array.isArray(asset) ? asset[asset.length - 1] : asset;
+  const TOKEN = sh("gh auth token");
+  const asciiName = assetName(origName); // 中文→ASCII 资产名（下载 URL 稳定）
+  const assetBuf = readFileSync(file);
+  const upRes = await fetch(`https://uploads.github.com/repos/${REPO}/releases/${release.id}/assets?name=${encodeURIComponent(asciiName)}`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${TOKEN}`,
+      "Accept": "application/vnd.github+json",
+      "Content-Type": "application/octet-stream",
+      "Content-Length": String(assetBuf.length),
+    },
+    body: assetBuf,
+  });
+  const assetJson = await upRes.json().catch(() => null);
+  if (!upRes.ok || !assetJson || !assetJson.id) {
+    console.error("❌ 资产上传失败:", upRes.status, JSON.stringify(assetJson).slice(0, 200));
+    process.exit(1);
+  }
+  const assetObj = assetJson;
   console.log(`   ✅ 资产已上传 id=${assetObj.id} name=${assetObj.name}`);
 
   const dlUrl = `https://github.com/${REPO}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(assetObj.name)}`;
@@ -135,4 +159,4 @@ function main() {
   console.log(`   页面将在约 1 分钟后更新: https://zyf2026.pages.dev/downloads.html`);
 }
 
-main();
+main().catch(e => { console.error("❌", e.message || e); process.exit(1); });
