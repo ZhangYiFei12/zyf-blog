@@ -377,6 +377,8 @@
     var lightboxEl = null;
     var lightboxImg = null;
     var lightboxCapEl = null;
+    var zoomLevelEl = null;
+    var zoomResetBtn = null;
     var currentDownloadUrl = "";
     var currentDownloadFile = "";
 
@@ -397,43 +399,216 @@
 
     var closeLightbox = function () {
       if (lightboxEl) lightboxEl.classList.remove("open");
+      resetZoom();
     };
 
+    /* ---- 光箱缩放 / 平移 ---- */
+    var zoomState = { scale: 1, min: 0.5, max: 6, x: 0, y: 0 };
+    var resetZoom = function () {
+      zoomState.scale = 1; zoomState.x = 0; zoomState.y = 0;
+      justDragged = false;
+      applyZoom();
+    };
+    var clampPan = function () {
+      if (!lightboxImg) return;
+      var baseW = lightboxImg.offsetWidth || 0;
+      var baseH = lightboxImg.offsetHeight || 0;
+      var sw = baseW * zoomState.scale;
+      var sh = baseH * zoomState.scale;
+      var maxX = Math.max(0, (sw - window.innerWidth) / 2 + 48);
+      var maxY = Math.max(0, (sh - window.innerHeight) / 2 + 48);
+      zoomState.x = Math.max(-maxX, Math.min(maxX, zoomState.x));
+      zoomState.y = Math.max(-maxY, Math.min(maxY, zoomState.y));
+    };
+    var applyZoom = function () {
+      if (!lightboxImg) return;
+      if (zoomState.scale > 1) clampPan(); else { zoomState.x = 0; zoomState.y = 0; }
+      lightboxImg.style.transition = dragging ? "none" : "";
+      lightboxImg.style.transform = "translate(" + zoomState.x + "px," + zoomState.y + "px) scale(" + zoomState.scale + ")";
+      lightboxImg.style.cursor = zoomState.scale > 1 ? (dragging ? "grabbing" : "grab") : "zoom-in";
+      if (zoomLevelEl) {
+        zoomLevelEl.textContent = Math.round(zoomState.scale * 100) + "%";
+        zoomLevelEl.style.display = zoomState.scale !== 1 ? "" : "none";
+      }
+      if (zoomResetBtn) zoomResetBtn.style.display = zoomState.scale !== 1 ? "" : "none";
+    };
+    var setZoom = function (next, cx, cy) {
+      if (!lightboxImg) return;
+      var prev = zoomState.scale;
+      next = Math.min(zoomState.max, Math.max(zoomState.min, next));
+      if (Math.abs(next - prev) < 0.001) return;
+      /* 以鼠标位置（或图片中心）为锚点缩放：保持锚点下的像素不动 */
+      var rect = lightboxImg.getBoundingClientRect();
+      var centerX = rect.left + rect.width / 2;
+      var centerY = rect.top + rect.height / 2;
+      var px = (cx === undefined ? centerX : cx) - centerX;
+      var py = (cy === undefined ? centerY : cy) - centerY;
+      var k = next / prev;
+      zoomState.x -= (px - zoomState.x) * (k - 1);
+      zoomState.y -= (py - zoomState.y) * (k - 1);
+      zoomState.scale = next;
+      if (zoomState.scale <= 1) { zoomState.x = 0; zoomState.y = 0; }
+      applyZoom();
+    };
+
+    var dragging = false, dragStart = null, justDragged = false;
+
     var openToken = 0;
+    var showingOriginal = true; // 当前光箱展示的是否为原图
+    var origBtnEl = null;
+    var updateOrigBtn = function () {
+      if (!origBtnEl) return;
+      origBtnEl.classList.toggle("is-original", showingOriginal);
+      origBtnEl.textContent = showingOriginal ? "原图 ✓" : "查看原图";
+      origBtnEl.title = showingOriginal ? "正在显示原图" : "加载原图（当前为缩略图）";
+    };
+    var showOriginal = function () {
+      if (!lightboxImg) return;
+      if (showingOriginal) { showToast("当前已是原图", "info"); return; }
+      lightboxImg.classList.add("loading-orig");
+      var full = new Image();
+      full.onload = function () {
+        lightboxImg.src = currentDownloadUrl;
+        lightboxImg.classList.remove("loading-orig");
+        showingOriginal = true;
+        updateOrigBtn();
+        showToast("已切换到原图", "info");
+      };
+      full.onerror = function () {
+        lightboxImg.classList.remove("loading-orig");
+        showToast("原图加载失败", "error");
+      };
+      full.src = currentDownloadUrl;
+    };
+
     var openLightbox = function (url, cap, file, thumb) {
       if (!lightboxEl) {
         lightboxEl = document.createElement("div");
         lightboxEl.className = "lightbox";
         lightboxEl.setAttribute("role", "dialog");
-        lightboxEl.setAttribute("aria-label", "图片预览");
-        lightboxEl.innerHTML = '<button class="lightbox-close" aria-label="关闭">✕</button>' +
-          '<button class="lightbox-download" aria-label="下载原图" title="下载原图">⬇</button>' +
-          '<img alt="查看大图" /><div class="lightbox-cap"></div>';
+        lightboxEl.setAttribute("aria-label", "图片预览（可缩放）");
+        lightboxEl.innerHTML =
+          '<img alt="查看大图" draggable="false" />' +
+          '<div class="lightbox-cap"></div>' +
+          '<div class="lightbox-tools">' +
+            '<button class="lightbox-btn lb-zoom-out" aria-label="缩小" title="缩小（滚轮 / -）">−</button>' +
+            '<span class="lightbox-zoom-level"></span>' +
+            '<button class="lightbox-btn lb-zoom-in" aria-label="放大" title="放大（滚轮 / +）">＋</button>' +
+            '<button class="lightbox-btn lb-zoom-reset" aria-label="重置缩放" title="重置（0）">⟲</button>' +
+            '<button class="lightbox-btn lb-original" aria-label="查看原图" title="查看原图">查看原图</button>' +
+            '<button class="lightbox-btn lb-download" aria-label="下载原图" title="下载原图">⬇</button>' +
+          '</div>' +
+          '<button class="lightbox-close" aria-label="关闭">✕</button>';
         document.body.appendChild(lightboxEl);
         lightboxImg = lightboxEl.querySelector("img");
         lightboxCapEl = lightboxEl.querySelector(".lightbox-cap");
-        lightboxEl.querySelector(".lightbox-download").addEventListener("click", function (e) {
+        zoomLevelEl = lightboxEl.querySelector(".lightbox-zoom-level");
+        zoomResetBtn = lightboxEl.querySelector(".lb-zoom-reset");
+        origBtnEl = lightboxEl.querySelector(".lb-original");
+
+        lightboxEl.querySelector(".lb-zoom-in").addEventListener("click", function (e) { e.stopPropagation(); setZoom(zoomState.scale * 1.4); });
+        lightboxEl.querySelector(".lb-zoom-out").addEventListener("click", function (e) { e.stopPropagation(); setZoom(zoomState.scale / 1.4); });
+        zoomResetBtn.addEventListener("click", function (e) { e.stopPropagation(); resetZoom(); });
+        lightboxEl.querySelector(".lb-original").addEventListener("click", function (e) { e.stopPropagation(); showOriginal(); });        lightboxEl.querySelector(".lb-download").addEventListener("click", function (e) {
           e.stopPropagation();
           downloadOriginal(currentDownloadUrl || lightboxImg.src, currentDownloadFile);
         });
-        lightboxEl.addEventListener("click", closeLightbox);
+        lightboxEl.querySelector(".lightbox-close").addEventListener("click", function (e) { e.stopPropagation(); closeLightbox(); });
+
+        /* 点击背景关闭（拖拽后不关闭） */
+        lightboxEl.addEventListener("click", function (e) {
+          if (e.target === lightboxEl && !justDragged) closeLightbox();
+        });
+
+        /* 滚轮缩放 */
+        lightboxEl.addEventListener("wheel", function (e) {
+          e.preventDefault();
+          setZoom(zoomState.scale * (e.deltaY < 0 ? 1.15 : 1 / 1.15), e.clientX, e.clientY);
+        }, { passive: false });
+
+        /* 双击缩放 */
+        lightboxImg.addEventListener("dblclick", function (e) {
+          e.stopPropagation();
+          if (zoomState.scale > 1.01) resetZoom();
+          else setZoom(2.5, e.clientX, e.clientY);
+        });
+
+        /* 拖拽平移（放大后） */
+        lightboxImg.addEventListener("mousedown", function (e) {
+          if (zoomState.scale <= 1) return;
+          e.preventDefault();
+          dragging = true; justDragged = false;
+          dragStart = { x: e.clientX - zoomState.x, y: e.clientY - zoomState.y };
+          applyZoom();
+        });
+        document.addEventListener("mousemove", function (e) {
+          if (!dragging) return;
+          justDragged = true;
+          zoomState.x = e.clientX - dragStart.x;
+          zoomState.y = e.clientY - dragStart.y;
+          applyZoom();
+        });
+        document.addEventListener("mouseup", function () {
+          if (!dragging) return;
+          dragging = false;
+          applyZoom();
+          setTimeout(function () { justDragged = false; }, 0);
+        });
+
+        /* 触摸：双指缩放 + 单指平移 */
+        var touchStart = null, pinchStart = null;
+        lightboxEl.addEventListener("touchstart", function (e) {
+          if (e.touches.length === 2) {
+            var dx = e.touches[0].clientX - e.touches[1].clientX;
+            var dy = e.touches[0].clientY - e.touches[1].clientY;
+            pinchStart = { dist: Math.hypot(dx, dy), scale: zoomState.scale,
+              cx: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+              cy: (e.touches[0].clientY + e.touches[1].clientY) / 2 };
+          } else if (e.touches.length === 1 && zoomState.scale > 1) {
+            touchStart = { x: e.touches[0].clientX - zoomState.x, y: e.touches[0].clientY - zoomState.y };
+          }
+        }, { passive: true });
+        lightboxEl.addEventListener("touchmove", function (e) {
+          if (e.touches.length === 2 && pinchStart) {
+            e.preventDefault();
+            var dx = e.touches[0].clientX - e.touches[1].clientX;
+            var dy = e.touches[0].clientY - e.touches[1].clientY;
+            var d = Math.hypot(dx, dy);
+            setZoom(pinchStart.scale * (d / pinchStart.dist), pinchStart.cx, pinchStart.cy);
+          } else if (e.touches.length === 1 && touchStart) {
+            e.preventDefault();
+            zoomState.x = e.touches[0].clientX - touchStart.x;
+            zoomState.y = e.touches[0].clientY - touchStart.y;
+            applyZoom();
+          }
+        }, { passive: false });
+        lightboxEl.addEventListener("touchend", function () { pinchStart = null; touchStart = null; }, { passive: true });
+
         document.addEventListener("keydown", function (e) {
+          if (!lightboxEl.classList.contains("open")) return;
           if (e.key === "Escape") closeLightbox();
+          else if (e.key === "+" || e.key === "=") setZoom(zoomState.scale * 1.4);
+          else if (e.key === "-" || e.key === "_") setZoom(zoomState.scale / 1.4);
+          else if (e.key === "0") resetZoom();
         });
       }
+      resetZoom();
       openToken++;
       var myToken = openToken;
       if (thumb && thumb !== url) {
         // 渐进加载：先显示缩略图（秒开），原图加载完成后无缝替换
         lightboxImg.src = thumb;
+        showingOriginal = false;
         var full = new Image();
         full.onload = function () {
-          if (myToken === openToken) lightboxImg.src = url;
+          if (myToken === openToken) { lightboxImg.src = url; showingOriginal = true; updateOrigBtn(); }
         };
         full.src = url;
       } else {
         lightboxImg.src = url;
+        showingOriginal = true;
       }
+      updateOrigBtn();
       lightboxCapEl.textContent = cap || "";
       lightboxCapEl.style.display = cap ? "" : "none";
       currentDownloadUrl = url; // 下载始终用原图

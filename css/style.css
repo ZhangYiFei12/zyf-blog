@@ -2107,7 +2107,9 @@ pre code.hljs {
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.25s ease, visibility 0.25s ease;
-  cursor: zoom-out;
+  cursor: default;
+  touch-action: none;
+  overscroll-behavior: contain;
 }
 
 .lightbox.open {
@@ -2121,15 +2123,75 @@ pre code.hljs {
   border-radius: var(--radius);
   border: 1px solid rgba(34, 211, 238, 0.35);
   box-shadow: 0 0 40px var(--glow-strong), 0 0 90px rgba(167, 139, 250, 0.25), 0 24px 70px rgba(0, 0, 0, 0.5);
-  transform: scale(0.94);
-  transition: transform 0.25s ease;
+  transform-origin: center center;
+  transition: transform 0.18s ease, opacity 0.2s ease;
+  user-select: none;
+  -webkit-user-drag: none;
+  will-change: transform;
+  touch-action: none;
 }
 
-.lightbox.open img { transform: scale(1); }
+.lightbox img.loading-orig { opacity: 0.55; }
+.lightbox.dragging img { transition: none; }
+
+/* 底部工具条（缩放 / 原图 / 下载） */
+.lightbox .lightbox-tools {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: rgba(2, 6, 16, 0.72);
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 3;
+}
+
+.lightbox .lightbox-btn {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #fff;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  font-family: inherit;
+}
+
+.lightbox .lightbox-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(34, 211, 238, 0.1);
+  box-shadow: 0 0 14px var(--glow-strong);
+}
+
+.lightbox .lightbox-btn.lb-original { font-size: 12px; letter-spacing: 0.5px; }
+.lightbox .lightbox-btn.lb-original.is-original {
+  color: #6ee7b7;
+  border-color: rgba(110, 231, 183, 0.5);
+  background: rgba(110, 231, 183, 0.1);
+}
+
+.lightbox .lightbox-zoom-level {
+  min-width: 44px;
+  text-align: center;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--accent);
+}
 
 .lightbox .lightbox-cap {
   position: absolute;
-  bottom: 26px;
+  bottom: 74px;
   left: 50%;
   transform: translateX(-50%);
   max-width: 80vw;
@@ -2166,6 +2228,7 @@ pre code.hljs {
   transform: rotate(90deg);
 }
 
+/* 兼容旧版单按钮（保留样式，新代码使用 .lightbox-btn） */
 .lightbox .lightbox-download {
   position: absolute;
   top: 18px;
@@ -2187,6 +2250,14 @@ pre code.hljs {
   border-color: var(--accent);
   color: var(--accent);
   box-shadow: 0 0 16px var(--glow-strong);
+}
+
+/* 小屏：工具条压缩，按钮紧凑 */
+@media (max-width: 560px) {
+  .lightbox .lightbox-tools { gap: 2px; padding: 4px 6px; bottom: 16px; }
+  .lightbox .lightbox-btn { min-width: 30px; height: 30px; padding: 0 7px; font-size: 13px; }
+  .lightbox .lightbox-zoom-level { min-width: 36px; font-size: 11px; }
+  .lightbox .lightbox-cap { bottom: 60px; max-width: 88vw; font-size: 11px; }
 }
 
 /* 前台轻提示（main.js 动态创建，下载等反馈用） */
@@ -2228,7 +2299,7 @@ pre code.hljs {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gallery-item, .gallery-item img, .lightbox, .lightbox img, .lightbox .lightbox-close {
+  .gallery-item, .gallery-item img, .lightbox, .lightbox img, .lightbox .lightbox-close, .lightbox .lightbox-btn {
     transition-duration: 0.01s !important;
     animation-duration: 0.01s !important;
   }

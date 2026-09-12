@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台 | ZH</title>
-  <link rel="stylesheet" href="css/style.css?v=18" />
+  <link rel="stylesheet" href="css/style.css?v=20" />
   <link rel="icon" type="image/png" href="images/avatar.png" />
   <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
   <style>
@@ -165,6 +165,7 @@
     }
     .opt-modal .opt-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
     .opt-modal .opt-note { font-size: 11px; color: var(--text-dim); margin-top: 8px; }
+    .opt-modal .opt-sep { height: 1px; background: var(--border); margin: 10px 0; }
 
     /* 相册卡片（图片 + 详细信息） */
     .gal-cell {
@@ -282,6 +283,17 @@
                 <option value="0.9">高 90%</option>
                 <option value="0.8" selected>中 80%</option>
                 <option value="0.7">低 70%</option>
+              </select>
+            </div>
+            <div class="img-settings-item">
+              <label>缩略图大小</label>
+              <select id="optThumbTarget" style="background:var(--bg-card);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:11px;font-family:var(--mono);">
+                <option value="0" selected>不限制</option>
+                <option value="100">≤100KB</option>
+                <option value="50">≤50KB</option>
+                <option value="30">≤30KB</option>
+                <option value="20">≤20KB</option>
+                <option value="10">≤10KB</option>
               </select>
             </div>
             <div class="img-settings-item">
@@ -480,15 +492,53 @@
           <option value="0.6">低 60%</option>
         </select>
       </div>
+      <div class="opt-sep"></div>
+      <div class="opt-field">
+        <label>当前缩略图</label>
+        <span id="optThumbCurrent" style="font-size:12px;color:var(--text-dim);">—</span>
+      </div>
+      <div class="opt-field">
+        <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;">
+          <input type="checkbox" id="optModalMakeThumb" checked /> 重做缩略图
+        </label>
+      </div>
+      <div class="opt-field">
+        <label>缩略图宽</label>
+        <select id="optModalThumbWidth">
+          <option value="640">640px</option>
+          <option value="480" selected>480px</option>
+          <option value="320">320px</option>
+          <option value="240">240px</option>
+        </select>
+      </div>
+      <div class="opt-field">
+        <label>缩略图质量</label>
+        <select id="optModalThumbQuality">
+          <option value="0.9">高 90%</option>
+          <option value="0.8" selected>中 80%</option>
+          <option value="0.7">低 70%</option>
+        </select>
+      </div>
+      <div class="opt-field">
+        <label>缩略图大小</label>
+        <select id="optModalThumbTarget">
+          <option value="0" selected>不限制</option>
+          <option value="100">≤100KB</option>
+          <option value="50">≤50KB</option>
+          <option value="30">≤30KB</option>
+          <option value="20">≤20KB</option>
+          <option value="10">≤10KB</option>
+        </select>
+      </div>
       <div class="opt-actions">
         <button class="btn btn-outline btn-sm" id="optModalCancel">取消</button>
         <button class="btn btn-primary btn-sm" id="optModalConfirm">开始压缩</button>
       </div>
-      <div class="opt-note">压缩后覆盖原文件，URL 不变；部署后生效（约 1 分钟）</div>
+      <div class="opt-note">压缩后覆盖原文件，URL 不变；缩略图覆盖原路径（不改动 URL）；部署后生效（约 1 分钟）</div>
     </div>
   </div>
 
-  <script src="js/admin.js?v=14"></script>
+  <script src="js/admin.js?v=15"></script>
   <script>
     (function () {
       function cur() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }

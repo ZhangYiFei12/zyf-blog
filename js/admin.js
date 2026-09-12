@@ -35,6 +35,7 @@
     quality: 0.8,          // 压缩质量
     thumbWidth: 480,       // 缩略图宽度 px
     thumbQuality: 0.8,     // 缩略图质量
+    thumbTarget: 0,        // 缩略图目标大小 KB（0 = 不限制）
     makeThumb: true        // 是否自动生成缩略图
   };
   function loadImgSettings() {
@@ -44,6 +45,7 @@
       imgSettings.quality = parseFloat(saved.quality) || 0.8;
       imgSettings.thumbWidth = parseInt(saved.thumbWidth, 10) || 480;
       imgSettings.thumbQuality = parseFloat(saved.thumbQuality) || 0.8;
+      imgSettings.thumbTarget = parseInt(saved.thumbTarget, 10) || 0;
       imgSettings.makeThumb = saved.makeThumb !== false;
     } catch (e) { /* 忽略损坏数据 */ }
   }
@@ -56,6 +58,7 @@
       quality: $("optQuality"),
       thumbWidth: $("optThumbWidth"),
       thumbQuality: $("optThumbQuality"),
+      thumbTarget: $("optThumbTarget"),
       makeThumb: $("optMakeThumb")
     };
     function applyToUI() {
@@ -63,12 +66,14 @@
       if (els.quality) els.quality.value = String(imgSettings.quality);
       if (els.thumbWidth) els.thumbWidth.value = String(imgSettings.thumbWidth);
       if (els.thumbQuality) els.thumbQuality.value = String(imgSettings.thumbQuality);
+      if (els.thumbTarget) els.thumbTarget.value = String(imgSettings.thumbTarget);
       if (els.makeThumb) els.makeThumb.checked = !!imgSettings.makeThumb;
     }
     if (els.target) els.target.addEventListener("change", function () { imgSettings.target = parseInt(els.target.value, 10) || 2048; saveImgSettings(); });
     if (els.quality) els.quality.addEventListener("change", function () { imgSettings.quality = parseFloat(els.quality.value) || 0.8; saveImgSettings(); });
     if (els.thumbWidth) els.thumbWidth.addEventListener("change", function () { imgSettings.thumbWidth = parseInt(els.thumbWidth.value, 10) || 480; saveImgSettings(); });
     if (els.thumbQuality) els.thumbQuality.addEventListener("change", function () { imgSettings.thumbQuality = parseFloat(els.thumbQuality.value) || 0.8; saveImgSettings(); });
+    if (els.thumbTarget) els.thumbTarget.addEventListener("change", function () { imgSettings.thumbTarget = parseInt(els.thumbTarget.value, 10) || 0; saveImgSettings(); });
     if (els.makeThumb) els.makeThumb.addEventListener("change", function () { imgSettings.makeThumb = els.makeThumb.checked; saveImgSettings(); });
     var toggle = $("imgSettingsToggle");
     if (toggle) toggle.addEventListener("click", function () { document.querySelector(".img-settings").classList.toggle("collapsed"); });
@@ -492,8 +497,9 @@
    * @param {string} dataUrl 原图 dataURL
    * @param {number} maxWidth 缩略图最大宽度
    * @param {number} quality webp 质量 0-1
+   * @param {number} [targetBytes] 目标字节数（0/省略 = 不限制）；超限则依次降质量、缩尺寸
    */
-  function makeThumbnail(dataUrl, maxWidth, quality) {
+  function makeThumbnail(dataUrl, maxWidth, quality, targetBytes) {
     return new Promise(function (resolve, reject) {
       var img = new Image();
       img.onload = function () {
@@ -505,13 +511,32 @@
           if (w > maxWidth) {
             h = Math.round(h * maxWidth / w); w = maxWidth;
           }
+          var target = Math.max(0, Number(targetBytes) || 0);
           var canvas = document.createElement("canvas");
-          canvas.width = w; canvas.height = h;
-          var ctx = canvas.getContext("2d");
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0, 0, w, h);
-          ctx.drawImage(img, 0, 0, w, h);
-          resolve({ dataUrl: canvas.toDataURL("image/webp", quality || 0.8) });
+          var q = quality || 0.8;
+          var qFloor = 0.5;          // 质量下限（先保锐度）
+          var out = "", b64 = "", bytes = 0, ctx;
+          for (var iter = 0; iter < 16; iter++) {
+            canvas.width = w; canvas.height = h;
+            ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+            out = canvas.toDataURL("image/webp", q);
+            b64 = out.split(",")[1] || "";
+            bytes = Math.floor(b64.length * 3 / 4);
+            if (!target || bytes <= target) break;   // 无目标或已达标
+            if (q > qFloor) {                         // 阶段1：先降质量到 0.5
+              q = Math.max(qFloor, q - 0.1);
+            } else if (w > 200) {                     // 阶段2：再缩尺寸（保锐度）
+              w = Math.floor(w * 0.85); h = Math.floor(h * 0.85);
+            } else if (q > 0.32) {                    // 阶段3：到底后再降一点质量
+              q = Math.max(0.32, q - 0.06);
+            } else {
+              break;                                  // 极小目标，到此为止
+            }
+          }
+          resolve({ dataUrl: out, bytes: bytes });
         } catch (err) { reject(err); }
       };
       img.onerror = function () { reject(new Error("图片解码失败")); };
@@ -913,6 +938,11 @@
   var optCurrentSize = $("optCurrentSize");
   var optModalTarget = $("optModalTarget");
   var optModalQuality = $("optModalQuality");
+  var optModalMakeThumb = $("optModalMakeThumb");
+  var optModalThumbWidth = $("optModalThumbWidth");
+  var optModalThumbQuality = $("optModalThumbQuality");
+  var optModalThumbTarget = $("optModalThumbTarget");
+  var optThumbCurrent = $("optThumbCurrent");
   var optModalConfirm = $("optModalConfirm");
   var optModalCancel = $("optModalCancel");
   var optPendingFile = "";
@@ -933,9 +963,18 @@
     var cached = null;
     galleryCache.forEach(function (x) { if (x && x.file === file) cached = x; });
     if (optCurrentSize) optCurrentSize.textContent = (cached && cached.size) ? formatSize(cached.size) : "—";
+    if (optThumbCurrent) {
+      optThumbCurrent.textContent = cached
+        ? (cached.thumbSize ? formatSize(cached.thumbSize) : (cached.thumbUrl ? "未知" : "无缩略图"))
+        : "—";
+    }
     // 同步面板参数
     if (optModalTarget) optModalTarget.value = String(imgSettings.target);
     if (optModalQuality) optModalQuality.value = String(imgSettings.quality);
+    if (optModalMakeThumb) optModalMakeThumb.checked = cached ? !!cached.thumbUrl : true;
+    if (optModalThumbWidth) optModalThumbWidth.value = String(imgSettings.thumbWidth);
+    if (optModalThumbQuality) optModalThumbQuality.value = String(imgSettings.thumbQuality);
+    if (optModalThumbTarget) optModalThumbTarget.value = String(imgSettings.thumbTarget);
     if (optModalOverlay) optModalOverlay.style.display = "flex";
     // 缓存缺失时再网络读取
     if (url && !(cached && cached.size)) {
@@ -958,6 +997,17 @@
     if (!optPendingFile) { closeOptModal(); return; }
     var targetBytes = (parseInt(optModalTarget && optModalTarget.value, 10) || 2048) * 1024;
     var quality = parseFloat(optModalQuality && optModalQuality.value) || 0.8;
+    // 缩略图参数（弹窗独立设置，同时回写为全局默认）
+    var useThumb = optModalMakeThumb ? !!optModalMakeThumb.checked : imgSettings.makeThumb;
+    var thumbWidth = parseInt(optModalThumbWidth && optModalThumbWidth.value, 10) || imgSettings.thumbWidth;
+    var thumbQuality = parseFloat(optModalThumbQuality && optModalThumbQuality.value) || imgSettings.thumbQuality;
+    var thumbTargetKB = parseInt(optModalThumbTarget && optModalThumbTarget.value, 10) || 0;
+    if (optModalMakeThumb) {
+      imgSettings.thumbWidth = thumbWidth;
+      imgSettings.thumbQuality = thumbQuality;
+      imgSettings.thumbTarget = thumbTargetKB;
+      saveImgSettings();
+    }
     if (optModalConfirm) { optModalConfirm.disabled = true; optModalConfirm.textContent = "压缩中…"; }
 
     fetch(optPendingUrl, { cache: "force-cache" })
@@ -983,14 +1033,12 @@
           mime: "image/jpeg",
           ext: "jpg",
         };
-        if (imgSettings.makeThumb) {
-          return makeThumbnail(out.dataUrl, imgSettings.thumbWidth, imgSettings.thumbQuality).then(function (thumb) {
-            payload.thumb = thumb.dataUrl.split(",")[1] || "";
-            payload.thumbExt = "webp";
-            return payload;
-          }).catch(function () { return payload; });
-        }
-        return payload;
+        if (!useThumb) return payload; // 不重做缩略图：保留原缩略图，仅压缩原图
+        return makeThumbnail(out.dataUrl, thumbWidth, thumbQuality, thumbTargetKB * 1024).then(function (thumb) {
+          payload.thumb = thumb.dataUrl.split(",")[1] || "";
+          payload.thumbExt = "webp";
+          return payload;
+        }).catch(function () { return payload; });
       })
       .then(function (payload) { return api("/gallery/optimize", { method: "POST", body: payload }); })
       .then(function (data) {
@@ -1237,7 +1285,7 @@
           processNext(i + 1);
           return;
         }
-        makeThumbnail(dataUrl, imgSettings.thumbWidth, imgSettings.thumbQuality).then(function (thumb) {
+        makeThumbnail(dataUrl, imgSettings.thumbWidth, imgSettings.thumbQuality, (imgSettings.thumbTarget || 0) * 1024).then(function (thumb) {
           results.push({
             data: (dataUrl.split(",")[1]) || "",
             mime: mime,
