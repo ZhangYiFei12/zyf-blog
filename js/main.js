@@ -399,6 +399,9 @@
 
     var closeLightbox = function () {
       if (lightboxEl) lightboxEl.classList.remove("open");
+      preferThumb = false;
+      fullCache = null;
+      fullCached = false;
       resetZoom();
     };
 
@@ -455,21 +458,47 @@
 
     var openToken = 0;
     var showingOriginal = true; // 当前光箱展示的是否为原图
+    var preferThumb = false;    // 用户主动选了缩略图，原图后台加载完不要抢回去
+    var currentThumbUrl = "";   // 当前图片的缩略图地址（无则空）
+    var fullCache = null;       // 已加载的原图，切回时秒切不重复请求
+    var fullCached = false;     // 原图是否已完整落地（fullCache.src 是绝对 URL，不能直接和相对 URL 比）
     var origBtnEl = null;
+    var thumbBtnEl = null;
     var updateOrigBtn = function () {
-      if (!origBtnEl) return;
-      origBtnEl.classList.toggle("is-original", showingOriginal);
-      origBtnEl.textContent = showingOriginal ? "原图 ✓" : "查看原图";
-      origBtnEl.title = showingOriginal ? "正在显示原图" : "加载原图（当前为缩略图）";
+      var hasThumb = !!(currentThumbUrl && currentThumbUrl !== currentDownloadUrl);
+      if (origBtnEl) {
+        origBtnEl.classList.toggle("is-original", showingOriginal);
+        origBtnEl.textContent = showingOriginal ? "原图 ✓" : "查看原图";
+        origBtnEl.title = showingOriginal ? "正在显示原图" : "加载原图（当前为缩略图）";
+        origBtnEl.disabled = false;
+      }
+      if (thumbBtnEl) {
+        // 无缩略图时不展示该按钮
+        thumbBtnEl.style.display = hasThumb ? "" : "none";
+        thumbBtnEl.classList.toggle("is-thumb", !showingOriginal);
+        thumbBtnEl.textContent = !showingOriginal ? "缩略图 ✓" : "查看缩略图";
+        thumbBtnEl.title = !showingOriginal ? "正在显示缩略图" : "切回缩略图（小图，加载快）";
+      }
     };
     var showOriginal = function () {
       if (!lightboxImg) return;
+      preferThumb = false;
       if (showingOriginal) { showToast("当前已是原图", "info"); return; }
+      // 已缓存过：直接秒切
+      if (fullCached && fullCache && fullCache.complete && fullCache.naturalWidth) {
+        lightboxImg.src = currentDownloadUrl;
+        showingOriginal = true;
+        updateOrigBtn();
+        return;
+      }
       lightboxImg.classList.add("loading-orig");
       var full = new Image();
       full.onload = function () {
-        lightboxImg.src = currentDownloadUrl;
+        fullCache = full;
+        fullCached = true;
         lightboxImg.classList.remove("loading-orig");
+        if (preferThumb) return; // 用户已切回缩略图，不抢
+        lightboxImg.src = currentDownloadUrl;
         showingOriginal = true;
         updateOrigBtn();
         showToast("已切换到原图", "info");
@@ -479,6 +508,16 @@
         showToast("原图加载失败", "error");
       };
       full.src = currentDownloadUrl;
+    };
+    var showThumb = function () {
+      if (!lightboxImg) return;
+      if (!currentThumbUrl || currentThumbUrl === currentDownloadUrl) { showToast("这张图没有缩略图", "info"); return; }
+      if (!showingOriginal) { showToast("当前已是缩略图", "info"); return; }
+      preferThumb = true;
+      lightboxImg.src = currentThumbUrl;
+      showingOriginal = false;
+      updateOrigBtn();
+      showToast("已切换到缩略图", "info");
     };
 
     var openLightbox = function (url, cap, file, thumb) {
@@ -496,6 +535,7 @@
             '<button class="lightbox-btn lb-zoom-in" aria-label="放大" title="放大（滚轮 / +）">＋</button>' +
             '<button class="lightbox-btn lb-zoom-reset" aria-label="重置缩放" title="重置（0）">⟲</button>' +
             '<button class="lightbox-btn lb-original" aria-label="查看原图" title="查看原图">查看原图</button>' +
+            '<button class="lightbox-btn lb-thumb" aria-label="查看缩略图" title="切回缩略图">查看缩略图</button>' +
             '<button class="lightbox-btn lb-download" aria-label="下载原图" title="下载原图">⬇</button>' +
           '</div>' +
           '<button class="lightbox-close" aria-label="关闭">✕</button>';
@@ -505,11 +545,14 @@
         zoomLevelEl = lightboxEl.querySelector(".lightbox-zoom-level");
         zoomResetBtn = lightboxEl.querySelector(".lb-zoom-reset");
         origBtnEl = lightboxEl.querySelector(".lb-original");
+        thumbBtnEl = lightboxEl.querySelector(".lb-thumb");
 
         lightboxEl.querySelector(".lb-zoom-in").addEventListener("click", function (e) { e.stopPropagation(); setZoom(zoomState.scale * 1.4); });
         lightboxEl.querySelector(".lb-zoom-out").addEventListener("click", function (e) { e.stopPropagation(); setZoom(zoomState.scale / 1.4); });
         zoomResetBtn.addEventListener("click", function (e) { e.stopPropagation(); resetZoom(); });
-        lightboxEl.querySelector(".lb-original").addEventListener("click", function (e) { e.stopPropagation(); showOriginal(); });        lightboxEl.querySelector(".lb-download").addEventListener("click", function (e) {
+        lightboxEl.querySelector(".lb-original").addEventListener("click", function (e) { e.stopPropagation(); showOriginal(); });
+        lightboxEl.querySelector(".lb-thumb").addEventListener("click", function (e) { e.stopPropagation(); showThumb(); });
+        lightboxEl.querySelector(".lb-download").addEventListener("click", function (e) {
           e.stopPropagation();
           downloadOriginal(currentDownloadUrl || lightboxImg.src, currentDownloadFile);
         });
@@ -595,13 +638,25 @@
       resetZoom();
       openToken++;
       var myToken = openToken;
-      if (thumb && thumb !== url) {
+      preferThumb = false;
+      currentDownloadUrl = url; // 下载始终用原图
+      currentDownloadFile = file || "";
+      currentThumbUrl = (thumb && thumb !== url) ? thumb : "";
+      fullCache = null;
+      fullCached = false;
+      if (currentThumbUrl) {
         // 渐进加载：先显示缩略图（秒开），原图加载完成后无缝替换
-        lightboxImg.src = thumb;
+        lightboxImg.src = currentThumbUrl;
         showingOriginal = false;
         var full = new Image();
         full.onload = function () {
-          if (myToken === openToken) { lightboxImg.src = url; showingOriginal = true; updateOrigBtn(); }
+          fullCache = full;
+          fullCached = true;
+          if (myToken !== openToken) return;
+          if (preferThumb) return; // 用户已主动切回缩略图，不抢
+          lightboxImg.src = url;
+          showingOriginal = true;
+          updateOrigBtn();
         };
         full.src = url;
       } else {
@@ -611,8 +666,6 @@
       updateOrigBtn();
       lightboxCapEl.textContent = cap || "";
       lightboxCapEl.style.display = cap ? "" : "none";
-      currentDownloadUrl = url; // 下载始终用原图
-      currentDownloadFile = file || "";
       lightboxEl.classList.add("open");
     };
 

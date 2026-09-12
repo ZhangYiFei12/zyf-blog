@@ -2180,6 +2180,12 @@ pre code.hljs {
   border-color: rgba(110, 231, 183, 0.5);
   background: rgba(110, 231, 183, 0.1);
 }
+.lightbox .lightbox-btn.lb-thumb { font-size: 12px; letter-spacing: 0.5px; }
+.lightbox .lightbox-btn.lb-thumb.is-thumb {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.5);
+  background: rgba(251, 191, 36, 0.1);
+}
 
 .lightbox .lightbox-zoom-level {
   min-width: 44px;
@@ -2254,10 +2260,11 @@ pre code.hljs {
 
 /* 小屏：工具条压缩，按钮紧凑 */
 @media (max-width: 560px) {
-  .lightbox .lightbox-tools { gap: 2px; padding: 4px 6px; bottom: 16px; }
+  .lightbox .lightbox-tools { gap: 2px; padding: 4px 6px; bottom: 16px; max-width: 94vw; flex-wrap: wrap; justify-content: center; }
   .lightbox .lightbox-btn { min-width: 30px; height: 30px; padding: 0 7px; font-size: 13px; }
+  .lightbox .lightbox-btn.lb-original, .lightbox .lightbox-btn.lb-thumb { font-size: 11px; padding: 0 6px; }
   .lightbox .lightbox-zoom-level { min-width: 36px; font-size: 11px; }
-  .lightbox .lightbox-cap { bottom: 60px; max-width: 88vw; font-size: 11px; }
+  .lightbox .lightbox-cap { bottom: 96px; max-width: 88vw; font-size: 11px; }
 }
 
 /* 前台轻提示（main.js 动态创建，下载等反馈用） */
