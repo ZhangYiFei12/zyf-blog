@@ -250,6 +250,39 @@ async function getGallery(env) {
   }
 }
 
+/* 列出仓库某目录下各文件大小（git tree），返回 { relativePath: bytes } 或 null（失败时） */
+async function getTreeSizes(env, dir) {
+  try {
+    const res = await gh(env, `/repos/${repo(env)}/git/trees/${enc(branch(env) + ":" + dir)}`);
+    const data = await res.json();
+    const map = {};
+    if (data && Array.isArray(data.tree)) {
+      for (const t of data.tree) {
+        if (t && t.type === "blob" && typeof t.size === "number") map[t.path] = t.size;
+      }
+    }
+    return map;
+  } catch (e) {
+    return null;
+  }
+}
+
+/* base64 字符串解码后的字节数（无需 Buffer） */
+function b64Bytes(b64) {
+  const s = String(b64 || "").replace(/[^A-Za-z0-9+/=]/g, "");
+  if (!s) return 0;
+  let len = Math.floor((s.length * 3) / 4);
+  if (s.endsWith("==")) len -= 2;
+  else if (s.endsWith("=")) len -= 1;
+  return len > 0 ? len : 0;
+}
+
+/* 由 thumbUrl 推出仓库内相对路径 */
+function thumbRelPath(thumbUrl) {
+  const p = String(thumbUrl || "").replace(/^\/?(images\/uploads\/)?/, "");
+  return p || "";
+}
+
 /* 校验并规整项目对象 */
 function normalizeProject(input) {
   const project = {
@@ -519,6 +552,26 @@ export async function onRequest(context) {
   // ---- GET /api/admin/gallery（相册列表）----
   if (method === "GET" && rest.length === 1 && rest[0] === "gallery") {
     const gallery = await getGallery(env);
+    // 附加真实文件大小（原图 / 缩略图）；缺失时一次性回写到 gallery.json（自愈）
+    const sizes = await getTreeSizes(env, "images/uploads");
+    let dirty = false;
+    if (sizes) {
+      for (const g of gallery) {
+        if (!g || !g.file) continue;
+        const realSize = sizes[g.file];
+        const realThumb = g.thumbUrl ? sizes[thumbRelPath(g.thumbUrl)] : 0;
+        if (typeof realSize === "number" && g.size !== realSize) { g.size = realSize; dirty = true; }
+        if (g.thumbUrl && typeof realThumb === "number" && g.thumbSize !== realThumb) { g.thumbSize = realThumb; dirty = true; }
+      }
+    }
+    if (dirty) {
+      // 回写失败不影响读取（下正下次再试）
+      try {
+        await commitFiles(env, "📝 补齐相册图片大小信息", [
+          { path: "data/gallery.json", content: JSON.stringify(gallery, null, 2) },
+        ]);
+      } catch (e) { /* ignore */ }
+    }
     return json({ gallery });
   }
 
@@ -545,7 +598,11 @@ export async function onRequest(context) {
         url: `/images/uploads/${filename}`,
         caption: String((img && img.caption) || "").trim(),
         date: new Date().toISOString().slice(0, 10),
+        size: b64Bytes(b64),
       };
+      // 压缩前原始大小（前端传入，便于展示压缩比）
+      const origSize = Number(img && img.origSize) || 0;
+      if (origSize > 0) entry.origSize = origSize;
       // 缩略图（webp，480px）：有则随原图一起提交，并写入 thumbUrl
       const thumbB64 = img && img.thumb ? String(img.thumb) : "";
       const thumbExt = String((img && img.thumbExt) || "webp").replace(/[^a-z0-9]/gi, "").toLowerCase() || "webp";
@@ -553,6 +610,7 @@ export async function onRequest(context) {
         const thumbName = `thumb-${filename.replace(/\.[^.]+$/, "")}.${thumbExt}`;
         changes.push({ path: `images/uploads/${thumbName}`, content: thumbB64, encoding: "base64" });
         entry.thumbUrl = `/images/uploads/${thumbName}`;
+        entry.thumbSize = b64Bytes(thumbB64);
       }
       added.push(entry);
     }
@@ -583,7 +641,9 @@ export async function onRequest(context) {
     let thumbUrl = target.thumbUrl || "";
     const thumbB64 = input && input.thumb ? String(input.thumb) : "";
     const thumbExt = String((input && input.thumbExt) || "webp").replace(/[^a-z0-9]/gi, "").toLowerCase() || "webp";
+    let thumbSize = null;
     if (thumbB64 && thumbB64.length <= 1024 * 1024) {
+      thumbSize = b64Bytes(thumbB64);
       if (target.thumbUrl) {
         const tp = String(target.thumbUrl).replace(/^\//, "");
         if (tp) changes.push({ path: tp, content: thumbB64, encoding: "base64" });
@@ -593,10 +653,13 @@ export async function onRequest(context) {
         thumbUrl = `/images/uploads/${thumbName}`;
       }
     }
-    if (thumbUrl !== target.thumbUrl) {
-      target.thumbUrl = thumbUrl;
-      changes.push({ path: "data/gallery.json", content: JSON.stringify(gallery, null, 2) });
-    }
+    // 更新大小信息（原图 / 缩略图）并写入 gallery.json
+    target.size = b64Bytes(b64);
+    const prevOrig = Number(target.origSize) || 0;
+    if (!prevOrig && target.size) target.origSize = target.size; // 首次压缩前无记录时以当前为准
+    if (thumbSize !== null) target.thumbSize = thumbSize;
+    target.thumbUrl = thumbUrl;
+    changes.push({ path: "data/gallery.json", content: JSON.stringify(gallery, null, 2) });
 
     const commitSha = await commitFiles(env, `⚙️ 后台重新压缩相册图片：${filename}`, changes);
     return json({ ok: true, commitSha, message: "已重新压缩并提交，部署后生效（约 1 分钟）" });

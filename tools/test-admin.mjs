@@ -168,6 +168,15 @@ function mockServer(req, res) {
       respond(201, { sha: headCommitSha });
     } else if (path === `/repos/${process.env.GITHUB_REPO}/git/refs/heads/main` && method === "PATCH") {
       respond(200, { object: { sha: headCommitSha } });
+    } else if (path.startsWith(`/repos/${process.env.GITHUB_REPO}/git/trees/`) && method === "GET") {
+      // 模拟目录树：/git/trees/main:images/uploads
+      const spec = decodeURIComponent(path.replace(`/repos/${process.env.GITHUB_REPO}/git/trees/`, ""));
+      const dir = spec.includes(":") ? spec.split(":").slice(1).join(":") : "";
+      const prefix = dir ? dir.replace(/\/$/, "") + "/" : "";
+      const tree = Object.keys(files)
+        .filter(k => k.startsWith(prefix))
+        .map(k => ({ path: k.slice(prefix.length), type: "file", size: Buffer.byteLength(String(files[k]), "utf8") }));
+      respond(200, { tree });
     } else if (path === `/repos/${process.env.GITHUB_REPO}/contents/blog/posts` && method === "GET") {
       const entries = Object.keys(files).filter(k => k.startsWith("blog/posts/")).map(k => ({ name: k.replace("blog/posts/", ""), type: "file" }));
       respond(200, entries);
@@ -426,6 +435,39 @@ mockServer_.listen(mockPort, async () => {
     if (getFile("files/test-tool.zip") !== null) throw new Error("仓库文件未删除");
     const dl = JSON.parse(getFile("data/downloads.json"));
     if (dl.length !== 0) throw new Error("downloads.json 应已清空");
+  });
+
+  // 12. 相册上传与大小信息
+  setFile("data/gallery.json", "[]");
+
+  await test("相册上传图片并记录大小", async () => {
+    const jpegB64 = Buffer.from("fake-jpeg-data-1234567890").toString("base64");
+    const thumbB64 = Buffer.from("fake-thumb").toString("base64");
+    const req = new Request("http://localhost/api/admin/gallery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ images: [{ data: jpegB64, mime: "image/jpeg", ext: "jpg", origSize: 999999, thumb: thumbB64, thumbExt: "webp" }] }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + " " + JSON.stringify(data));
+    const e = data.added && data.added[0];
+    if (!e) throw new Error("未返回 added");
+    // base64 "fake-jpeg-data-1234567890" → 25 字节；"fake-thumb" → 10 字节
+    if (e.size !== 25) throw new Error("size 应为 25，实际 " + e.size);
+    if (e.thumbSize !== 10) throw new Error("thumbSize 应为 10，实际 " + e.thumbSize);
+    if (e.origSize !== 999999) throw new Error("origSize 未记录");
+  });
+
+  await test("相册列表附带真实文件大小（tree 自愈）", async () => {
+    const req = new Request("http://localhost/api/admin/gallery", { headers: { Authorization: "Bearer " + token } });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200");
+    const g = data.gallery && data.gallery[0];
+    if (!g) throw new Error("相册为空");
+    if (typeof g.size !== "number" || g.size <= 0) throw new Error("size 未回填");
+    if (!g.thumbUrl) throw new Error("缺 thumbUrl");
   });
 
   // 结果

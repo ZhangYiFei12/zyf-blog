@@ -165,6 +165,49 @@
     }
     .opt-modal .opt-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
     .opt-modal .opt-note { font-size: 11px; color: var(--text-dim); margin-top: 8px; }
+
+    /* 相册卡片（图片 + 详细信息） */
+    .gal-cell {
+      border: 1px solid var(--border); border-radius: 10px;
+      overflow: hidden; background: var(--bg-card);
+      display: flex; flex-direction: column;
+    }
+    .gal-cell .gal-thumb {
+      position: relative; aspect-ratio: 1 / 1;
+      background: var(--bg-soft); overflow: hidden;
+    }
+    .gal-cell .gal-thumb img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+      transition: transform 0.35s ease;
+    }
+    .gal-cell:hover .gal-thumb img { transform: scale(1.04); }
+    .gal-cell .gal-actions {
+      position: absolute; top: 6px; right: 6px;
+      display: flex; gap: 4px;
+      opacity: 0.55; transition: opacity 0.2s ease;
+    }
+    .gal-cell:hover .gal-actions, .gal-cell:focus-within .gal-actions { opacity: 1; }
+    .gal-cell .gal-info { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 5px; }
+    .gal-cell .gal-name {
+      font-family: var(--mono); font-size: 10px; color: var(--text-dim);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .gal-cell .gal-sizes { display: flex; flex-direction: column; gap: 3px; }
+    .gal-cell .gal-size-row {
+      display: flex; align-items: baseline; gap: 6px;
+      font-size: 11px; font-family: var(--mono);
+    }
+    .gal-cell .gal-size-row i {
+      font-style: normal; color: var(--text-dim);
+      font-size: 10px; min-width: 42px;
+    }
+    .gal-cell .gal-size-row b { color: var(--text); font-weight: 600; }
+    .gal-cell .gal-size-row em {
+      font-style: normal; font-size: 10px;
+      color: var(--accent); opacity: 0.9;
+    }
+    .gal-cell .gal-saved { color: #22c55e !important; }
+    .gal-cell .gal-date { font-size: 10px; font-family: var(--mono); color: var(--text-dim); }
   </style>
 </head>
 <body class="admin-body">
@@ -388,7 +431,7 @@
             <span id="galleryCount" style="font-size:11px;color:var(--text-dim);"></span>
             <span style="font-size:11px;color:var(--text-dim);">单张 ≤5MB，超限自动压缩（优化设置见上方⚙️面板），部署后首页相册更新（约 1 分钟）</span>
           </div>
-          <div id="galleryGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-top:12px;"></div>
+          <div id="galleryGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:12px;"></div>
           <div id="galleryLoading" class="loading">加载中</div>
         </div>
       </div>
@@ -445,7 +488,7 @@
     </div>
   </div>
 
-  <script src="js/admin.js?v=13"></script>
+  <script src="js/admin.js?v=14"></script>
   <script>
     (function () {
       function cur() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }

@@ -838,15 +838,38 @@
       galleryGrid.innerHTML = '<div class="empty-state">相册还没有图片<br/>点击上方「批量上传图片」添加 🖼️</div>';
       return;
     }
+    var totalSize = 0, totalThumb = 0;
+    galleryCache.forEach(function (g) { totalSize += Number(g.size) || 0; totalThumb += Number(g.thumbSize) || 0; });
+    if (totalSize) {
+      galleryCount.textContent = "共 " + galleryCache.length + " 张 · 原图 " + formatSize(totalSize) +
+        (totalThumb ? " · 缩略图 " + formatSize(totalThumb) : "");
+    }
     galleryGrid.innerHTML = "";
     galleryCache.forEach(function (g) {
       var cell = document.createElement("div");
-      cell.style.cssText = "position:relative;border:1px solid var(--border);border-radius:10px;overflow:hidden;aspect-ratio:1/1;background:var(--bg-soft);";
+      cell.className = "gal-cell";
+      var size = Number(g.size) || 0;
+      var thumbSize = Number(g.thumbSize) || 0;
+      var origSize = Number(g.origSize) || 0;
+      var ratio = (origSize && size && origSize > size) ? Math.round((1 - size / origSize) * 100) : 0;
+      var thumbRatio = (size && thumbSize) ? (size / thumbSize) : 0;
       cell.innerHTML =
-        '<img src="' + escapeAttr(g.url) + '" alt="' + escapeAttr(g.caption || g.file) + '" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy" />' +
-        '<div style="position:absolute;top:6px;right:6px;display:flex;gap:4px;">' +
-        '<button class="btn btn-outline btn-sm" data-action="opt" data-file="' + escapeAttr(g.file) + '" title="重新压缩（可设置大小/质量）">压缩</button>' +
-        '<button class="btn btn-danger btn-sm" data-action="del" data-file="' + escapeAttr(g.file) + '">删除</button>' +
+        '<div class="gal-thumb">' +
+          '<img src="' + escapeAttr(g.thumbUrl || g.url) + '" alt="' + escapeAttr(g.caption || g.file) + '" loading="lazy" />' +
+          '<div class="gal-actions">' +
+            '<button class="btn btn-outline btn-sm" data-action="opt" data-file="' + escapeAttr(g.file) + '" title="重新压缩（可设置大小/质量）">压缩</button>' +
+            '<button class="btn btn-danger btn-sm" data-action="del" data-file="' + escapeAttr(g.file) + '">删除</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="gal-info">' +
+          '<div class="gal-name" title="' + escapeAttr(g.file) + '">' + escapeHtml(g.file) + '</div>' +
+          '<div class="gal-sizes">' +
+            '<span class="gal-size-row"><i>原图</i><b>' + (size ? formatSize(size) : "未知") + '</b>' +
+              (origSize && origSize > size ? '<em class="gal-saved">省 ' + ratio + '%</em>' : '') + '</span>' +
+            '<span class="gal-size-row"><i>缩略图</i><b>' + (thumbSize ? formatSize(thumbSize) : (g.thumbUrl ? "未知" : "无")) + '</b>' +
+              (thumbRatio >= 10 ? '<em>缩小 ' + Math.round(thumbRatio) + '×</em>' : '') + '</span>' +
+          '</div>' +
+          (g.date ? '<div class="gal-date">' + escapeHtml(g.date) + '</div>' : '') +
         '</div>';
       galleryGrid.appendChild(cell);
     });
@@ -905,14 +928,17 @@
     optPendingFile = file;
     optPendingUrl = url;
     if (optFileName) optFileName.textContent = file;
-    if (optCurrentSize) optCurrentSize.textContent = "—";
     if (optPreview) { optPreview.src = url; optPreview.alt = file; }
+    // 当前大小：优先用已缓存的实际大小（避免额外请求）
+    var cached = null;
+    galleryCache.forEach(function (x) { if (x && x.file === file) cached = x; });
+    if (optCurrentSize) optCurrentSize.textContent = (cached && cached.size) ? formatSize(cached.size) : "—";
     // 同步面板参数
     if (optModalTarget) optModalTarget.value = String(imgSettings.target);
     if (optModalQuality) optModalQuality.value = String(imgSettings.quality);
     if (optModalOverlay) optModalOverlay.style.display = "flex";
-    // 读取当前文件大小
-    if (url) {
+    // 缓存缺失时再网络读取
+    if (url && !(cached && cached.size)) {
       fetch(url, { cache: "force-cache" })
         .then(function (r) { return r.ok ? r.blob() : null; })
         .then(function (blob) { if (blob && optCurrentSize) optCurrentSize.textContent = formatSize(blob.size); })
@@ -1194,7 +1220,7 @@
       galleryUploadBtn.textContent = "处理中 " + (i + 1) + "/" + files.length + "…";
 
       var push = function (dataUrl, mime, ext) {
-        results.push({ data: (dataUrl.split(",")[1]) || "", mime: mime, ext: ext });
+        results.push({ data: (dataUrl.split(",")[1]) || "", mime: mime, ext: ext, origSize: file.size });
         processNext(i + 1);
       };
       var failOne = function (msg) {
@@ -1207,7 +1233,7 @@
       var pushWithThumb = function (dataUrl, mime, ext) {
         if (!imgSettings.makeThumb) {
           // 关闭缩略图：只上传原图
-          results.push({ data: (dataUrl.split(",")[1]) || "", mime: mime, ext: ext });
+          results.push({ data: (dataUrl.split(",")[1]) || "", mime: mime, ext: ext, origSize: file.size });
           processNext(i + 1);
           return;
         }
@@ -1216,13 +1242,14 @@
             data: (dataUrl.split(",")[1]) || "",
             mime: mime,
             ext: ext,
+            origSize: file.size,
             thumb: (thumb.dataUrl.split(",")[1]) || "",
             thumbExt: "webp"
           });
           processNext(i + 1);
         }).catch(function () {
           // 缩略图失败仍继续，只上传原图
-          results.push({ data: (dataUrl.split(",")[1]) || "", mime: mime, ext: ext });
+          results.push({ data: (dataUrl.split(",")[1]) || "", mime: mime, ext: ext, origSize: file.size });
           processNext(i + 1);
         });
       };
