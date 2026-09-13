@@ -91,10 +91,12 @@
   var tabProjects = $("tabProjects");
   var tabGallery = $("tabGallery");
   var tabDownloads = $("tabDownloads");
+  var tabLinks = $("tabLinks");
   var viewArticles = $("viewArticles");
   var viewProjects = $("viewProjects");
   var viewGallery = $("viewGallery");
   var viewDownloads = $("viewDownloads");
+  var viewLinks = $("viewLinks");
   var galleryGrid = $("galleryGrid");
   var galleryLoading = $("galleryLoading");
   var galleryUploadBtn = $("galleryUploadBtn");
@@ -116,6 +118,12 @@
   var projectsCache = [];
   var projectFilterEl = $("projectFilter");
   var projectFilterStatus = "";
+  var linkList = $("linkList");
+  var linkListLoading = $("linkListLoading");
+  var saveLinkBtn = $("saveLinkBtn");
+  var resetLinkBtn = $("resetLinkBtn");
+  var linkId = $("linkId");
+  var linksCache = [];
   var pendingDeleteId = null;
   var pendingDeleteBtn = null;
   var pendingDeleteTimer = null;
@@ -645,19 +653,23 @@
     tabProjects.className = "tab" + (name === "projects" ? " active" : "");
     tabGallery.className = "tab" + (name === "gallery" ? " active" : "");
     tabDownloads.className = "tab" + (name === "downloads" ? " active" : "");
+    tabLinks.className = "tab" + (name === "links" ? " active" : "");
     viewArticles.style.display = name === "articles" ? "block" : "none";
     viewProjects.style.display = name === "projects" ? "block" : "none";
     viewGallery.style.display = name === "gallery" ? "block" : "none";
     viewDownloads.style.display = name === "downloads" ? "block" : "none";
+    viewLinks.style.display = name === "links" ? "block" : "none";
     if (name === "projects") loadProjects();
     if (name === "gallery") loadGallery();
     if (name === "downloads") loadDownloads();
+    if (name === "links") loadLinks();
   }
 
   tabArticles.addEventListener("click", function () { switchTab("articles"); });
   tabProjects.addEventListener("click", function () { switchTab("projects"); });
   tabGallery.addEventListener("click", function () { switchTab("gallery"); });
   tabDownloads.addEventListener("click", function () { switchTab("downloads"); });
+  tabLinks.addEventListener("click", function () { switchTab("links"); });
 
   /* ---------- 项目列表 ---------- */
 
@@ -1332,6 +1344,147 @@
     };
     processNext(0);
   });
+
+  /* ---------- 关联网站管理 ---------- */
+
+  function loadLinks() {
+    linkList.innerHTML = "";
+    linkListLoading.style.display = "block";
+    api("/links")
+      .then(function (data) {
+        linkListLoading.style.display = "none";
+        linksCache = data.links || [];
+        renderLinks();
+      })
+      .catch(function (err) {
+        linkListLoading.style.display = "none";
+        linkList.innerHTML = '<div class="empty-state" style="color:var(--danger);">加载失败：' + escapeHtml(err.message) + "</div>";
+      });
+  }
+
+  function renderLinks() {
+    if (!linksCache.length) {
+      linkList.innerHTML = '<div class="empty-state">还没有关联网站<br/>在左侧添加，会显示在关于页「关联网站」区 🔗</div>';
+      return;
+    }
+    linksCache.forEach(function (l) {
+      var item = document.createElement("div");
+      item.className = "item";
+      var host = "";
+      try { host = new URL(l.url).hostname; } catch (e) { host = l.url || ""; }
+      item.innerHTML =
+        '<div class="info">' +
+          '<div class="title">' + escapeHtml(l.name || "(未命名)") +
+            (l.published === false ? ' <span style="color:var(--accent);font-size:10px;border:1px solid var(--accent);border-radius:3px;padding:1px 6px;">隐藏</span>' : "") +
+          "</div>" +
+          '<div class="date">' + escapeHtml(host) +
+            (l.desc ? " · " + escapeHtml(l.desc) : "") +
+            (Number(l.order) ? " · 排序 " + escapeHtml(String(l.order)) : "") +
+          "</div>" +
+        "</div>" +
+        '<div class="actions">' +
+          '<a class="btn btn-outline btn-sm" href="' + escapeAttr(l.url) + '" target="_blank" rel="noopener noreferrer">访问</a>' +
+          '<button class="btn btn-outline btn-sm" data-action="edit" data-id="' + escapeAttr(l.id) + '">编辑</button>' +
+          '<button class="btn btn-danger btn-sm" data-action="del" data-id="' + escapeAttr(l.id) + '">删除</button>' +
+        "</div>";
+      linkList.appendChild(item);
+    });
+  }
+
+  linkList.addEventListener("click", function (e) {
+    var btn = e.target.closest("button[data-action]");
+    if (!btn) return;
+    var id = btn.getAttribute("data-id");
+    if (btn.getAttribute("data-action") === "edit") {
+      resetDeleteConfirm();
+      loadLink(id);
+    } else if (btn.getAttribute("data-action") === "del") {
+      deleteLink(id, btn);
+    }
+  });
+
+  function fillLinkForm(l) {
+    $("linkNameField").value = l.name || "";
+    $("linkUrlField").value = l.url || "";
+    $("linkDescField").value = l.desc || "";
+    $("linkIconField").value = l.icon || "";
+    $("linkOrderField").value = Number(l.order) || 0;
+    $("linkPublished").checked = l.published !== false;
+  }
+
+  function resetLinkForm() {
+    linkId.value = "";
+    fillLinkForm({});
+    saveLinkBtn.textContent = "➕ 添加关联";
+    resetLinkBtn.style.display = "none";
+    $("linkStatus").textContent = "";
+  }
+
+  resetLinkBtn.addEventListener("click", resetLinkForm);
+
+  function loadLink(id) {
+    var l = linksCache.find(function (x) { return x.id === id; });
+    if (!l) { showToast("关联网站不存在", "error"); return; }
+    fillLinkForm(l);
+    linkId.value = l.id;
+    saveLinkBtn.textContent = "💾 保存修改";
+    resetLinkBtn.style.display = "inline-flex";
+    $("linkNameField").scrollIntoView({ behavior: "smooth", block: "start" });
+    showToast("已载入「" + l.name + "」", "success");
+  }
+
+  function saveLink() {
+    var name = $("linkNameField").value.trim();
+    var url = $("linkUrlField").value.trim();
+    if (!name) { showToast("请填写网站名称", "error"); return; }
+    if (!url) { showToast("请填写网站地址", "error"); return; }
+    if (!/^https?:\/\//i.test(url)) { showToast("网址需以 http:// 或 https:// 开头", "error"); return; }
+    var payload = {
+      name: name,
+      url: url,
+      desc: $("linkDescField").value.trim(),
+      icon: $("linkIconField").value.trim(),
+      order: parseInt($("linkOrderField").value, 10) || 0,
+      published: $("linkPublished").checked,
+    };
+    if (linkId.value) payload.id = linkId.value;
+
+    saveLinkBtn.disabled = true;
+    saveLinkBtn.textContent = "提交中…";
+    $("linkStatus").textContent = "";
+
+    api("/links", { method: "POST", body: payload })
+      .then(function (data) {
+        $("linkStatus").textContent = "✔ " + data.message;
+        showToast("已保存，部署后关于页更新", "success");
+        resetLinkForm();
+        loadLinks();
+      })
+      .catch(function (err) { showToast(err.message || "保存失败", "error"); })
+      .then(function () { saveLinkBtn.disabled = false; saveLinkBtn.textContent = linkId.value ? "💾 保存修改" : "➕ 添加关联"; });
+  }
+
+  saveLinkBtn.addEventListener("click", saveLink);
+
+  function deleteLink(id, btn) {
+    if (pendingDeleteId !== id) {
+      resetDeleteConfirm();
+      if (!btn) { showToast("删除失败：按钮状态异常", "error"); return; }
+      pendingDeleteId = id;
+      pendingDeleteBtn = btn;
+      btn.textContent = "⚠ 再点一次确认";
+      btn.classList.add("btn-confirming");
+      pendingDeleteTimer = setTimeout(resetDeleteConfirm, 4000);
+      return;
+    }
+    resetDeleteConfirm();
+    api("/links", { method: "DELETE", body: { id: id } })
+      .then(function (data) {
+        showToast(data.message || "已删除", "success");
+        loadLinks();
+      })
+      .catch(function (err) { showToast(err.message || "删除失败", "error"); });
+  }
 
   /* ---------- 转义 ---------- */
 

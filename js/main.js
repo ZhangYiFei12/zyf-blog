@@ -728,6 +728,48 @@
     }
   }
 
+  /* ---- 关联网站（关于页 #linksSection，数据来自 data/links.json） ---- */
+  var linksGridEl = document.getElementById("linksGrid");
+  if (linksGridEl) {
+    var linksSectionEl = document.getElementById("linksSection");
+    var hostOf = function (u) {
+      try { return new URL(u, window.location.href).hostname.replace(/^www\./, ""); }
+      catch (e) { return String(u || "").replace(/^https?:\/\//, "").split("/")[0]; }
+    };
+    /* 无自定义图标时，用 Google 公共 favicon 服务（失败则由 img.onerror 降级为首字母） */
+    var faviconOf = function (u) {
+      return "https://www.google.com/s2/favicons?domain=" + encodeURIComponent(hostOf(u)) + "&sz=64";
+    };
+    fetch("data/links.json", { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("no links")); })
+      .then(function (list) {
+        if (!Array.isArray(list)) return;
+        var items = list.filter(function (l) { return l && l.name && l.url && l.published !== false; });
+        if (!items.length) return;
+        items.sort(function (a, b) { return (Number(a.order) || 0) - (Number(b.order) || 0); });
+        var html = "";
+        items.forEach(function (l) {
+          var host = hostOf(l.url);
+          var letter = esc((l.name || "?").trim().charAt(0).toUpperCase());
+          var icon = l.icon ? esc(l.icon) : faviconOf(l.url);
+          html += '<a class="link-card" href="' + esc(l.url) + '" target="_blank" rel="noopener noreferrer" title="' + esc(l.name) + '">' +
+                    '<span class="link-icon"><span class="link-fallback">' + letter + '</span>' +
+                      '<img src="' + icon + '" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'" />' +
+                    '</span>' +
+                    '<span class="link-body">' +
+                      '<span class="link-name">' + esc(l.name) + '</span>' +
+                      (l.desc ? '<span class="link-desc">' + esc(l.desc) + '</span>' : '') +
+                      '<span class="link-host">' + esc(host) + '</span>' +
+                    '</span>' +
+                    '<span class="link-go" aria-hidden="true">↗</span>' +
+                  "</a>";
+        });
+        linksGridEl.innerHTML = html;
+        if (linksSectionEl) linksSectionEl.style.display = "";
+      })
+      .catch(function () { /* 无数据 / 读取失败：保持隐藏 */ });
+  }
+
   /* ---- 当前年份导航高亮 ---- */
   var path = window.location.pathname.split("/").pop() || "index.html";
   document.querySelectorAll(".nav-links a").forEach(function (a) {

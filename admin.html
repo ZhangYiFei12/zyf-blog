@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台 | ZH</title>
-  <link rel="stylesheet" href="css/style.css?v=21" />
+  <link rel="stylesheet" href="css/style.css?v=22" />
   <link rel="icon" type="image/png" href="images/avatar.png" />
   <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
   <style>
@@ -240,6 +240,7 @@
         <button class="tab" id="tabProjects">🛠️ 项目</button>
         <button class="tab" id="tabGallery">🖼️ 相册</button>
         <button class="tab" id="tabDownloads">📦 下载</button>
+        <button class="tab" id="tabLinks">🔗 关联</button>
       </div>
 
       <!-- ⚙️ 图片优化设置（全局，localStorage 持久化） -->
@@ -434,6 +435,55 @@
       </div>
       </div>
 
+      <div id="viewLinks" style="display:none;">
+      <div class="admin-grid">
+        <!-- 左侧：关联网站表单 -->
+        <div>
+          <div class="form-group">
+            <label>网站名称 *</label>
+            <input type="text" id="linkNameField" class="field" placeholder="例如：Cloudflare" />
+          </div>
+          <div class="form-group">
+            <label>网站地址 *</label>
+            <input type="text" id="linkUrlField" class="field" placeholder="https://example.com" />
+          </div>
+          <div class="form-group">
+            <label>简介（可选）</label>
+            <input type="text" id="linkDescField" class="field" placeholder="一句话介绍，显示在名称下方" />
+          </div>
+          <div class="proj-grid">
+            <div class="form-group">
+              <label>图标地址（可选）</label>
+              <input type="text" id="linkIconField" class="field" placeholder="留空自动取网站图标" />
+            </div>
+            <div class="form-group">
+              <label>排序（越小越前）</label>
+              <input type="number" id="linkOrderField" class="field" value="0" />
+            </div>
+          </div>
+          <div class="form-group">
+            <div class="checkbox-row">
+              <input type="checkbox" id="linkPublished" checked />
+              <label>在关于页显示</label>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:8px;">
+            <button class="btn" id="saveLinkBtn">➕ 添加关联</button>
+            <button class="btn btn-outline" id="resetLinkBtn" style="display:none;">新建关联</button>
+            <span id="linkStatus" style="font-size:11px;color:var(--text-dim);align-self:center;margin-left:8px;"></span>
+          </div>
+          <input type="hidden" id="linkId" value="" />
+        </div>
+
+        <!-- 右侧：关联网站列表 -->
+        <div class="article-list">
+          <h3>🔗 所有关联网站</h3>
+          <div id="linkList"></div>
+          <div id="linkListLoading" class="loading">加载中</div>
+        </div>
+      </div>
+      </div>
+
       <div id="viewGallery" style="display:none;">
         <div class="article-list" style="max-width:1100px;">
           <h3>🖼️ 相册管理</h3>
@@ -538,7 +588,7 @@
     </div>
   </div>
 
-  <script src="js/admin.js?v=15"></script>
+  <script src="js/admin.js?v=16"></script>
   <script>
     (function () {
       function cur() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }

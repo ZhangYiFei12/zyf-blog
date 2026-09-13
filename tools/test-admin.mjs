@@ -470,6 +470,84 @@ mockServer_.listen(mockPort, async () => {
     if (!g.thumbUrl) throw new Error("缺 thumbUrl");
   });
 
+  // 13. 关联网站管理（links 路由）
+  setFile("data/links.json", "[]");
+
+  await test("列出关联网站（初始空）", async () => {
+    const req = new Request("http://localhost/api/admin/links", { headers: { Authorization: "Bearer " + token } });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status);
+    if (!Array.isArray(data.links) || data.links.length !== 0) throw new Error("初始应为空列表");
+  });
+
+  await test("新增关联网站", async () => {
+    const req = new Request("http://localhost/api/admin/links", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ name: "Cloudflare", url: "https://cloudflare.com", desc: "全球 CDN", order: 2 }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + " " + JSON.stringify(data));
+    if (!data.ok || !data.id) throw new Error("未返回 ok/id");
+    const links = JSON.parse(getFile("data/links.json"));
+    if (!links.length || links[0].name !== "Cloudflare") throw new Error("links.json 未记录");
+    if (links[0].url !== "https://cloudflare.com") throw new Error("url 不正确");
+  });
+
+  await test("网址缺协议 → 400", async () => {
+    const req = new Request("http://localhost/api/admin/links", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ name: "坏网站", url: "cloudflare.com" }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    if (res.status !== 400) throw new Error("期望 400 但得到 " + res.status);
+  });
+
+  await test("缺少名称 → 400", async () => {
+    const req = new Request("http://localhost/api/admin/links", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ url: "https://a.com" }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    if (res.status !== 400) throw new Error("期望 400 但得到 " + res.status);
+  });
+
+  let linkId = "";
+  await test("编辑关联网站", async () => {
+    const list = JSON.parse(getFile("data/links.json"));
+    linkId = list[0].id;
+    const req = new Request("http://localhost/api/admin/links", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ id: linkId, name: "Cloudflare Pages", url: "https://pages.cloudflare.com", desc: "静态托管", order: 1 }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status);
+    const links = JSON.parse(getFile("data/links.json"));
+    if (links.length !== 1) throw new Error("编辑不应新增记录，实际 " + links.length);
+    if (links[0].name !== "Cloudflare Pages") throw new Error("名称未更新");
+    if (links[0].id !== linkId) throw new Error("id 不应改变");
+  });
+
+  await test("删除关联网站", async () => {
+    const req = new Request("http://localhost/api/admin/links", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ id: linkId }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + " " + JSON.stringify(data));
+    if (!data.ok) throw new Error("未返回 ok");
+    const links = JSON.parse(getFile("data/links.json"));
+    if (links.length !== 0) throw new Error("links.json 应已清空");
+  });
+
   // 结果
   console.log(`\n🎯 结果：${passed} 通过，${failed} 失败，共 ${passed + failed} 项`);
   mockServer_.close();

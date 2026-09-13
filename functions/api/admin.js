@@ -250,6 +250,17 @@ async function getGallery(env) {
   }
 }
 
+/* 读取 data/links.json（关联网站） */
+async function getLinks(env) {
+  try {
+    const raw = await getFile(env, "data/links.json");
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 /* 列出仓库某目录下各文件大小（git tree），返回 { relativePath: bytes } 或 null（失败时） */
 async function getTreeSizes(env, dir) {
   try {
@@ -298,6 +309,20 @@ function normalizeProject(input) {
   };
   project.id = input.id ? String(input.id).trim() : slugify(project.title) || `project-${Date.now()}`;
   return project;
+}
+
+/* 校验并规整关联网站对象 */
+function normalizeLink(input) {
+  const link = {
+    name: String(input.name || "").trim(),
+    url: String(input.url || "").trim(),
+    desc: String(input.desc || "").trim(),
+    icon: String(input.icon || "").trim(),
+    published: input.published !== false,
+    order: Number(input.order) || 0,
+  };
+  link.id = input.id ? String(input.id).trim() : `link-${Date.now().toString(36)}`;
+  return link;
 }
 
 /* ---------------- 下载文件（GitHub 仓库 files/ + GitHub Release 混合） ----------------
@@ -744,6 +769,48 @@ export async function onRequest(context) {
       { path: "index.html", content: newIndexHtml },
     ]);
 
+    return json({ ok: true, id, commitSha, message: "已删除并提交，等待自动部署" });
+  }
+
+  // ---- GET /api/admin/links（关联网站列表）----
+  if (method === "GET" && rest.length === 1 && rest[0] === "links") {
+    const links = await getLinks(env);
+    return json({ links });
+  }
+
+  // ---- POST /api/admin/links（新建 / 编辑）----
+  if (method === "POST" && rest.length === 1 && rest[0] === "links") {
+    const input = await request.json().catch(() => null);
+    if (!input) return json({ error: "请求体无效" }, 400);
+    const link = normalizeLink(input);
+    if (!link.name) return json({ error: "缺少网站名称" }, 400);
+    if (!link.url) return json({ error: "缺少网站地址" }, 400);
+    if (!/^https?:\/\//i.test(link.url)) return json({ error: "网址需以 http:// 或 https:// 开头" }, 400);
+    const links = await getLinks(env);
+    const idx = links.findIndex(l => l.id === link.id);
+    if (idx >= 0) {
+      links[idx] = link;
+    } else {
+      links.unshift(link);
+    }
+    const commitSha = await commitFiles(env, `🔗 ${idx >= 0 ? "后台编辑" : "后台新增"}关联网站：${link.name}`, [
+      { path: "data/links.json", content: JSON.stringify(links, null, 2) + "\n" },
+    ]);
+    return json({ ok: true, id: link.id, commitSha, message: "已提交，Cloudflare 正在自动部署（约 30 秒~1 分钟）" });
+  }
+
+  // ---- DELETE /api/admin/links（按 id）----
+  if (method === "DELETE" && rest.length === 1 && rest[0] === "links") {
+    const input = await request.json().catch(() => null);
+    const id = input && input.id ? String(input.id).trim() : "";
+    if (!id) return json({ error: "缺少 ID" }, 400);
+    const links = await getLinks(env);
+    const target = links.find(l => l.id === id);
+    if (!target) return json({ error: "关联网站不存在" }, 404);
+    const remaining = links.filter(l => l.id !== id);
+    const commitSha = await commitFiles(env, `🗑️ 后台删除关联网站：${target.name}`, [
+      { path: "data/links.json", content: JSON.stringify(remaining, null, 2) + "\n" },
+    ]);
     return json({ ok: true, id, commitSha, message: "已删除并提交，等待自动部署" });
   }
 
