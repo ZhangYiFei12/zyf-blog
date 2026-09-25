@@ -46,7 +46,7 @@
     });
   }
 
-  /* ---- 深浅色主题切换 ---- */
+  /* ---- 深浅色主题切换（首访跟随系统，手动选择后以 localStorage 为准） ---- */
   var themeBtn = document.getElementById("themeToggle");
   function currentTheme() {
     return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
@@ -66,18 +66,47 @@
       syncThemeIcon();
     });
   }
+  /* 用户未显式选择时，系统主题变化实时跟随 */
+  if (window.matchMedia) {
+    var mq = window.matchMedia("(prefers-color-scheme: light)");
+    var onSysThemeChange = function (e) {
+      var saved = null;
+      try { saved = localStorage.getItem("zyf-theme"); } catch (err) {}
+      if (saved) return; // 用户已手动选择，不跟随系统
+      if (e.matches) document.documentElement.setAttribute("data-theme", "light");
+      else document.documentElement.removeAttribute("data-theme");
+      syncThemeIcon();
+    };
+    if (mq.addEventListener) mq.addEventListener("change", onSysThemeChange);
+    else if (mq.addListener) mq.addListener(onSysThemeChange);
+  }
 
-  /* ---- 移动端导航切换 ---- */
+  /* ---- 移动端导航切换（含无障碍：aria-expanded / ESC / 焦点返回） ---- */
   var toggle = document.querySelector(".nav-toggle");
   var links = document.querySelector(".nav-links");
   if (toggle && links) {
+    var setNavOpen = function (open) {
+      links.classList.toggle("open", open);
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    };
     toggle.addEventListener("click", function () {
-      links.classList.toggle("open");
+      setNavOpen(!links.classList.contains("open"));
     });
     document.addEventListener("click", function (e) {
       if (!toggle.contains(e.target) && !links.contains(e.target)) {
-        links.classList.remove("open");
+        setNavOpen(false);
       }
+    });
+    /* ESC 关闭菜单并把焦点还给菜单按钮 */
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && links.classList.contains("open")) {
+        setNavOpen(false);
+        toggle.focus();
+      }
+    });
+    /* 点击菜单内链接后自动关闭（移动端体验） */
+    links.addEventListener("click", function (e) {
+      if (e.target.closest("a")) setNavOpen(false);
     });
   }
 
@@ -262,9 +291,28 @@
     }
   }
 
-  /* ---- 代码语法高亮（highlight.js，文章页） ---- */
-  if (window.hljs && document.querySelector(".article-body code")) {
-    try { hljs.highlightAll(); } catch (e) {}
+  /* ---- 代码语法高亮（highlight.js 按需动态加载） ----
+   * 只有页面真的存在代码块时才去加载 120KB 的 highlight.min.js，
+   * 无代码的文章可省下这笔开销；加载失败则静默降级（不影响阅读）。
+   */
+  var codeBlocks = document.querySelectorAll(".article-body pre code");
+  if (codeBlocks.length) {
+    var runHljs = function () {
+      if (!window.hljs) return;
+      try { hljs.highlightAll(); } catch (e) {}
+    };
+    if (window.hljs) {
+      runHljs();
+    } else {
+      // 相对路径：文章页在 /blog/ 或 /kb/ 下为 ../js/，列表页为 js/
+      var inSubDir = /\/(blog|kb)\//.test(window.location.pathname);
+      var src = (inSubDir ? "../js/" : "js/") + "highlight.min.js?v=1";
+      var s = document.createElement("script");
+      s.src = src;
+      s.async = true;
+      s.onload = runHljs;
+      document.head.appendChild(s);
+    }
   }
 
   /* ---- 博客标签筛选 + 站内搜索（博客列表页） ---- */
@@ -427,6 +475,69 @@
     }
 
     kbApply();
+  }
+
+  /* ---- 分享按钮（文章页 / 知识库页） ---- */
+  var shareRow = document.querySelector(".share-row");
+  if (shareRow) {
+    var shareUrl = shareRow.getAttribute("data-share-url") || window.location.href;
+    var shareTitle = shareRow.getAttribute("data-share-title") || document.title;
+    /* 支持系统分享时显示原生分享按钮 */
+    var nativeBtn = shareRow.querySelector('[data-share="native"]');
+    if (nativeBtn && navigator.share) nativeBtn.hidden = false;
+    shareRow.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-share]");
+      if (!btn) return;
+      var kind = btn.getAttribute("data-share");
+      if (kind === "copy") {
+        var done = function () { showToast("链接已复制", "info"); };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(shareUrl).then(done, function () { fallbackCopy(shareUrl); done(); });
+        } else { fallbackCopy(shareUrl); done(); }
+      } else if (kind === "native") {
+        navigator.share({ title: shareTitle, url: shareUrl }).catch(function () {});
+      }
+    });
+  }
+
+  /* ---- 相关文章（按标签重合度，客户端计算） ---- */
+  var relatedEl = document.getElementById("relatedPosts");
+  if (relatedEl) {
+    var inSub = /\/(blog|kb)\//.test(window.location.pathname);
+    var idxUrl = inSub ? "../data/search-index.json" : "data/search-index.json";
+    var curSlug = decodeURIComponent(window.location.pathname.split("/").pop().replace(/\.html$/i, ""));
+    fetch(idxUrl, { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("no index")); })
+      .then(function (list) {
+        if (!Array.isArray(list)) return;
+        var current = list.find(function (p) { return p.slug === curSlug; });
+        if (!current) return;
+        var myTags = (current.tags || []).filter(Boolean);
+        var scored = list
+          .filter(function (p) { return p.slug !== curSlug; })
+          .map(function (p) {
+            var pt = p.tags || [];
+            var overlap = myTags.filter(function (t) { return pt.indexOf(t) !== -1; }).length;
+            return { p: p, score: overlap };
+          })
+          .filter(function (x) { return x.score > 0; })
+          .sort(function (a, b) { return b.score - a.score || String(b.p.date || "").localeCompare(String(a.p.date || "")); })
+          .slice(0, 4);
+        if (!scored.length) return;
+        var prefix = inSub ? "../blog/" : "blog/";
+        relatedEl.innerHTML =
+          '<div class="related-title">🔗 ' + (relatedEl.getAttribute("aria-label") || "相关文章") + "</div>" +
+          '<div class="related-list">' +
+          scored.map(function (x) {
+            return '<a class="related-item" href="' + prefix + esc(encodeURIComponent(x.p.slug)) + '.html">' +
+                     '<span class="related-name">' + esc(x.p.title || x.p.slug) + "</span>" +
+                     '<span class="related-meta">' + esc(x.p.date || "") + (x.p.tags && x.p.tags.length ? " · " + esc(x.p.tags.join(" / ")) : "") + "</span>" +
+                   "</a>";
+          }).join("") +
+          "</div>";
+        relatedEl.hidden = false;
+      })
+      .catch(function () {});
   }
 
   /* ---- 上一篇 / 下一篇（文章页，客户端渲染） ---- */

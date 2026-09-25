@@ -26,6 +26,8 @@
   Cache-Control: public, max-age=0, must-revalidate
 /kb/*
   Cache-Control: public, max-age=0, must-revalidate
+/tags/*
+  Cache-Control: public, max-age=0, must-revalidate
 
 # 下载页
 /downloads.html
@@ -33,4 +35,8 @@
 
 # 知识库
 /kb.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+# 归档页
+/archive.html
   Cache-Control: public, max-age=0, must-revalidate

@@ -12,6 +12,9 @@
 - 📦 **软件下载**：`downloads.html` 发布安装包（小文件网页后台上传 / 大文件 Release 脚本）
 - 🔗 **关联网站**：关于页展示推荐站点，后台增删改（`data/links.json`）
 - 📚 **知识库**：`kb.html` 汇总技术文档，后台上传 Markdown 自动渲染成页面
+- 🏷️ **标签页 / 归档页**：`tags/<标签>.html` 聚合页 + `archive.html` 按年归档，随文章发布自动重建
+- 🔗 **相关文章 / 分享**：文章页按标签重合度推荐、一键复制链接或分享到推特/微博
+- ♿ **无障碍 (a11y)**：skip-link、键盘焦点环、`aria-expanded`、ESC 关菜单，色彩对比度通过 WCAG AA
 
 ## 📁 目录结构
 
@@ -241,6 +244,52 @@ tags: ["Git", "速查"]
 
 原图 / 缩略图切换：原图首次加载后会缓存，切回时**同步零延迟**；若原图还在加载中你又主动切回缩略图，加载完成后不会抢回（尊重手动选择）。
 
+## 🔍 SEO 与无障碍
+
+### 结构化数据
+
+所有文章页 / 知识库页自动注入两层 JSON-LD：
+
+- `BlogPosting`：标题、摘要、发布日期、作者、发布者、封面图
+- `BreadcrumbList`：首页 › 博客 › 当前文章
+
+同时每页都有 `<link rel="canonical">`，避免带参 URL 与 `/index.html` 产生重复内容。
+
+### 无障碍（a11y）
+
+| 能力 | 说明 |
+| --- | --- |
+| `skip-link` | 键盘用户按 Tab 首个可聚焦元素，回车直达 `#mainContent` |
+| 焦点可见 | `:focus-visible` 统一青色描边；鼠标点击不显焦点框 |
+| 移动菜单 | `aria-expanded` / `aria-controls` 同步；支持 ESC 关闭并回焦 |
+| 减少动画 | 全站尊重 `prefers-reduced-motion` |
+| 色彩对比度 | 深浅两套主题的文字对比度均 ≥ 4.5:1（WCAG AA） |
+
+### 主题
+
+首访跟随系统 `prefers-color-scheme`；用户手动切换后以 `localStorage` 为准，
+且系统主题变化不再覆盖用户选择（仅在用户未选择时实时跟随）。
+
+## 🏷️ 标签页与归档页
+
+这两个页面由文章自动派生，**无需手工维护**：
+
+| 页面 | 路径 | 生成时机 |
+| --- | --- | --- |
+| 标签聚合页 | `tags/<标签>.html` | 发布/编辑/删除文章时 |
+| 归档页 | `archive.html` | 发布/编辑/删除文章时 |
+
+- 标签页按标签聚合文章，写入 `sitemap.xml`；某标签下文章清零时**自动删除**该页（不留死链）
+- 归档页按年份倒序分组，组内按日期倒序
+- 本地批量重建：`node tools/gen-pages.mjs`
+
+### 相关文章与分享
+
+文章页底部（标签重合度 > 0 时）：
+
+- **相关文章**：客户端读 `data/search-index.json`，按标签重合度排序取前 4 篇
+- **分享**：一键复制链接；推特 / 微博；支持 Web Share API 的浏览器额外显示「系统分享」
+
 ## 🔗 关联网站管理
 
 关于页（`about.html`）简介下方会展示「关联网站」卡片区，数据来自 `data/links.json`，由后台「🔗 关联」页管理。
@@ -311,7 +360,20 @@ node tools/md2html.mjs -w           # 监听模式，保存自动重新生成
 
 - `tools/md2html.mjs` —— Markdown 一键转 HTML（零依赖，支持标题/加粗/斜体/代码块/列表/引用/表格/链接/图片/删除线/分割线）
 - `tools/md2html-core.mjs` —— 渲染核心（纯函数，CLI 与后台 API 共用，保证预览 = 线上）
-- `tools/test-admin.mjs` —— 后台 API 自测脚本（`node tools/test-admin.mjs`）
+- `tools/gen-pages.mjs` —— 批量重建派生页面（标签页 / 归档页 / kb.html / sitemap / RSS / 索引）
+- `tools/check-integrity.mjs` —— 仓库完整性检查（孤儿图 / 缺失图 / 死链 / 体积不一致），有问题时退出码为 1
+- `tools/test-admin.mjs` —— 后台 API 自测（`node tools/test-admin.mjs`）
+- `tools/test-frontend.mjs` —— 前端回归测试（纯函数 + 生成产物 + 渲染断言，需先启动 dev-server）
+
+### 提交前自检
+
+```bash
+node tools/dev-server.mjs &          # 前端测试需要
+node tools/check-integrity.mjs       # 资源完整性（死链/孤儿图）
+node tools/test-admin.mjs            # 后台 API（34 项）
+node tools/test-frontend.mjs         # 前端（26 项）
+node tools/gen-pages.mjs             # 重建派生页面
+```
 
 ## 📄 License
 

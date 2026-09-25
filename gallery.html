@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>相册 | ZH</title>
   <meta name="description" content="照片与影像收藏" />
-  <link rel="stylesheet" href="css/style.css?v=24" />
+  <link rel="stylesheet" href="css/style.css?v=25" />
   <link rel="icon" type="image/png" href="images/avatar.png" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="相册 · ZH | 个人博客" />
@@ -14,16 +14,18 @@
   <meta property="og:image" content="https://zyf2026.pages.dev/images/avatar.png" />
   <meta property="og:site_name" content="ZH 博客" />
   <meta name="twitter:card" content="summary" />
-  <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
+  <script>try{var t=localStorage.getItem("zyf-theme");if(t==="light"||(!t&&window.matchMedia("(prefers-color-scheme: light)").matches))document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
 </head>
 <body>
+
+  <a class="skip-link" href="#mainContent">跳到主要内容</a>
 
   <nav class="navbar">
     <div class="nav-inner">
       <a href="index.html" class="brand">
         <span class="prompt">&gt;_</span>ZH<span class="cursor"></span>
       </a>
-      <ul class="nav-links">
+      <ul class="nav-links" id="navLinks">
         <li><a href="index.html">首页</a></li>
         <li><a href="blog.html">博客</a></li>
         <li><a href="projects.html">项目</a></li>
@@ -34,12 +36,12 @@
       </ul>
       <div class="nav-actions">
         <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
-        <button class="nav-toggle" aria-label="菜单">☰ 菜单</button>
+        <button class="nav-toggle" id="navToggle" aria-label="菜单" aria-expanded="false" aria-controls="navLinks">☰ 菜单</button>
       </div>
     </div>
   </nav>
 
-  <main class="container">
+  <main class="container" id="mainContent">
 
     <div class="page-head">
       <h1>相<span class="accent">册</span></h1>
@@ -61,6 +63,6 @@
   </footer>
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
-  <script src="js/main.js?v=21"></script>
+  <script src="js/main.js?v=22"></script>
 </body>
 </html>

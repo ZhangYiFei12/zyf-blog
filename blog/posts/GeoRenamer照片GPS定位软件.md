@@ -149,7 +149,7 @@ geo-renamer/
 
 如需商业使用，请联系作者获取商业授权。
 
-详见 [LICENSE](LICENSE)
+详见 [LICENSE](https://github.com/ZhangYiFei12/use-photo-gps-find-address/blob/main/LICENSE)
 
 ## 🤝 贡献
 

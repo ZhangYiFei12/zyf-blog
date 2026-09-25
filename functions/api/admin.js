@@ -26,6 +26,9 @@ import {
   buildKbIndex,
   renderKbList,
   renderKbFilter,
+  buildTagPage,
+  buildArchivePage,
+  collectTags,
   slugify,
   listItemSnippet,
   renderProjects,
@@ -288,6 +291,34 @@ async function getAllKbDocs(env) {
   return docs;
 }
 
+/* 生成标签页 + 归档页的变更集（发布/删除文章后调用，保持派生页面同步）
+ * 旧的标签页若已不存在则删除，避免留下空页与死链。
+ */
+async function buildTagAndArchiveChanges(env, posts) {
+  const changes = [];
+  const tags = collectTags(posts);
+  const wanted = new Set(tags.map(t => t.name));
+
+  // 删除已不再出现的旧标签页
+  try {
+    const res = await gh(env, `/repos/${repo(env)}/contents/tags?ref=${branch(env)}`);
+    const files = await res.json();
+    for (const f of (Array.isArray(files) ? files : [])) {
+      if (!f.name || !f.name.endsWith(".html")) continue;
+      const tag = decodeURIComponent(f.name.replace(/\.html$/, ""));
+      if (!wanted.has(tag)) changes.push({ path: `tags/${f.name}`, delete: true });
+    }
+  } catch (e) {
+    // 目录不存在或读取失败：忽略（首次创建时属正常）
+  }
+
+  for (const t of tags) {
+    changes.push({ path: `tags/${t.name}.html`, content: buildTagPage(t.name, posts) });
+  }
+  changes.push({ path: "archive.html", content: buildArchivePage(posts) });
+  return { changes, tags };
+}
+
 /* 读取 data/links.json（关联网站） */
 async function getLinks(env) {
   try {
@@ -544,10 +575,16 @@ export async function onRequest(context) {
       { path: `blog/posts/${slug}.md`, content: mdContent },
       { path: `blog/${slug}.html`, content: pageHtml },
       { path: "data/posts.json", content: buildPostsIndex(updatedPosts) },
-      { path: "sitemap.xml", content: buildSitemap(updatedPosts, undefined, await getAllKbDocs(env)) },
       { path: "feed.xml", content: buildRss(updatedPosts) },
       { path: "data/search-index.json", content: buildSearchIndex(updatedPosts) },
     ];
+    // 派生页面：标签页 + 归档页 + sitemap（含标签页）
+    const tagInfo = await buildTagAndArchiveChanges(env, updatedPosts);
+    commitChanges.push(...tagInfo.changes);
+    commitChanges.push({
+      path: "sitemap.xml",
+      content: buildSitemap(updatedPosts, undefined, await getAllKbDocs(env), tagInfo.tags),
+    });
     // 已发布文章才更新公开页面
     if (publishedPosts.length) {
       commitChanges.push(
@@ -579,15 +616,17 @@ export async function onRequest(context) {
     blogHtml = replaceBetween(blogHtml, "<!-- BLOG-LIST-START -->", "<!-- BLOG-LIST-END -->", blogList);
     indexHtml = replaceBetween(indexHtml, "<!-- LATEST-START -->", "<!-- LATEST-END -->", latest);
 
+    const delTagInfo = await buildTagAndArchiveChanges(env, remaining);
     const commitSha = await commitFiles(env, `🗑️ 后台删除：${target.meta.title}`, [
       { path: `blog/posts/${slug}.md`, delete: true },
       { path: `blog/${slug}.html`, delete: true },
       { path: "blog.html", content: blogHtml },
       { path: "index.html", content: indexHtml },
       { path: "data/posts.json", content: buildPostsIndex(remaining) },
-      { path: "sitemap.xml", content: buildSitemap(remaining, undefined, await getAllKbDocs(env)) },
       { path: "feed.xml", content: buildRss(remaining) },
       { path: "data/search-index.json", content: buildSearchIndex(remaining) },
+      ...delTagInfo.changes,
+      { path: "sitemap.xml", content: buildSitemap(remaining, undefined, await getAllKbDocs(env), delTagInfo.tags) },
     ]);
 
     return json({ ok: true, slug, commitSha, message: "已删除并提交，等待自动部署" });
@@ -922,7 +961,7 @@ export async function onRequest(context) {
     changes.push({ path: "data/kb.json", content: buildKbIndex(finalDocs) });
     // 同步 sitemap（否则新增的知识库文档不进站点地图）
     const postsForSitemap = await getAllPosts(env);
-    changes.push({ path: "sitemap.xml", content: buildSitemap(postsForSitemap, undefined, finalDocs) });
+    changes.push({ path: "sitemap.xml", content: buildSitemap(postsForSitemap, undefined, finalDocs, collectTags(postsForSitemap)) });
 
     const isEdit = !!input.slug;
     const label = batch ? `导入 ${added.length} 篇知识库文档` : `${isEdit ? "编辑" : "新建"}知识库文档：${added[0].title}`;
@@ -959,7 +998,7 @@ export async function onRequest(context) {
       { path: "kb.html", content: newKbHtml },
       { path: "data/kb.json", content: buildKbIndex(remaining) },
       // 同步 sitemap（否则已删除的文档会留下死链）
-      { path: "sitemap.xml", content: buildSitemap(await getAllPosts(env), undefined, remaining) },
+      { path: "sitemap.xml", content: buildSitemap(await getAllPosts(env), undefined, remaining, collectTags(await getAllPosts(env))) },
     ]);
 
     return json({ ok: true, commitSha, message: "已删除并提交，等待自动部署" });

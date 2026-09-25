@@ -232,12 +232,14 @@ export function buildArticlePreview(meta, bodyHtml) {
   const tags = Array.isArray(meta.tags) && meta.tags.length
     ? meta.tags.join(" · ")
     : "随笔";
+  const mins = readingMinutes(bodyHtml);
   return `    <article>
       <header class="article-header">
         <h1>${escapeHtml(meta.title)}</h1>
         <div class="article-meta">
           <span>📅 ${escapeHtml(date)}</span>
           <span>🏷️ ${escapeHtml(tags)}</span>
+          <span>⏱️ 约 ${mins} 分钟</span>
         </div>
       </header>
 
@@ -247,6 +249,70 @@ ${bodyHtml}
     </article>`;
 }
 
+/* ---------- 阅读时长估算 ----------
+ * 中英文混排：中文按 350 字/分，英文按 200 词/分，取合计向上取整。
+ * 入参可以是 HTML（生产/预览）或纯文本。
+ */
+export function readingMinutes(input) {
+  const text = String(input || "")
+    .replace(/<pre[\s\S]*?<\/pre>/gi, " ")   // 代码块不计入阅读时长
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&[a-z]+;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text) return 1;
+  const cjk = (text.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) || []).length;
+  const words = (text.replace(/[\u4e00-\u9fff\u3400-\u4dbf]/g, " ").match(/[A-Za-z0-9']+/g) || []).length;
+  const minutes = cjk / 350 + words / 200;
+  return Math.max(1, Math.ceil(minutes));
+}
+
+/* ---------- SEO：canonical + JSON-LD 结构化数据 ---------- */
+function jsonLdScript(obj) {
+  // 转义 </script> 防止提前闭合
+  const json = JSON.stringify(obj).replace(/<\//g, "\\u003c/");
+  return `  <script type="application/ld+json">${json}</script>`;
+}
+
+function buildArticleJsonLd(meta, opts) {
+  const SITE = opts.site || "https://zyf2026.pages.dev";
+  const url = opts.url;
+  const tags = Array.isArray(meta.tags) ? meta.tags.filter(Boolean) : [];
+  const ld = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: meta.title,
+    description: meta.excerpt || meta.desc || meta.title,
+    datePublished: meta.date || undefined,
+    dateModified: meta.updated || meta.date || undefined,
+    author: { "@type": "Organization", name: opts.author || "ZH", url: SITE + "/about.html" },
+    publisher: {
+      "@type": "Organization",
+      name: "ZH 博客",
+      logo: { "@type": "ImageObject", url: SITE + "/images/avatar.png" },
+    },
+    mainEntityOfPage: { "@type": "WebPage", "@id": url },
+    image: SITE + "/images/avatar.png",
+    inLanguage: "zh-CN",
+    url,
+  };
+  if (tags.length) ld.keywords = tags.join(", ");
+  return ld;
+}
+
+function buildBreadcrumbJsonLd(site, items) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((it, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: it.name,
+      item: it.url,
+    })),
+  };
+}
+
 /* ---------- 页面模板 ---------- */
 export function buildPage(meta, bodyHtml, opts = {}) {
   const excerpt = meta.excerpt || meta.title;
@@ -254,6 +320,14 @@ export function buildPage(meta, bodyHtml, opts = {}) {
   const SITE = "https://zyf2026.pages.dev";
   const pageUrl = slug ? `${SITE}/blog/${slug}.html` : SITE + "/";
   const articleHtml = buildArticlePreview(meta, bodyHtml);
+  const jsonLd = [
+    buildArticleJsonLd(meta, { url: pageUrl, site: SITE }),
+    buildBreadcrumbJsonLd(SITE, [
+      { name: "首页", url: SITE + "/" },
+      { name: "博客", url: SITE + "/blog.html" },
+      { name: meta.title, url: pageUrl },
+    ]),
+  ].map(jsonLdScript).join("\n");
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -262,18 +336,22 @@ export function buildPage(meta, bodyHtml, opts = {}) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${escapeHtml(meta.title)} | ZH</title>
   <meta name="description" content="${escapeAttr(excerpt)}" />
-  <link rel="stylesheet" href="../css/style.css?v=24" />
+  <link rel="canonical" href="${escapeAttr(pageUrl)}" />
+  <link rel="stylesheet" href="../css/style.css?v=25" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
   <meta property="og:type" content="article" />
   <meta property="og:title" content="${escapeAttr(meta.title)}" />
   <meta property="og:description" content="${escapeAttr(excerpt)}" />
-  <meta property="og:url" content="${pageUrl}" />
+  <meta property="og:url" content="${escapeAttr(pageUrl)}" />
   <meta property="og:image" content="${SITE}/images/avatar.png" />
   <meta property="og:site_name" content="ZH 博客" />
   <meta name="twitter:card" content="summary" />
-  <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
+${jsonLd}
+  <script>try{var t=localStorage.getItem("zyf-theme");if(t==="light"||(!t&&window.matchMedia("(prefers-color-scheme: light)").matches))document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
 </head>
 <body>
+
+  <a class="skip-link" href="#mainContent">跳到主要内容</a>
 
   <div class="reading-progress" id="readingProgress"></div>
 
@@ -282,24 +360,29 @@ export function buildPage(meta, bodyHtml, opts = {}) {
       <a href="../index.html" class="brand">
         <span class="prompt">&gt;_</span>ZH<span class="cursor"></span>
       </a>
-      <ul class="nav-links">
+      <ul class="nav-links" id="navLinks">
         <li><a href="../index.html">首页</a></li>
         <li><a href="../blog.html">博客</a></li>
         <li><a href="../projects.html">项目</a></li>
         <li><a href="../about.html">关于</a></li>
         <li><a href="../downloads.html">下载</a></li>
         <li><a href="../gallery.html">相册</a></li>
+        <li><a href="../kb.html">知识库</a></li>
       </ul>
       <div class="nav-actions">
         <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
-        <button class="nav-toggle" aria-label="菜单">☰ 菜单</button>
+        <button class="nav-toggle" id="navToggle" aria-label="菜单" aria-expanded="false" aria-controls="navLinks">☰ 菜单</button>
       </div>
     </div>
   </nav>
 
-  <main class="container article">
+  <main class="container article" id="mainContent">
 
 ${articleHtml}
+
+${buildShareRow(meta.title, pageUrl)}
+
+${relatedPlaceholder("相关文章")}
 
     <nav class="post-nav" id="postNav"></nav>
 
@@ -315,11 +398,30 @@ ${articleHtml}
   </footer>
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
-  <script src="../js/highlight.min.js?v=1"></script>
-  <script src="../js/main.js?v=21"></script>
+  <script src="../js/main.js?v=22"></script>
 </body>
 </html>
 `;
+}
+
+/* ---------- 分享按钮（文章页 / 知识库页共用） ---------- */
+export function buildShareRow(title, url) {
+  const u = encodeURIComponent(url);
+  const t = encodeURIComponent(title);
+  const xHref = escapeAttr(`https://twitter.com/intent/tweet?url=${u}&text=${t}`);
+  const wbHref = escapeAttr(`https://service.weibo.com/share/share.php?url=${u}&title=${t}`);
+  return `    <div class="share-row" data-share-url="${escapeAttr(url)}" data-share-title="${escapeAttr(title)}">
+      <span class="share-label">分享</span>
+      <button type="button" class="share-btn" data-share="copy">🔗 复制链接</button>
+      <a class="share-btn" href="${xHref}" target="_blank" rel="noopener noreferrer">𝕏 推特</a>
+      <a class="share-btn" href="${wbHref}" target="_blank" rel="noopener noreferrer">微博</a>
+      <button type="button" class="share-btn" data-share="native" hidden>系统分享…</button>
+    </div>`;
+}
+
+/* 相关文章容器（内容由 main.js 按标签重合度客户端填充） */
+export function relatedPlaceholder(label) {
+  return `    <section class="related" id="relatedPosts" hidden aria-label="${escapeAttr(label || "相关文章")}"></section>`;
 }
 
 /* ---------- 工具 ---------- */
@@ -431,11 +533,12 @@ export function buildRss(posts, base = "https://zyf2026.pages.dev") {
 }
 
 /* ---------- 站点地图 sitemap.xml ---------- */
-export function buildSitemap(posts, base = "https://zyf2026.pages.dev", kbDocs = null) {
+export function buildSitemap(posts, base = "https://zyf2026.pages.dev", kbDocs = null, tags = null) {
   const today = new Date().toISOString().slice(0, 10);
   const urls = [
     { loc: base + "/", lastmod: today, pri: "1.0", freq: "weekly" },
     { loc: base + "/blog.html", lastmod: today, pri: "0.8", freq: "weekly" },
+    { loc: base + "/archive.html", lastmod: today, pri: "0.7", freq: "weekly" },
     { loc: base + "/projects.html", lastmod: today, pri: "0.8", freq: "monthly" },
     { loc: base + "/downloads.html", lastmod: today, pri: "0.8", freq: "monthly" },
     { loc: base + "/gallery.html", lastmod: today, pri: "0.6", freq: "monthly" },
@@ -445,7 +548,7 @@ export function buildSitemap(posts, base = "https://zyf2026.pages.dev", kbDocs =
   for (const p of (Array.isArray(posts) ? posts : [])) {
     if (p.meta.published === false) continue; // 草稿不进 sitemap
     urls.push({
-      loc: base + "/blog/" + p.slug + ".html",
+      loc: base + "/blog/" + encodeURIComponent(p.slug) + ".html",
       lastmod: p.meta.date || today,
       pri: "0.7",
       freq: "monthly",
@@ -453,10 +556,20 @@ export function buildSitemap(posts, base = "https://zyf2026.pages.dev", kbDocs =
   }
   for (const d of (Array.isArray(kbDocs) ? kbDocs : [])) {
     urls.push({
-      loc: base + "/kb/" + d.slug + ".html",
+      loc: base + "/kb/" + encodeURIComponent(d.slug) + ".html",
       lastmod: (d.meta && d.meta.date) || today,
       pri: "0.6",
       freq: "monthly",
+    });
+  }
+  for (const t of (Array.isArray(tags) ? tags : [])) {
+    const name = typeof t === "string" ? t : t.name;
+    if (!name) continue;
+    urls.push({
+      loc: base + "/tags/" + encodeURIComponent(name) + ".html",
+      lastmod: today,
+      pri: "0.5",
+      freq: "weekly",
     });
   }
   const body = urls
@@ -510,6 +623,15 @@ export function buildKbPage(meta, bodyHtml, opts = {}) {
   const pageUrl = slug ? `${SITE}/kb/${slug}.html` : `${SITE}/kb.html`;
   const tags = Array.isArray(meta.tags) && meta.tags.length ? meta.tags : [];
   const date = meta.date || new Date().toISOString().slice(0, 10);
+  const mins = readingMinutes(bodyHtml);
+  const jsonLd = [
+    buildArticleJsonLd(meta, { url: pageUrl, site: SITE }),
+    buildBreadcrumbJsonLd(SITE, [
+      { name: "首页", url: SITE + "/" },
+      { name: "知识库", url: SITE + "/kb.html" },
+      { name: meta.title, url: pageUrl },
+    ]),
+  ].map(jsonLdScript).join("\n");
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -518,18 +640,22 @@ export function buildKbPage(meta, bodyHtml, opts = {}) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${escapeHtml(meta.title)} | 知识库 | ZH</title>
   <meta name="description" content="${escapeAttr(excerpt)}" />
-  <link rel="stylesheet" href="../css/style.css?v=24" />
+  <link rel="canonical" href="${escapeAttr(pageUrl)}" />
+  <link rel="stylesheet" href="../css/style.css?v=25" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
   <meta property="og:type" content="article" />
   <meta property="og:title" content="${escapeAttr(meta.title)}" />
   <meta property="og:description" content="${escapeAttr(excerpt)}" />
-  <meta property="og:url" content="${pageUrl}" />
+  <meta property="og:url" content="${escapeAttr(pageUrl)}" />
   <meta property="og:image" content="${SITE}/images/avatar.png" />
   <meta property="og:site_name" content="ZH 知识库" />
   <meta name="twitter:card" content="summary" />
-  <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
+${jsonLd}
+  <script>try{var t=localStorage.getItem("zyf-theme");if(t==="light"||(!t&&window.matchMedia("(prefers-color-scheme: light)").matches))document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
 </head>
 <body>
+
+  <a class="skip-link" href="#mainContent">跳到主要内容</a>
 
   <div class="reading-progress" id="readingProgress"></div>
 
@@ -538,7 +664,7 @@ export function buildKbPage(meta, bodyHtml, opts = {}) {
       <a href="../index.html" class="brand">
         <span class="prompt">&gt;_</span>ZH<span class="cursor"></span>
       </a>
-      <ul class="nav-links">
+      <ul class="nav-links" id="navLinks">
         <li><a href="../index.html">首页</a></li>
         <li><a href="../blog.html">博客</a></li>
         <li><a href="../projects.html">项目</a></li>
@@ -549,14 +675,14 @@ export function buildKbPage(meta, bodyHtml, opts = {}) {
       </ul>
       <div class="nav-actions">
         <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
-        <button class="nav-toggle" aria-label="菜单">☰ 菜单</button>
+        <button class="nav-toggle" id="navToggle" aria-label="菜单" aria-expanded="false" aria-controls="navLinks">☰ 菜单</button>
       </div>
     </div>
   </nav>
 
-  <main class="container article kb-doc">
+  <main class="container article kb-doc" id="mainContent">
 
-    <nav class="kb-breadcrumb">
+    <nav class="kb-breadcrumb" aria-label="面包屑">
       <a href="../kb.html">📚 知识库</a>
       <span class="kb-crumb-sep">/</span>
       <span class="kb-crumb-cat">${escapeHtml(category)}</span>
@@ -569,6 +695,7 @@ export function buildKbPage(meta, bodyHtml, opts = {}) {
           <span>📅 ${escapeHtml(date)}</span>
           <span>📂 ${escapeHtml(category)}</span>
           ${tags.length ? `<span>🏷️ ${escapeHtml(tags.join(" · "))}</span>` : ""}
+          <span>⏱️ 约 ${mins} 分钟</span>
         </div>
       </header>
 
@@ -578,6 +705,10 @@ ${bodyHtml}
     </article>
 
     <a class="back-link" href="../kb.html">返回知识库</a>
+
+${buildShareRow(meta.title, pageUrl)}
+
+${relatedPlaceholder("相关知识")}
 
   </main>
 
@@ -589,8 +720,7 @@ ${bodyHtml}
   </footer>
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
-  <script src="../js/highlight.min.js?v=1"></script>
-  <script src="../js/main.js?v=21"></script>
+  <script src="../js/main.js?v=22"></script>
 </body>
 </html>
 `;
@@ -682,4 +812,200 @@ export function buildKbStats(docs) {
   const list = Array.isArray(docs) ? docs : [];
   const cats = new Set(list.map(d => (d.meta && d.meta.category) || "未分类"));
   return { docs: list.length, categories: cats.size };
+}
+
+/* ============================================================
+   标签聚合页（tags/<tag>.html）与归档页（archive.html）
+   共用一套“列表型页面”外壳，减少重复
+   ============================================================ */
+
+/* 列表型页面外壳（标签页 / 归档页共用） */
+function buildListShell({ title, description, canonical, bodyHtml, navActive, rootPrefix }) {
+  const p = rootPrefix || ""; // 标签页在 tags/ 下需 "../"，归档页为 ""
+  const SITE = "https://zyf2026.pages.dev";
+  const navItem = (href, label, key) =>
+    `        <li><a href="${p}${href}"${navActive === key ? ' class="active"' : ""}>${label}</a></li>`;
+  const cssV = "24";
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escapeHtml(title)} | ZH</title>
+  <meta name="description" content="${escapeAttr(description)}" />
+  <link rel="canonical" href="${escapeAttr(canonical)}" />
+  <link rel="stylesheet" href="${p}css/style.css?v=${cssV}" />
+  <link rel="icon" type="image/png" href="${p}images/avatar.png" />
+  <link rel="alternate" type="application/rss+xml" title="ZH 博客 RSS" href="${p}feed.xml" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="${escapeAttr(title)}" />
+  <meta property="og:description" content="${escapeAttr(description)}" />
+  <meta property="og:url" content="${escapeAttr(canonical)}" />
+  <meta property="og:image" content="${SITE}/images/avatar.png" />
+  <meta property="og:site_name" content="ZH 博客" />
+  <meta name="twitter:card" content="summary" />
+  ${jsonLdScript({
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: title,
+    description,
+    url: canonical,
+    inLanguage: "zh-CN",
+    isPartOf: { "@type": "WebSite", name: "ZH 博客", url: SITE + "/" },
+  })}
+  <script>try{var t=localStorage.getItem("zyf-theme");if(t==="light"||(!t&&window.matchMedia("(prefers-color-scheme: light)").matches))document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
+</head>
+<body>
+
+  <a class="skip-link" href="#mainContent">跳到主要内容</a>
+
+  <nav class="navbar">
+    <div class="nav-inner">
+      <a href="${p}index.html" class="brand">
+        <span class="prompt">&gt;_</span>ZH<span class="cursor"></span>
+      </a>
+      <ul class="nav-links" id="navLinks">
+${navItem("index.html", "首页", "home")}
+${navItem("blog.html", "博客", "blog")}
+${navItem("projects.html", "项目", "projects")}
+${navItem("about.html", "关于", "about")}
+${navItem("downloads.html", "下载", "downloads")}
+${navItem("gallery.html", "相册", "gallery")}
+${navItem("kb.html", "知识库", "kb")}
+      </ul>
+      <div class="nav-actions">
+        <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
+        <button class="nav-toggle" id="navToggle" aria-label="菜单" aria-expanded="false" aria-controls="navLinks">☰ 菜单</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container" id="mainContent">
+
+${bodyHtml}
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>© <span data-year>2025</span> ZH · Built with <span class="heart">♥</span> and a lot of coffee</p>
+      <p style="margin-top:6px;font-size:11px;color:#4b5a6e;">&gt;_ ZH · 用代码记录世界</p>
+    </div>
+  </footer>
+
+  <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
+  <script src="${p}js/main.js?v=22"></script>
+</body>
+</html>
+`;
+}
+
+/* 单个标签聚合页 */
+export function buildTagPage(tag, posts, base = "https://zyf2026.pages.dev") {
+  const list = (Array.isArray(posts) ? posts : []).filter(p => {
+    const t = (p.meta && p.meta.tags) || [];
+    return p.meta && p.meta.published !== false && t.indexOf(tag) !== -1;
+  });
+  const canonical = `${base}/tags/${encodeURIComponent(tag)}.html`;
+  // 标签页位于 /tags/ 子目录，需为文章链接补上 ../
+  let items = list
+    .map(p => listItemSnippet(p.meta, p.slug).replace('href="blog/', 'href="../blog/'))
+    .join("\n\n");
+  if (!items) items = '      <div class="photo-empty">该标签下暂无文章</div>';
+
+  const bodyHtml = `    <div class="page-head">
+      <h1>标签：<span class="accent">${escapeHtml(tag)}</span></h1>
+      <p>共 ${list.length} 篇文章 · <a href="../blog.html" style="color:var(--accent);text-decoration:none;">返回博客</a></p>
+    </div>
+
+    <section class="section" style="border-top:none;padding-top:0;">
+${items}
+    </section>`;
+
+  return buildListShell({
+    title: `标签：${tag}`,
+    description: `标签「${tag}」下的全部文章，共 ${list.length} 篇。`,
+    canonical,
+    bodyHtml,
+    navActive: "blog",
+    rootPrefix: "../",
+  });
+}
+
+/* 归档页（按年份倒序分组，组内按日期倒序） */
+export function buildArchivePage(posts, base = "https://zyf2026.pages.dev") {
+  const list = (Array.isArray(posts) ? posts : [])
+    .filter(p => p.meta && p.meta.published !== false)
+    .sort((a, b) => String(b.meta.date || "").localeCompare(String(a.meta.date || "")));
+
+  const byYear = new Map();
+  for (const p of list) {
+    const d = String(p.meta.date || "");
+    const y = /^\d{4}/.test(d) ? d.slice(0, 4) : "未标注日期";
+    if (!byYear.has(y)) byYear.set(y, []);
+    byYear.get(y).push(p);
+  }
+
+  let groups = "";
+  for (const [year, items] of byYear) {
+    const rows = items.map(p => {
+      const tags = ((p.meta.tags || []).length ? p.meta.tags : ["随笔"])
+        .map(t => `<span class="tag">${escapeHtml(t)}</span>`).join("\n              ");
+      return `        <li class="archive-item">
+          <span class="archive-date">${escapeHtml(p.meta.date || "")}</span>
+          <a class="archive-title" href="blog/${encodeURIComponent(p.slug)}.html">${escapeHtml(p.meta.title)}</a>
+          <span class="archive-tags">
+              ${tags}
+          </span>
+        </li>`;
+    }).join("\n");
+    groups += `      <div class="archive-group">
+        <h3 class="archive-year">${escapeHtml(year)} <em>${items.length}</em></h3>
+        <ol class="archive-list">
+${rows}
+        </ol>
+      </div>\n`;
+  }
+  if (!groups) groups = '      <div class="photo-empty">还没有已发布的文章</div>\n';
+
+  const bodyHtml = `    <div class="page-head">
+      <h1>归<span class="accent">档</span></h1>
+      <p>按时间倒序浏览全部 ${list.length} 篇文章。</p>
+    </div>
+
+    <section class="section" style="border-top:none;padding-top:0;">
+${groups}    </section>`;
+
+  return buildListShell({
+    title: "归档",
+    description: `全部文章归档，按年份浏览，共 ${list.length} 篇。`,
+    canonical: `${base}/archive.html`,
+    bodyHtml,
+    navActive: "blog",
+    rootPrefix: "",
+  });
+}
+
+/* 标签列表（供 blog.html 生成标签页链接用） */
+export function collectTags(posts) {
+  const counts = new Map();
+  for (const p of (Array.isArray(posts) ? posts : [])) {
+    if (!p.meta || p.meta.published === false) continue;
+    for (const t of (p.meta.tags || ["随笔"])) {
+      if (!t) continue;
+      counts.set(t, (counts.get(t) || 0) + 1);
+    }
+  }
+  return [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+/* 按标签重合度计算相关文章（供客户端与服务端共用逻辑说明） */
+export function scoreRelated(currentTags, candidateTags) {
+  const a = new Set((currentTags || []).filter(Boolean));
+  let n = 0;
+  for (const t of (candidateTags || [])) if (a.has(t)) n++;
+  return n;
 }

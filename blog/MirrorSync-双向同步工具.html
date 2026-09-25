@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MirrorSync 双向同步工具 | ZH</title>
   <meta name="description" content="MirrorSync 双向同步工具" />
-  <link rel="stylesheet" href="../css/style.css?v=24" />
+  <link rel="canonical" href="https://zyf2026.pages.dev/blog/MirrorSync-双向同步工具.html" />
+  <link rel="stylesheet" href="../css/style.css?v=25" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
   <meta property="og:type" content="article" />
   <meta property="og:title" content="MirrorSync 双向同步工具" />
@@ -14,9 +15,13 @@
   <meta property="og:image" content="https://zyf2026.pages.dev/images/avatar.png" />
   <meta property="og:site_name" content="ZH 博客" />
   <meta name="twitter:card" content="summary" />
-  <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"MirrorSync 双向同步工具","description":"MirrorSync 双向同步工具","datePublished":"2026-08-27","dateModified":"2026-08-27","author":{"@type":"Organization","name":"ZH","url":"https://zyf2026.pages.dev/about.html"},"publisher":{"@type":"Organization","name":"ZH 博客","logo":{"@type":"ImageObject","url":"https://zyf2026.pages.dev/images/avatar.png"}},"mainEntityOfPage":{"@type":"WebPage","@id":"https://zyf2026.pages.dev/blog/MirrorSync-双向同步工具.html"},"image":"https://zyf2026.pages.dev/images/avatar.png","inLanguage":"zh-CN","url":"https://zyf2026.pages.dev/blog/MirrorSync-双向同步工具.html","keywords":"工具"}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"首页","item":"https://zyf2026.pages.dev/"},{"@type":"ListItem","position":2,"name":"博客","item":"https://zyf2026.pages.dev/blog.html"},{"@type":"ListItem","position":3,"name":"MirrorSync 双向同步工具","item":"https://zyf2026.pages.dev/blog/MirrorSync-双向同步工具.html"}]}</script>
+  <script>try{var t=localStorage.getItem("zyf-theme");if(t==="light"||(!t&&window.matchMedia("(prefers-color-scheme: light)").matches))document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
 </head>
 <body>
+
+  <a class="skip-link" href="#mainContent">跳到主要内容</a>
 
   <div class="reading-progress" id="readingProgress"></div>
 
@@ -25,22 +30,23 @@
       <a href="../index.html" class="brand">
         <span class="prompt">&gt;_</span>ZH<span class="cursor"></span>
       </a>
-      <ul class="nav-links">
+      <ul class="nav-links" id="navLinks">
         <li><a href="../index.html">首页</a></li>
         <li><a href="../blog.html">博客</a></li>
         <li><a href="../projects.html">项目</a></li>
         <li><a href="../about.html">关于</a></li>
         <li><a href="../downloads.html">下载</a></li>
         <li><a href="../gallery.html">相册</a></li>
+        <li><a href="../kb.html">知识库</a></li>
       </ul>
       <div class="nav-actions">
         <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
-        <button class="nav-toggle" aria-label="菜单">☰ 菜单</button>
+        <button class="nav-toggle" id="navToggle" aria-label="菜单" aria-expanded="false" aria-controls="navLinks">☰ 菜单</button>
       </div>
     </div>
   </nav>
 
-  <main class="container article">
+  <main class="container article" id="mainContent">
 
     <article>
       <header class="article-header">
@@ -48,6 +54,7 @@
         <div class="article-meta">
           <span>📅 2026-08-27</span>
           <span>🏷️ 工具</span>
+          <span>⏱️ 约 3 分钟</span>
         </div>
       </header>
 
@@ -95,7 +102,7 @@
 <h3>方式一：图形界面（日常使用）</h3>
 
 <ol>
-  <li>从 <a href="../../releases">Releases</a> 下载安装包并安装（自包含，无需安装 .NET）</li>
+  <li>从 <a href="https://github.com/ZhangYiFei12/MirrorSync/releases" target="_blank" rel="noopener">Releases</a> 下载安装包并安装（自包含，无需安装 .NET）</li>
   <li>打开后点击工具栏「<strong>⚙ 设置</strong>」</li>
   <li>填写 <strong>A 盘</strong> 和 <strong>B 盘</strong> 路径（盘符根目录或任意文件夹）</li>
   <li>调整策略与过滤规则，点「保存」</li>
@@ -193,11 +200,21 @@ dotnet publish MirrorSync.csproj -c Release -r win-x64 --self-contained \
 
 <h2>📄 许可证</h2>
 
-<p>本项目基于 <a href="./LICENSE">GPL-3.0</a> 许可证开源。</p>
+<p>本项目基于 <a href="https://github.com/ZhangYiFei12/MirrorSync/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0</a> 许可证开源。</p>
 
 <p>© 2025 ZYF — 由 DSH + DSv4f 开发</p>
       </div>
     </article>
+
+    <div class="share-row" data-share-url="https://zyf2026.pages.dev/blog/MirrorSync-双向同步工具.html" data-share-title="MirrorSync 双向同步工具">
+      <span class="share-label">分享</span>
+      <button type="button" class="share-btn" data-share="copy">🔗 复制链接</button>
+      <a class="share-btn" href="https://twitter.com/intent/tweet?url=https%3A%2F%2Fzyf2026.pages.dev%2Fblog%2FMirrorSync-%E5%8F%8C%E5%90%91%E5%90%8C%E6%AD%A5%E5%B7%A5%E5%85%B7.html&amp;text=MirrorSync%20%E5%8F%8C%E5%90%91%E5%90%8C%E6%AD%A5%E5%B7%A5%E5%85%B7" target="_blank" rel="noopener noreferrer">𝕏 推特</a>
+      <a class="share-btn" href="https://service.weibo.com/share/share.php?url=https%3A%2F%2Fzyf2026.pages.dev%2Fblog%2FMirrorSync-%E5%8F%8C%E5%90%91%E5%90%8C%E6%AD%A5%E5%B7%A5%E5%85%B7.html&amp;title=MirrorSync%20%E5%8F%8C%E5%90%91%E5%90%8C%E6%AD%A5%E5%B7%A5%E5%85%B7" target="_blank" rel="noopener noreferrer">微博</a>
+      <button type="button" class="share-btn" data-share="native" hidden>系统分享…</button>
+    </div>
+
+    <section class="related" id="relatedPosts" hidden aria-label="相关文章"></section>
 
     <nav class="post-nav" id="postNav"></nav>
 
@@ -213,7 +230,6 @@ dotnet publish MirrorSync.csproj -c Release -r win-x64 --self-contained \
   </footer>
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
-  <script src="../js/highlight.min.js?v=1"></script>
-  <script src="../js/main.js?v=21"></script>
+  <script src="../js/main.js?v=22"></script>
 </body>
 </html>

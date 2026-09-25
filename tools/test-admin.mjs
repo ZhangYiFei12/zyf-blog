@@ -200,6 +200,10 @@ function mockServer(req, res) {
     } else if (path === `/repos/${process.env.GITHUB_REPO}/contents/blog/posts` && method === "GET") {
       const entries = Object.keys(files).filter(k => k.startsWith("blog/posts/")).map(k => ({ name: k.replace("blog/posts/", ""), type: "file" }));
       respond(200, entries);
+    } else if (path === `/repos/${process.env.GITHUB_REPO}/contents/tags` && method === "GET") {
+      const entries = Object.keys(files).filter(k => k.startsWith("tags/")).map(k => ({ name: k.replace("tags/", ""), type: "file" }));
+      if (!entries.length) { respond(404, { message: "Not Found" }); return; }
+      respond(200, entries);
     } else if (path === `/repos/${process.env.GITHUB_REPO}/contents/docs/kb` && method === "GET") {
       const entries = Object.keys(files).filter(k => k.startsWith("docs/kb/")).map(k => ({ name: k.replace("docs/kb/", ""), type: "file" }));
       respond(200, entries);
@@ -720,8 +724,10 @@ mockServer_.listen(mockPort, async () => {
     const addData = await addRes.json();
     if (addRes.status !== 200) throw new Error("新增失败 " + addRes.status);
     const slug = addData.added[0].slug;
+    // sitemap 中的 URL 为规范编码形式（与线上一致）
+    const encSlug = encodeURIComponent(slug);
     let sm = getFile("sitemap.xml");
-    if (!sm || sm.indexOf(`/kb/${slug}.html`) === -1) throw new Error("新增后 sitemap 未包含该文档");
+    if (!sm || sm.indexOf(`/kb/${encSlug}.html`) === -1) throw new Error("新增后 sitemap 未包含该文档");
 
     // 删除后 sitemap 不应再有该文档（避免死链）
     const delReq = new Request("http://localhost/api/admin/kb/" + encodeURIComponent(slug), {
@@ -731,7 +737,51 @@ mockServer_.listen(mockPort, async () => {
     const delRes = await onRequest({ request: delReq, env: ENV, params: {} });
     if (delRes.status !== 200) throw new Error("删除失败 " + delRes.status);
     sm = getFile("sitemap.xml");
-    if (sm && sm.indexOf(`/kb/${slug}.html`) !== -1) throw new Error("删除后 sitemap 仍残留该文档（死链）");
+    if (sm && sm.indexOf(`/kb/${encSlug}.html`) !== -1) throw new Error("删除后 sitemap 仍残留该文档（死链）");
+  });
+
+  await test("发布文章时同步生成标签页与归档页", async () => {
+    const req = new Request("http://localhost/api/admin/articles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ title: "标签同步测试", date: "2026-09-25", excerpt: "测试", tags: ["同步标记"], body: "# 正文\n\n内容。" }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + " " + JSON.stringify(data));
+    // 应生成 tags/<tag>.html
+    const tagFile = `tags/同步标记.html`;
+    if (!hasFile(tagFile)) throw new Error("标签页未生成：" + tagFile);
+    // 标签页内的文章链接应带 ../ 前缀（位于 tags/ 子目录）
+    const tagHtml = getFile(tagFile);
+    if (tagHtml.indexOf('href="../blog/') === -1) throw new Error("标签页文章链接缺少 ../ 前缀（会产生死链）");
+    if (/href="blog\//.test(tagHtml)) throw new Error("标签页存在未加 ../ 的文章链接");
+    // 应生成 archive.html
+    if (!hasFile("archive.html")) throw new Error("归档页未生成");
+    const arch = getFile("archive.html");
+    if (arch.indexOf("标签同步测试") === -1) throw new Error("归档页缺少新文章");
+    if (arch.indexOf("2026") === -1) throw new Error("归档页缺少年份分组");
+    // sitemap 应包含标签页与归档页
+    const sm = getFile("sitemap.xml");
+    if (sm.indexOf("/tags/") === -1) throw new Error("sitemap 未包含标签页");
+    if (sm.indexOf("/archive.html") === -1) throw new Error("sitemap 未包含归档页");
+  });
+
+  await test("删除文章时清理失效标签页", async () => {
+    const listRes = await onRequest({ request: new Request("http://localhost/api/admin/articles", { headers: { Authorization: "Bearer " + token } }), env: ENV, params: {} });
+    const listData = await listRes.json();
+    const target = (listData.articles || []).find(a => a.title === "标签同步测试");
+    if (!target) throw new Error("未找到刚发布的测试文章");
+    const delReq = new Request("http://localhost/api/admin/articles/" + encodeURIComponent(target.slug), {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + token },
+    });
+    const delRes = await onRequest({ request: delReq, env: ENV, params: {} });
+    if (delRes.status !== 200) throw new Error("删除失败 " + delRes.status);
+    // 该标签已无文章，标签页应被删除
+    if (hasFile("tags/同步标记.html")) throw new Error("失效标签页未清理");
+    const sm = getFile("sitemap.xml");
+    if (sm.indexOf("同步标记") !== -1) throw new Error("sitemap 残留已失效标签");
   });
 
   // 结果

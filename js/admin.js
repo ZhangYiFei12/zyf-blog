@@ -1081,7 +1081,7 @@
   if (optModalOverlay) optModalOverlay.addEventListener("click", function (e) { if (e.target === optModalOverlay) closeOptModal(); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape" && optModalOverlay && optModalOverlay.style.display !== "none") closeOptModal(); });
 
-  /* ---------- 📦 下载文件管理（R2 大文件直传） ---------- */
+  /* ---------- 📦 下载文件管理（≤100MB 存仓库 files/ · 大文件走 GitHub Release） ---------- */
 
   function fmtBytes(n) {
     n = Number(n) || 0;

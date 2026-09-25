@@ -46,7 +46,7 @@ tags: ["工具"]
 
 ### 方式一：图形界面（日常使用）
 
-1. 从 [Releases](../../releases) 下载安装包并安装（自包含，无需安装 .NET）
+1. 从 [Releases](https://github.com/ZhangYiFei12/MirrorSync/releases) 下载安装包并安装（自包含，无需安装 .NET）
 2. 打开后点击工具栏「**⚙ 设置**」
 3. 填写 **A 盘** 和 **B 盘** 路径（盘符根目录或任意文件夹）
 4. 调整策略与过滤规则，点「保存」
@@ -137,6 +137,6 @@ MirrorSync/
 
 ## 📄 许可证
 
-本项目基于 [GPL-3.0](./LICENSE) 许可证开源。
+本项目基于 [GPL-3.0](https://github.com/ZhangYiFei12/MirrorSync/blob/main/LICENSE) 许可证开源。
 
 © 2025 ZYF — 由 DSH + DSv4f 开发

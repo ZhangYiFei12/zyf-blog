@@ -26,3 +26,7 @@ dist/
 # 后台凭据（本机参考，绝不入库）
 .admin-credentials.txt
 .wrangler/
+
+# 浏览器调试临时 profile
+.edgeprof/
+__t_*.html
