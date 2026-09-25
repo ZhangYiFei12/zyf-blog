@@ -3,18 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <!-- ✏️ 修改①：浏览器标签页标题（"文章标题" 和 "你的名字"） -->
-  <title>文章标题 | ZH</title>
-  <!-- ✏️ 修改②：文章摘要（SEO 用，会显示在搜索结果里） -->
-  <meta name="description" content="一句话描述这篇文章的内容。" />
+  <title>Git 常用命令速查 | 知识库 | ZH</title>
+  <meta name="description" content="日常工作最常用的 Git 命令，含分支、回滚、rebase 场景。" />
   <link rel="stylesheet" href="../css/style.css?v=23" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
   <meta property="og:type" content="article" />
-  <meta property="og:title" content="文章标题 · 张义飞" />
-  <meta property="og:description" content="一句话描述这篇文章的内容。" />
-  <meta property="og:url" content="https://zyf2026.pages.dev/blog/文章文件名.html" />
+  <meta property="og:title" content="Git 常用命令速查" />
+  <meta property="og:description" content="日常工作最常用的 Git 命令，含分支、回滚、rebase 场景。" />
+  <meta property="og:url" content="https://zyf2026.pages.dev/kb/Git常用命令速查.html" />
   <meta property="og:image" content="https://zyf2026.pages.dev/images/avatar.png" />
-  <meta property="og:site_name" content="张义飞博客" />
+  <meta property="og:site_name" content="ZH 知识库" />
   <meta name="twitter:card" content="summary" />
   <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
 </head>
@@ -34,6 +32,7 @@
         <li><a href="../about.html">关于</a></li>
         <li><a href="../downloads.html">下载</a></li>
         <li><a href="../gallery.html">相册</a></li>
+        <li><a href="../kb.html" class="active">知识库</a></li>
       </ul>
       <div class="nav-actions">
         <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
@@ -42,52 +41,58 @@
     </div>
   </nav>
 
-  <main class="container article">
+  <main class="container article kb-doc">
+
+    <nav class="kb-breadcrumb">
+      <a href="../kb.html">📚 知识库</a>
+      <span class="kb-crumb-sep">/</span>
+      <span class="kb-crumb-cat">开发工具</span>
+    </nav>
 
     <article>
       <header class="article-header">
-        <!-- ✏️ 修改③：文章大标题 -->
-        <h1>文章大标题</h1>
+        <h1>Git 常用命令速查</h1>
         <div class="article-meta">
-          <!-- ✏️ 修改④：日期（格式：YYYY-MM-DD） -->
-          <span>📅 2025-01-01</span>
-          <!-- ✏️ 修改⑤：标签（用 · 分隔，参考格式） -->
-          <span>🏷️ 技术 · 随笔</span>
+          <span>📅 2026-09-10</span>
+          <span>📂 开发工具</span>
+          <span>🏷️ Git · 速查</span>
         </div>
       </header>
 
       <div class="article-body">
-        <!-- ⬇️⬇️ 正文从这里开始写 ⬇️⬇️
-             复制下面的格式片段使用，写完删除多余的：
+<h1>Git 常用命令速查</h1>
 
-             <h2>小标题</h2>
-             <p>普通段落文字。</p>
-             <p>加粗用 <strong>这样写</strong>。</p>
-             <ul>
-               <li>无序列表项</li>
-               <li>另一个列表项</li>
-             </ul>
-             <ol>
-               <li>有序列表项</li>
-               <li>另一个列表项</li>
-             </ol>
-             <blockquote>引用别人的话，显示为侧边条样式。</blockquote>
-             <p>行内代码用 <code>console.log("hi")</code>。</p>
-             <pre><code>// 整段代码块
-function hello() {
-  console.log("你好，世界");
-}</code></pre>
-             <hr />   <!-- 水平分割线 -->
-             <p><em>斜体文字，常用于结尾寄语。</em></p>
-        -->
+<h2>基础操作</h2>
+
+<pre><code class="language-bash">git status              # 查看工作区状态
+git add -A              # 暂存所有改动
+git commit -m "msg"     # 提交
+git push origin main    # 推送</code></pre>
+
+<h2>分支管理</h2>
+
+<table>
+<thead><tr><th>命令</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td><code>git branch</code></td><td>列出本地分支</td></tr>
+<tr><td><code>git switch -c feat</code></td><td>新建并切换分支</td></tr>
+<tr><td><code>git merge feat</code></td><td>合并分支</td></tr>
+</tbody>
+</table>
+
+
+<h2>回滚</h2>
+
+<ul>
+  <li><code>git restore &lt;file&gt;</code> —— 丢弃工作区改动</li>
+  <li><code>git reset --soft HEAD~1</code> —— 撤销提交但保留改动</li>
+  <li><code>git revert &lt;sha&gt;</code> —— 生成一个反向提交（安全，推荐用于已推送）</li>
+</ul>
+
       </div>
     </article>
 
-    <!-- 上一篇 / 下一篇（由 data/posts.json 客户端自动填充，保持不动） -->
-    <nav class="post-nav" id="postNav"></nav>
-
-    <!-- 返回博客列表（保持不动） -->
-    <a class="back-link" href="../blog.html">返回博客列表</a>
+    <a class="back-link" href="../kb.html">返回知识库</a>
 
   </main>
 

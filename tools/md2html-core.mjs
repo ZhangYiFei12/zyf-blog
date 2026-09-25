@@ -5,7 +5,9 @@
 
 /* ---------- Front Matter 解析 ---------- */
 export function parseFrontMatter(raw) {
-  const meta = { title: "", date: "", excerpt: "", tags: [], published: true };
+  const meta = { title: "", date: "", excerpt: "", tags: [], published: true, category: "" };
+  // 统一行尾（CRLF/CR → LF），否则正则的 $ 无法匹配行尾的 \r
+  raw = String(raw == null ? "" : raw).replace(/\r\n?/g, "\n");
   if (raw.startsWith("---")) {
     const end = raw.indexOf("\n---", 3);
     if (end !== -1) {
@@ -260,7 +262,7 @@ export function buildPage(meta, bodyHtml, opts = {}) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${escapeHtml(meta.title)} | ZH</title>
   <meta name="description" content="${escapeAttr(excerpt)}" />
-  <link rel="stylesheet" href="../css/style.css?v=22" />
+  <link rel="stylesheet" href="../css/style.css?v=23" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
   <meta property="og:type" content="article" />
   <meta property="og:title" content="${escapeAttr(meta.title)}" />
@@ -314,7 +316,7 @@ ${articleHtml}
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
   <script src="../js/highlight.min.js?v=1"></script>
-  <script src="../js/main.js?v=20"></script>
+  <script src="../js/main.js?v=21"></script>
 </body>
 </html>
 `;
@@ -429,7 +431,7 @@ export function buildRss(posts, base = "https://zyf2026.pages.dev") {
 }
 
 /* ---------- 站点地图 sitemap.xml ---------- */
-export function buildSitemap(posts, base = "https://zyf2026.pages.dev") {
+export function buildSitemap(posts, base = "https://zyf2026.pages.dev", kbDocs = null) {
   const today = new Date().toISOString().slice(0, 10);
   const urls = [
     { loc: base + "/", lastmod: today, pri: "1.0", freq: "weekly" },
@@ -437,6 +439,7 @@ export function buildSitemap(posts, base = "https://zyf2026.pages.dev") {
     { loc: base + "/projects.html", lastmod: today, pri: "0.8", freq: "monthly" },
     { loc: base + "/downloads.html", lastmod: today, pri: "0.8", freq: "monthly" },
     { loc: base + "/gallery.html", lastmod: today, pri: "0.6", freq: "monthly" },
+    { loc: base + "/kb.html", lastmod: today, pri: "0.8", freq: "weekly" },
     { loc: base + "/about.html", lastmod: today, pri: "0.6", freq: "monthly" },
   ];
   for (const p of (Array.isArray(posts) ? posts : [])) {
@@ -445,6 +448,14 @@ export function buildSitemap(posts, base = "https://zyf2026.pages.dev") {
       loc: base + "/blog/" + p.slug + ".html",
       lastmod: p.meta.date || today,
       pri: "0.7",
+      freq: "monthly",
+    });
+  }
+  for (const d of (Array.isArray(kbDocs) ? kbDocs : [])) {
+    urls.push({
+      loc: base + "/kb/" + d.slug + ".html",
+      lastmod: (d.meta && d.meta.date) || today,
+      pri: "0.6",
       freq: "monthly",
     });
   }
@@ -471,7 +482,8 @@ export function buildSearchIndex(posts) {
       title: p.meta.title || "",
       date: p.meta.date || "",
       tags: p.meta.tags || [],
-      text: stripHtml(p.bodyHtml).slice(0, 800),
+      // 搜索文本含摘要 + 正文，避免摘要里的关键词搜不到
+      text: [p.meta.excerpt || "", stripHtml(p.bodyHtml)].filter(Boolean).join(" ").slice(0, 800),
     }));
   return JSON.stringify(list) + "\n";
 }
@@ -483,4 +495,191 @@ export function renderMarkdown(md) {
   const slug = slugify(meta.title || "untitled");
   const pageHtml = buildPage(meta, bodyHtml, { slug });
   return { meta, slug, bodyHtml, pageHtml };
+}
+/* ============================================================
+   知识库（docs/kb/*.md → kb/*.html）
+   与博客文章共用 Markdown 渲染，页面带知识库专属导航与面包屑
+   ============================================================ */
+
+/* 知识库文档页（输出到 kb/<slug>.html，资源相对路径用 ../） */
+export function buildKbPage(meta, bodyHtml, opts = {}) {
+  const excerpt = meta.excerpt || meta.desc || meta.title;
+  const slug = opts.slug ? String(opts.slug) : "";
+  const category = meta.category || "未分类";
+  const SITE = "https://zyf2026.pages.dev";
+  const pageUrl = slug ? `${SITE}/kb/${slug}.html` : `${SITE}/kb.html`;
+  const tags = Array.isArray(meta.tags) && meta.tags.length ? meta.tags : [];
+  const date = meta.date || new Date().toISOString().slice(0, 10);
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escapeHtml(meta.title)} | 知识库 | ZH</title>
+  <meta name="description" content="${escapeAttr(excerpt)}" />
+  <link rel="stylesheet" href="../css/style.css?v=23" />
+  <link rel="icon" type="image/png" href="../images/avatar.png" />
+  <meta property="og:type" content="article" />
+  <meta property="og:title" content="${escapeAttr(meta.title)}" />
+  <meta property="og:description" content="${escapeAttr(excerpt)}" />
+  <meta property="og:url" content="${pageUrl}" />
+  <meta property="og:image" content="${SITE}/images/avatar.png" />
+  <meta property="og:site_name" content="ZH 知识库" />
+  <meta name="twitter:card" content="summary" />
+  <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
+</head>
+<body>
+
+  <div class="reading-progress" id="readingProgress"></div>
+
+  <nav class="navbar">
+    <div class="nav-inner">
+      <a href="../index.html" class="brand">
+        <span class="prompt">&gt;_</span>ZH<span class="cursor"></span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="../index.html">首页</a></li>
+        <li><a href="../blog.html">博客</a></li>
+        <li><a href="../projects.html">项目</a></li>
+        <li><a href="../about.html">关于</a></li>
+        <li><a href="../downloads.html">下载</a></li>
+        <li><a href="../gallery.html">相册</a></li>
+        <li><a href="../kb.html" class="active">知识库</a></li>
+      </ul>
+      <div class="nav-actions">
+        <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
+        <button class="nav-toggle" aria-label="菜单">☰ 菜单</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container article kb-doc">
+
+    <nav class="kb-breadcrumb">
+      <a href="../kb.html">📚 知识库</a>
+      <span class="kb-crumb-sep">/</span>
+      <span class="kb-crumb-cat">${escapeHtml(category)}</span>
+    </nav>
+
+    <article>
+      <header class="article-header">
+        <h1>${escapeHtml(meta.title)}</h1>
+        <div class="article-meta">
+          <span>📅 ${escapeHtml(date)}</span>
+          <span>📂 ${escapeHtml(category)}</span>
+          ${tags.length ? `<span>🏷️ ${escapeHtml(tags.join(" · "))}</span>` : ""}
+        </div>
+      </header>
+
+      <div class="article-body">
+${bodyHtml}
+      </div>
+    </article>
+
+    <a class="back-link" href="../kb.html">返回知识库</a>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>© <span data-year>2025</span> 张义飞 · Built with <span class="heart">♥</span> and a lot of coffee</p>
+      <p style="margin-top:6px;font-size:11px;color:#4b5a6e;">&gt;_ zhangyifei · 用代码记录世界</p>
+    </div>
+  </footer>
+
+  <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
+  <script src="../js/highlight.min.js?v=1"></script>
+  <script src="../js/main.js?v=21"></script>
+</body>
+</html>
+`;
+}
+
+/* 知识库索引数据（data/kb.json）：元数据 + 正文纯文本（客户端搜索用） */
+export function buildKbIndex(docs) {
+  const stripHtml = html =>
+    String(html || "")
+      .replace(/&lt;[^>]+&gt;/g, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+      .replace(/\s+/g, " ")
+      .trim();
+  const list = (Array.isArray(docs) ? docs : [])
+    .map(d => {
+      const desc = d.meta.excerpt || d.meta.desc || "";
+      return {
+        slug: d.slug,
+        title: d.meta.title || d.slug,
+        category: d.meta.category || "未分类",
+        desc: desc,
+        date: d.meta.date || "",
+        tags: d.meta.tags || [],
+        // 搜索文本含标题/简介/正文，避免简介里的关键词搜不到
+        text: [desc, stripHtml(d.bodyHtml)].filter(Boolean).join(" ").slice(0, 1500),
+      };
+    })
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  return JSON.stringify(list, null, 2) + "\n";
+}
+
+/* 知识库列表卡片（单条文档） */
+export function buildKbCard(d) {
+  const meta = d.meta || d;
+  const tags = Array.isArray(meta.tags) ? meta.tags : [];
+  const desc = meta.excerpt || meta.desc || "";
+  const dataTags = [(meta.category || "未分类")].concat(tags).join(" ");
+  return `        <a class="kb-item" href="kb/${d.slug}.html" data-tags="${escapeAttr(dataTags)}">
+          <span class="kb-item-icon">📄</span>
+          <span class="kb-item-body">
+            <span class="kb-item-title">${escapeHtml(meta.title || d.slug)}</span>
+${desc ? `            <span class="kb-item-desc">${escapeHtml(desc)}</span>\n` : ""}          </span>
+          <span class="kb-item-date">${escapeHtml(meta.date || "")}</span>
+        </a>`;
+}
+
+/* 知识库列表整体（写入 kb.html 标记区间，按分类分组） */
+export function renderKbList(docs) {
+  const list = Array.isArray(docs) ? docs : [];
+  if (!list.length) return '      <div class="kb-empty">📚 知识库还是空的，去后台上传 Markdown 吧</div>';
+  const groups = new Map();
+  for (const d of list) {
+    const cat = (d.meta && d.meta.category) || "未分类";
+    if (!groups.has(cat)) groups.set(cat, []);
+    groups.get(cat).push(d);
+  }
+  const parts = [];
+  for (const [cat, items] of groups) {
+    parts.push(
+      `      <div class="kb-group">\n` +
+      `        <h3 class="kb-group-title">${escapeHtml(cat)} <em>${items.length}</em></h3>\n` +
+      `        <div class="kb-list">\n` +
+      items.map(buildKbCard).join("\n") +
+      `\n        </div>\n      </div>`
+    );
+  }
+  return parts.join("\n");
+}
+
+/* 知识库分类筛选条 */
+export function renderKbFilter(docs) {
+  const list = Array.isArray(docs) ? docs : [];
+  const cats = new Map();
+  for (const d of list) {
+    const cat = (d.meta && d.meta.category) || "未分类";
+    cats.set(cat, (cats.get(cat) || 0) + 1);
+  }
+  const chips = [`<button type="button" class="chip active" data-cat="">全部 <em>${list.length}</em></button>`];
+  for (const [cat, n] of cats) {
+    chips.push(`<button type="button" class="chip" data-cat="${escapeAttr(cat)}">${escapeHtml(cat)} <em>${n}</em></button>`);
+  }
+  return chips.join("\n        ");
+}
+
+/* 知识库统计：文档数 / 分类数 */
+export function buildKbStats(docs) {
+  const list = Array.isArray(docs) ? docs : [];
+  const cats = new Set(list.map(d => (d.meta && d.meta.category) || "未分类"));
+  return { docs: list.length, categories: cats.size };
 }

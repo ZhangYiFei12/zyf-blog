@@ -2,37 +2,43 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://zyf2026.pages.dev/</loc>
-    <lastmod>2026-09-17</lastmod>
+    <lastmod>2026-09-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://zyf2026.pages.dev/blog.html</loc>
-    <lastmod>2026-09-17</lastmod>
+    <lastmod>2026-09-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://zyf2026.pages.dev/projects.html</loc>
-    <lastmod>2026-09-17</lastmod>
+    <lastmod>2026-09-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://zyf2026.pages.dev/downloads.html</loc>
-    <lastmod>2026-09-17</lastmod>
+    <lastmod>2026-09-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://zyf2026.pages.dev/gallery.html</loc>
-    <lastmod>2026-09-17</lastmod>
+    <lastmod>2026-09-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://zyf2026.pages.dev/kb.html</loc>
+    <lastmod>2026-09-25</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://zyf2026.pages.dev/about.html</loc>
-    <lastmod>2026-09-17</lastmod>
+    <lastmod>2026-09-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -77,5 +83,17 @@
     <lastmod>2026-08-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://zyf2026.pages.dev/kb/Cloudflare-Pages-部署指南.html</loc>
+    <lastmod>2026-09-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://zyf2026.pages.dev/kb/Git常用命令速查.html</loc>
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
   </url>
 </urlset>

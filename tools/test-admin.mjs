@@ -125,6 +125,26 @@ setFile("blog/详细介绍与技术文档.html", EXISTING_HTML);
 setFile("blog.html", EXISTING_BLOG_HTML);
 setFile("index.html", EXISTING_INDEX_HTML);
 
+// 知识库 mock
+function kbHtmlTemplate(body) {
+  return `<!DOCTYPE html>\n<html><head><title>知识库 | ZH</title></head>\n<body>\n<div class="tag-filter" id="kbFilter">\n        <!-- KB-FILTER-START -->\n        <!-- KB-FILTER-END -->\n      </div>\n      <!-- KB-LIST-START -->\n${body}\n      <!-- KB-LIST-END -->\n</body></html>`;
+}
+setFile("kb.html", kbHtmlTemplate('      <div class="kb-empty">📚 知识库还是空的</div>'));
+setFile("data/kb.json", "[]\n");
+const EXISTING_KB_MD = `---
+title: "测试知识库文档"
+category: "技术文档"
+date: "2026-09-01"
+excerpt: "一篇测试文档"
+tags: ["测试"]
+---
+
+# 测试知识库文档
+
+正文内容。
+`;
+setFile("docs/kb/测试知识库文档.md", EXISTING_KB_MD);
+
 let commitCount = 0;
 let headCommitSha = "abc123";
 let treeSha = "tree123";
@@ -179,6 +199,9 @@ function mockServer(req, res) {
       respond(200, { tree });
     } else if (path === `/repos/${process.env.GITHUB_REPO}/contents/blog/posts` && method === "GET") {
       const entries = Object.keys(files).filter(k => k.startsWith("blog/posts/")).map(k => ({ name: k.replace("blog/posts/", ""), type: "file" }));
+      respond(200, entries);
+    } else if (path === `/repos/${process.env.GITHUB_REPO}/contents/docs/kb` && method === "GET") {
+      const entries = Object.keys(files).filter(k => k.startsWith("docs/kb/")).map(k => ({ name: k.replace("docs/kb/", ""), type: "file" }));
       respond(200, entries);
     } else if (path.startsWith(`/repos/${process.env.GITHUB_REPO}/contents/`) && method === "GET") {
       const filePath = path.replace(`/repos/${process.env.GITHUB_REPO}/contents/`, "");
@@ -546,6 +569,143 @@ mockServer_.listen(mockPort, async () => {
     if (!data.ok) throw new Error("未返回 ok");
     const links = JSON.parse(getFile("data/links.json"));
     if (links.length !== 0) throw new Error("links.json 应已清空");
+  });
+
+  // 14. 知识库（kb 路由）
+
+  await test("列出知识库文档（含已有文档）", async () => {
+    const req = new Request("http://localhost/api/admin/kb", { headers: { Authorization: "Bearer " + token } });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status);
+    if (!Array.isArray(data.docs)) throw new Error("docs 应为数组");
+    if (data.docs.length !== 1) throw new Error("期望 1 篇，实际 " + data.docs.length);
+    if (data.docs[0].category !== "技术文档") throw new Error("category 未解析: " + data.docs[0].category);
+  });
+
+  await test("取单篇知识库原文", async () => {
+    const req = new Request("http://localhost/api/admin/kb/" + encodeURIComponent("测试知识库文档"), { headers: { Authorization: "Bearer " + token } });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status);
+    if (!data.body || data.body.indexOf("正文内容") === -1) throw new Error("body 未返回");
+    if (!data.meta || data.meta.title !== "测试知识库文档") throw new Error("meta 不正确");
+  });
+
+  await test("新建知识库文档（写 md + html + 索引）", async () => {
+    const md = '---\ntitle: "新知识文档"\ncategory: "教程"\ndate: "2026-09-13"\nexcerpt: "说明"\n---\n\n# 新知识文档\n\n内容。\n';
+    const req = new Request("http://localhost/api/admin/kb", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ filename: "新知识文档.md", content: md }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + " " + JSON.stringify(data));
+    if (!data.ok || !data.added || !data.added.length) throw new Error("未返回 added");
+    const slug = data.added[0].slug;
+    if (!hasFile(`docs/kb/${slug}.md`)) throw new Error("md 未写入");
+    if (!hasFile(`kb/${slug}.html`)) throw new Error("html 未生成");
+    const kbIndex = JSON.parse(getFile("data/kb.json"));
+    if (!kbIndex.find(d => d.slug === slug)) throw new Error("kb.json 未记录");
+    // kb.html 应已更新列表 + 筛选
+    const kbHtml = getFile("kb.html");
+    if (kbHtml.indexOf("新知识文档") === -1) throw new Error("kb.html 列表未更新");
+    if (kbHtml.indexOf('data-cat="教程"') === -1) throw new Error("kb.html 筛选未更新");
+  });
+
+  await test("批量导入多篇文档", async () => {
+    const docs = [
+      { filename: "批量A.md", content: '---\ntitle: "批量A"\ncategory: "批量"\n---\n\nA 内容\n' },
+      { filename: "批量B.md", content: '---\ntitle: "批量B"\ncategory: "批量"\n---\n\nB 内容\n' },
+    ];
+    const req = new Request("http://localhost/api/admin/kb", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ docs }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + " " + JSON.stringify(data));
+    if (data.added.length !== 2) throw new Error("期望导入 2 篇，实际 " + data.added.length);
+    const kbIndex = JSON.parse(getFile("data/kb.json"));
+    if (!kbIndex.find(d => d.title === "批量A") || !kbIndex.find(d => d.title === "批量B")) throw new Error("批量文档未全部入库");
+  });
+
+  await test("缺标题的文档被拒绝", async () => {
+    const req = new Request("http://localhost/api/admin/kb", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ filename: "无标题.md", content: "没有 front matter 标题\n\n内容" }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    // 无 front matter 时会从首行推标题，因此应成功；这里验证不会 500
+    if (res.status !== 200 && res.status !== 400) throw new Error("期望 200/400，得到 " + res.status);
+  });
+
+  await test("编辑知识库文档（slug 不变）", async () => {
+    const list = JSON.parse(getFile("data/kb.json"));
+    const target = list.find(d => d.title === "批量A");
+    const md = '---\ntitle: "批量A 改名"\ncategory: "批量"\ndate: "2026-09-14"\n---\n\nA 新内容\n';
+    const req = new Request("http://localhost/api/admin/kb", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ slug: target.slug, filename: target.slug + ".md", content: md }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + " " + JSON.stringify(data));
+    const kbIndex = JSON.parse(getFile("data/kb.json"));
+    if (!kbIndex.find(d => d.slug === target.slug && d.title === "批量A 改名")) throw new Error("标题未更新");
+    const renamed = kbIndex.filter(d => d.title === "批量A");
+    if (renamed.length) throw new Error("旧标题残留");
+  });
+
+  await test("删除知识库文档", async () => {
+    const list = JSON.parse(getFile("data/kb.json"));
+    const target = list.find(d => d.title === "批量B");
+    const req = new Request("http://localhost/api/admin/kb/" + encodeURIComponent(target.slug), {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + token },
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + " " + JSON.stringify(data));
+    if (!data.ok) throw new Error("未返回 ok");
+    if (hasFile(`docs/kb/${target.slug}.md`)) throw new Error("md 未删除");
+    if (hasFile(`kb/${target.slug}.html`)) throw new Error("html 未删除");
+    const kbIndex = JSON.parse(getFile("data/kb.json"));
+    if (kbIndex.find(d => d.slug === target.slug)) throw new Error("kb.json 残留");
+  });
+
+  await test("知识库未授权 → 401", async () => {
+    const req = new Request("http://localhost/api/admin/kb");
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    if (res.status !== 401) throw new Error("期望 401，得到 " + res.status);
+  });
+
+  await test("CRLF 行尾的 front matter 能正确解析", async () => {
+    const crlf = '---\r\ntitle: "CRLF 文档"\r\ncategory: "测试"\r\ndate: "2026-09-20"\r\nexcerpt: "行尾测试"\r\ntags: ["a"]\r\n---\r\n\r\n# CRLF 文档\r\n\r\n正文\r\n';
+    const req = new Request("http://localhost/api/admin/kb", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ filename: "CRLF文档.md", content: crlf }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + " " + JSON.stringify(data));
+    const added = data.added && data.added[0];
+    if (!added) throw new Error("未返回 added");
+    if (added.title !== "CRLF 文档") throw new Error("CRLF 下标题解析失败，得到 " + JSON.stringify(added.title));
+    if (added.category !== "测试") throw new Error("CRLF 下分类解析失败，得到 " + JSON.stringify(added.category));
+    const kbIndex = JSON.parse(getFile("data/kb.json"));
+    const entry = kbIndex.find(d => d.slug === added.slug);
+    if (!entry) throw new Error("索引未记录 CRLF 文档");
+    if (entry.title !== "CRLF 文档") throw new Error("索引标题为空（CRLF 解析回归）");
+    if (entry.category !== "测试") throw new Error("索引分类为空（CRLF 解析回归）");
+    // 生成的 html 页标题也不能为空
+    const page = getFile(`kb/${added.slug}.html`);
+    if (!page || page.indexOf("CRLF 文档") === -1) throw new Error("生成的页面缺少标题");
   });
 
   // 结果

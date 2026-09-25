@@ -3,18 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <!-- ✏️ 修改①：浏览器标签页标题（"文章标题" 和 "你的名字"） -->
-  <title>文章标题 | ZH</title>
-  <!-- ✏️ 修改②：文章摘要（SEO 用，会显示在搜索结果里） -->
-  <meta name="description" content="一句话描述这篇文章的内容。" />
+  <title>Cloudflare Pages 部署指南 | 知识库 | ZH</title>
+  <meta name="description" content="把纯静态站点部署到 Cloudflare Pages 的完整流程与注意事项。" />
   <link rel="stylesheet" href="../css/style.css?v=23" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
   <meta property="og:type" content="article" />
-  <meta property="og:title" content="文章标题 · 张义飞" />
-  <meta property="og:description" content="一句话描述这篇文章的内容。" />
-  <meta property="og:url" content="https://zyf2026.pages.dev/blog/文章文件名.html" />
+  <meta property="og:title" content="Cloudflare Pages 部署指南" />
+  <meta property="og:description" content="把纯静态站点部署到 Cloudflare Pages 的完整流程与注意事项。" />
+  <meta property="og:url" content="https://zyf2026.pages.dev/kb/Cloudflare-Pages-部署指南.html" />
   <meta property="og:image" content="https://zyf2026.pages.dev/images/avatar.png" />
-  <meta property="og:site_name" content="张义飞博客" />
+  <meta property="og:site_name" content="ZH 知识库" />
   <meta name="twitter:card" content="summary" />
   <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
 </head>
@@ -34,6 +32,7 @@
         <li><a href="../about.html">关于</a></li>
         <li><a href="../downloads.html">下载</a></li>
         <li><a href="../gallery.html">相册</a></li>
+        <li><a href="../kb.html" class="active">知识库</a></li>
       </ul>
       <div class="nav-actions">
         <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
@@ -42,52 +41,60 @@
     </div>
   </nav>
 
-  <main class="container article">
+  <main class="container article kb-doc">
+
+    <nav class="kb-breadcrumb">
+      <a href="../kb.html">📚 知识库</a>
+      <span class="kb-crumb-sep">/</span>
+      <span class="kb-crumb-cat">部署运维</span>
+    </nav>
 
     <article>
       <header class="article-header">
-        <!-- ✏️ 修改③：文章大标题 -->
-        <h1>文章大标题</h1>
+        <h1>Cloudflare Pages 部署指南</h1>
         <div class="article-meta">
-          <!-- ✏️ 修改④：日期（格式：YYYY-MM-DD） -->
-          <span>📅 2025-01-01</span>
-          <!-- ✏️ 修改⑤：标签（用 · 分隔，参考格式） -->
-          <span>🏷️ 技术 · 随笔</span>
+          <span>📅 2026-09-08</span>
+          <span>📂 部署运维</span>
+          <span>🏷️ Cloudflare · 部署</span>
         </div>
       </header>
 
       <div class="article-body">
-        <!-- ⬇️⬇️ 正文从这里开始写 ⬇️⬇️
-             复制下面的格式片段使用，写完删除多余的：
+<h1>Cloudflare Pages 部署指南</h1>
 
-             <h2>小标题</h2>
-             <p>普通段落文字。</p>
-             <p>加粗用 <strong>这样写</strong>。</p>
-             <ul>
-               <li>无序列表项</li>
-               <li>另一个列表项</li>
-             </ul>
-             <ol>
-               <li>有序列表项</li>
-               <li>另一个列表项</li>
-             </ol>
-             <blockquote>引用别人的话，显示为侧边条样式。</blockquote>
-             <p>行内代码用 <code>console.log("hi")</code>。</p>
-             <pre><code>// 整段代码块
-function hello() {
-  console.log("你好，世界");
-}</code></pre>
-             <hr />   <!-- 水平分割线 -->
-             <p><em>斜体文字，常用于结尾寄语。</em></p>
-        -->
+<h2>为什么选它</h2>
+
+<ul>
+  <li>免费额度充足，静态请求不限量</li>
+  <li>全球 CDN，国内访问速度可接受</li>
+  <li>推送到 GitHub 后自动构建部署</li>
+</ul>
+
+
+<h2>部署步骤</h2>
+
+<ol>
+  <li>进入 Cloudflare 控制台 → <strong>Workers &amp; Pages</strong></li>
+  <li><strong>Create</strong> → <strong>Pages</strong> → <strong>Connect to Git</strong></li>
+  <li>选择仓库，<strong>Build command 留空</strong>（纯静态无需构建）</li>
+  <li><strong>Build output directory</strong> 填 <code>/</code></li>
+  <li>保存并部署</li>
+</ol>
+
+
+<h2>环境变量</h2>
+
+<p>后台需要在 <strong>Settings → Environment variables</strong> 配置：</p>
+
+<pre><code>ADMIN_PASS       后台密码
+SESSION_SECRET   令牌签名密钥
+GITHUB_TOKEN     GitHub 细粒度 Token</code></pre>
+
+<blockquote>注意：环境变量修改后需要重新部署才会生效。</blockquote>
       </div>
     </article>
 
-    <!-- 上一篇 / 下一篇（由 data/posts.json 客户端自动填充，保持不动） -->
-    <nav class="post-nav" id="postNav"></nav>
-
-    <!-- 返回博客列表（保持不动） -->
-    <a class="back-link" href="../blog.html">返回博客列表</a>
+    <a class="back-link" href="../kb.html">返回知识库</a>
 
   </main>
 

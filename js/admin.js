@@ -92,11 +92,13 @@
   var tabGallery = $("tabGallery");
   var tabDownloads = $("tabDownloads");
   var tabLinks = $("tabLinks");
+  var tabKb = $("tabKb");
   var viewArticles = $("viewArticles");
   var viewProjects = $("viewProjects");
   var viewGallery = $("viewGallery");
   var viewDownloads = $("viewDownloads");
   var viewLinks = $("viewLinks");
+  var viewKb = $("viewKb");
   var galleryGrid = $("galleryGrid");
   var galleryLoading = $("galleryLoading");
   var galleryUploadBtn = $("galleryUploadBtn");
@@ -124,6 +126,12 @@
   var resetLinkBtn = $("resetLinkBtn");
   var linkId = $("linkId");
   var linksCache = [];
+  var kbList = $("kbList");
+  var kbListLoading = $("kbListLoading");
+  var saveKbBtn = $("saveKbBtn");
+  var resetKbBtn = $("resetKbBtn");
+  var kbSlug = $("kbSlug");
+  var kbDocsCache = [];
   var pendingDeleteId = null;
   var pendingDeleteBtn = null;
   var pendingDeleteTimer = null;
@@ -654,15 +662,18 @@
     tabGallery.className = "tab" + (name === "gallery" ? " active" : "");
     tabDownloads.className = "tab" + (name === "downloads" ? " active" : "");
     tabLinks.className = "tab" + (name === "links" ? " active" : "");
+    tabKb.className = "tab" + (name === "kb" ? " active" : "");
     viewArticles.style.display = name === "articles" ? "block" : "none";
     viewProjects.style.display = name === "projects" ? "block" : "none";
     viewGallery.style.display = name === "gallery" ? "block" : "none";
     viewDownloads.style.display = name === "downloads" ? "block" : "none";
     viewLinks.style.display = name === "links" ? "block" : "none";
+    viewKb.style.display = name === "kb" ? "block" : "none";
     if (name === "projects") loadProjects();
     if (name === "gallery") loadGallery();
     if (name === "downloads") loadDownloads();
     if (name === "links") loadLinks();
+    if (name === "kb") loadKb();
   }
 
   tabArticles.addEventListener("click", function () { switchTab("articles"); });
@@ -670,6 +681,7 @@
   tabGallery.addEventListener("click", function () { switchTab("gallery"); });
   tabDownloads.addEventListener("click", function () { switchTab("downloads"); });
   tabLinks.addEventListener("click", function () { switchTab("links"); });
+  tabKb.addEventListener("click", function () { switchTab("kb"); });
 
   /* ---------- 项目列表 ---------- */
 
@@ -1482,6 +1494,241 @@
       .then(function (data) {
         showToast(data.message || "已删除", "success");
         loadLinks();
+      })
+      .catch(function (err) { showToast(err.message || "删除失败", "error"); });
+  }
+
+  /* ---------- 知识库管理 ---------- */
+
+  function loadKb() {
+    kbList.innerHTML = "";
+    kbListLoading.style.display = "block";
+    api("/kb")
+      .then(function (data) {
+        kbListLoading.style.display = "none";
+        kbDocsCache = data.docs || [];
+        renderKbList();
+        renderKbCategoryOptions();
+      })
+      .catch(function (err) {
+        kbListLoading.style.display = "none";
+        kbList.innerHTML = '<div class="empty-state" style="color:var(--danger);">加载失败：' + escapeHtml(err.message) + "</div>";
+      });
+  }
+
+  function renderKbCategoryOptions() {
+    var dl = $("kbCategoryList");
+    if (!dl) return;
+    var cats = {};
+    kbDocsCache.forEach(function (d) { if (d.category) cats[d.category] = 1; });
+    dl.innerHTML = Object.keys(cats).map(function (c) { return '<option value="' + escapeAttr(c) + '"></option>'; }).join("");
+  }
+
+  function renderKbList() {
+    if (!kbDocsCache.length) {
+      kbList.innerHTML = '<div class="empty-state">知识库还没有文档<br/>点击左侧「上传 Markdown」批量导入 📚</div>';
+      return;
+    }
+    kbDocsCache.forEach(function (d) {
+      var item = document.createElement("div");
+      item.className = "item";
+      item.innerHTML =
+        '<div class="info">' +
+          '<div class="title">' + escapeHtml(d.title || d.slug) + '</div>' +
+          '<div class="date">' + escapeHtml(d.category || "未分类") +
+            (d.date ? " · " + escapeHtml(d.date) : "") +
+            (d.tags && d.tags.length ? " · " + escapeHtml(d.tags.join(" / ")) : "") +
+          "</div>" +
+        "</div>" +
+        '<div class="actions">' +
+          '<a class="btn btn-outline btn-sm" href="kb/' + escapeAttr(d.slug) + '.html" target="_blank" rel="noopener noreferrer">预览</a>' +
+          '<button class="btn btn-outline btn-sm" data-action="edit" data-slug="' + escapeAttr(d.slug) + '">编辑</button>' +
+          '<button class="btn btn-danger btn-sm" data-action="del" data-slug="' + escapeAttr(d.slug) + '">删除</button>' +
+        "</div>";
+      kbList.appendChild(item);
+    });
+  }
+
+  kbList.addEventListener("click", function (e) {
+    var btn = e.target.closest("button[data-action]");
+    if (!btn) return;
+    var slug = btn.getAttribute("data-slug");
+    if (btn.getAttribute("data-action") === "edit") {
+      resetDeleteConfirm();
+      loadKbDoc(slug);
+    } else if (btn.getAttribute("data-action") === "del") {
+      deleteKbDoc(slug, btn);
+    }
+  });
+
+  function fillKbForm(meta, body, slug) {
+    $("kbTitleField").value = meta.title || "";
+    $("kbCategoryField").value = meta.category || "";
+    $("kbDateField").value = meta.date || "";
+    $("kbTagsField").value = (meta.tags || []).join(", ");
+    $("kbDescField").value = meta.excerpt || meta.desc || "";
+    $("kbBodyField").value = body || "";
+    kbSlug.value = slug || "";
+  }
+
+  function resetKbForm() {
+    fillKbForm({ date: new Date().toISOString().slice(0, 10) }, "", "");
+    saveKbBtn.textContent = "📚 保存文档";
+    resetKbBtn.style.display = "none";
+    $("kbStatus").textContent = "";
+    var p = $("kbPreviewContent");
+    if (p) p.innerHTML = '<p style="color:var(--text-dim);font-size:12px;">等待输入…</p>';
+  }
+
+  resetKbBtn.addEventListener("click", resetKbForm);
+
+  function loadKbDoc(slug) {
+    kbListLoading.style.display = "block";
+    api("/kb/" + encodeURIComponent(slug))
+      .then(function (data) {
+        kbListLoading.style.display = "none";
+        fillKbForm(data.meta || {}, data.body || "", data.slug);
+        saveKbBtn.textContent = "💾 保存修改";
+        resetKbBtn.style.display = "inline-flex";
+        $("kbTitleField").scrollIntoView({ behavior: "smooth", block: "start" });
+        showToast("已载入「" + (data.meta && data.meta.title ? data.meta.title : slug) + "」", "success");
+        previewKb();
+      })
+      .catch(function (err) {
+        kbListLoading.style.display = "none";
+        showToast(err.message || "载入失败", "error");
+      });
+  }
+
+  function previewKb() {
+    var p = $("kbPreviewContent");
+    if (!p) return;
+    var body = $("kbBodyField").value;
+    if (!body.trim()) { p.innerHTML = '<p style="color:var(--text-dim);font-size:12px;">等待输入…</p>'; return; }
+    api("/preview", {
+      method: "POST",
+      body: {
+        title: $("kbTitleField").value.trim() || "（无标题）",
+        date: $("kbDateField").value.trim(),
+        tags: $("kbTagsField").value.split(/[,，]/).map(function (s) { return s.trim(); }).filter(Boolean),
+        excerpt: $("kbDescField").value.trim(),
+        body: body,
+      },
+    })
+      .then(function (data) { p.innerHTML = data.html || ""; })
+      .catch(function () { /* 预览失败不打断编辑 */ });
+  }
+
+  var kbPreviewTimer = null;
+  $("kbBodyField").addEventListener("input", function () {
+    clearTimeout(kbPreviewTimer);
+    kbPreviewTimer = setTimeout(previewKb, 500);
+  });
+
+  function kbDocFromForm() {
+    var title = $("kbTitleField").value.trim();
+    var body = $("kbBodyField").value;
+    if (!title) { showToast("请填写标题", "error"); return null; }
+    if (!body.trim()) { showToast("请填写正文", "error"); return null; }
+    var meta = {
+      title: title,
+      category: $("kbCategoryField").value.trim() || "未分类",
+      date: $("kbDateField").value.trim() || new Date().toISOString().slice(0, 10),
+      excerpt: $("kbDescField").value.trim(),
+      tags: $("kbTagsField").value.split(/[,，]/).map(function (s) { return s.trim(); }).filter(Boolean),
+    };
+    var md = kbBuildMarkdown(meta, body);
+    var filename = (kbSlug.value || title) + ".md";
+    return { filename: filename, content: md, slug: kbSlug.value || "" };
+  }
+
+  function kbBuildMarkdown(meta, body) {
+    var q = function (s) { return String(s || "").replace(/"/g, '\\"'); };
+    var lines = ["---", 'title: "' + q(meta.title) + '"'];
+    if (meta.category) lines.push('category: "' + q(meta.category) + '"');
+    lines.push('date: "' + q(meta.date) + '"');
+    if (meta.excerpt) lines.push('excerpt: "' + q(meta.excerpt) + '"');
+    if (meta.tags && meta.tags.length) lines.push("tags: [" + meta.tags.map(function (t) { return '"' + q(t) + '"'; }).join(", ") + "]");
+    lines.push("---", "", String(body || "").trim(), "");
+    return lines.join("\n");
+  }
+
+  function submitKb(payload) {
+    saveKbBtn.disabled = true;
+    saveKbBtn.textContent = "提交中…";
+    $("kbStatus").textContent = "";
+    api("/kb", { method: "POST", body: payload })
+      .then(function (data) {
+        var msg = data.message || "已保存";
+        if (data.errors && data.errors.length) msg += "（" + data.errors.length + " 篇失败）";
+        $("kbStatus").textContent = "✔ " + msg;
+        showToast(data.errors && data.errors.length ? msg + "\n" + data.errors.join("\n") : "已保存，部署后知识库更新", data.errors && data.errors.length ? "error" : "success");
+        resetKbForm();
+        loadKb();
+      })
+      .catch(function (err) {
+        $("kbStatus").textContent = "";
+        showToast(err.message || "保存失败", "error");
+      })
+      .then(function () {
+        saveKbBtn.disabled = false;
+        saveKbBtn.textContent = kbSlug.value ? "💾 保存修改" : "📚 保存文档";
+      });
+  }
+
+  saveKbBtn.addEventListener("click", function () {
+    var doc = kbDocFromForm();
+    if (!doc) return;
+    submitKb({ filename: doc.filename, content: doc.content, slug: doc.slug || undefined });
+  });
+
+  /* 上传 Markdown（支持多选批量导入，直接读文件内容提交） */
+  var kbUploadBtn = $("kbUploadBtn");
+  var kbFileInput = $("kbFileInput");
+  if (kbUploadBtn && kbFileInput) {
+    kbUploadBtn.addEventListener("click", function () { kbFileInput.click(); });
+    kbFileInput.addEventListener("change", function () {
+      var files = Array.prototype.slice.call(kbFileInput.files || []);
+      if (!files.length) return;
+      var readers = files.map(function (f) {
+        return new Promise(function (resolve) {
+          var fr = new FileReader();
+          fr.onload = function () { resolve({ filename: f.name.replace(/\.(md|markdown)$/i, "") + ".md", content: String(fr.result || "") }); };
+          fr.onerror = function () { resolve(null); };
+          fr.readAsText(f, "utf-8");
+        });
+      });
+      kbUploadBtn.disabled = true;
+      kbUploadBtn.textContent = "读取中…";
+      Promise.all(readers).then(function (docs) {
+        var valid = docs.filter(Boolean);
+        kbFileInput.value = "";
+        kbUploadBtn.disabled = false;
+        kbUploadBtn.textContent = "📄 上传 Markdown（可多选）";
+        if (!valid.length) { showToast("没有读到文件内容", "error"); return; }
+        if (!confirm("将导入 " + valid.length + " 个 Markdown 文件，确认继续？")) return;
+        submitKb({ docs: valid });
+      });
+    });
+  }
+
+  function deleteKbDoc(slug, btn) {
+    if (pendingDeleteId !== slug) {
+      resetDeleteConfirm();
+      if (!btn) { showToast("删除失败：按钮状态异常", "error"); return; }
+      pendingDeleteId = slug;
+      pendingDeleteBtn = btn;
+      btn.textContent = "⚠ 再点一次确认";
+      btn.classList.add("btn-confirming");
+      pendingDeleteTimer = setTimeout(resetDeleteConfirm, 4000);
+      return;
+    }
+    resetDeleteConfirm();
+    api("/kb/" + encodeURIComponent(slug), { method: "DELETE" })
+      .then(function (data) {
+        showToast(data.message || "已删除", "success");
+        if (kbSlug.value === slug) resetKbForm();
+        loadKb();
       })
       .catch(function (err) { showToast(err.message || "删除失败", "error"); });
   }

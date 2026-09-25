@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>知识库 | ZH</title>
+  <meta name="description" content="张义飞的知识库：技术文档、学习笔记与资料归档" />
+  <link rel="stylesheet" href="css/style.css?v=23" />
+  <link rel="icon" type="image/png" href="images/avatar.png" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="知识库 · 张义飞 | 个人博客" />
+  <meta property="og:description" content="张义飞的知识库：技术文档、学习笔记与资料归档" />
+  <meta property="og:url" content="https://zyf2026.pages.dev/kb.html" />
+  <meta property="og:image" content="https://zyf2026.pages.dev/images/avatar.png" />
+  <meta property="og:site_name" content="张义飞博客" />
+  <meta name="twitter:card" content="summary" />
+  <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-inner">
+      <a href="index.html" class="brand">
+        <span class="prompt">&gt;_</span>ZH<span class="cursor"></span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html">首页</a></li>
+        <li><a href="blog.html">博客</a></li>
+        <li><a href="projects.html">项目</a></li>
+        <li><a href="about.html">关于</a></li>
+        <li><a href="downloads.html">下载</a></li>
+        <li><a href="gallery.html">相册</a></li>
+        <li><a href="kb.html" class="active">知识库</a></li>
+      </ul>
+      <div class="nav-actions">
+        <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
+        <button class="nav-toggle" aria-label="菜单">☰ 菜单</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container">
+
+    <div class="page-head">
+      <h1>知识<span class="accent">库</span></h1>
+      <p>技术文档 · 学习笔记 · 资料归档 —— 沉淀下来的才算真正掌握。</p>
+    </div>
+
+    <section class="section" style="border-top:none;padding-top:0;">
+      <div class="kb-toolbar">
+        <div class="search-box" style="flex:1;min-width:220px;">
+          <input type="search" id="kbSearchInput" placeholder="🔍 搜索知识库标题 / 分类 / 正文…" autocomplete="off" />
+        </div>
+        <span class="kb-stats" id="kbStats"></span>
+      </div>
+
+      <div class="tag-filter" id="kbFilter">
+        <!-- KB-FILTER-START -->
+<button type="button" class="chip active" data-cat="">全部 <em>2</em></button>
+        <button type="button" class="chip" data-cat="开发工具">开发工具 <em>1</em></button>
+        <button type="button" class="chip" data-cat="部署运维">部署运维 <em>1</em></button>
+<!-- KB-FILTER-END -->
+      </div>
+
+      <!-- KB-LIST-START -->
+<div class="kb-group">
+        <h3 class="kb-group-title">开发工具 <em>1</em></h3>
+        <div class="kb-list">
+        <a class="kb-item" href="kb/Git常用命令速查.html" data-tags="开发工具 Git 速查">
+          <span class="kb-item-icon">📄</span>
+          <span class="kb-item-body">
+            <span class="kb-item-title">Git 常用命令速查</span>
+            <span class="kb-item-desc">日常工作最常用的 Git 命令，含分支、回滚、rebase 场景。</span>
+          </span>
+          <span class="kb-item-date">2026-09-10</span>
+        </a>
+        </div>
+      </div>
+      <div class="kb-group">
+        <h3 class="kb-group-title">部署运维 <em>1</em></h3>
+        <div class="kb-list">
+        <a class="kb-item" href="kb/Cloudflare-Pages-部署指南.html" data-tags="部署运维 Cloudflare 部署">
+          <span class="kb-item-icon">📄</span>
+          <span class="kb-item-body">
+            <span class="kb-item-title">Cloudflare Pages 部署指南</span>
+            <span class="kb-item-desc">把纯静态站点部署到 Cloudflare Pages 的完整流程与注意事项。</span>
+          </span>
+          <span class="kb-item-date">2026-09-08</span>
+        </a>
+        </div>
+      </div>
+<!-- KB-LIST-END -->
+
+      <div class="photo-empty" id="kbEmpty" style="margin-top:24px;padding:40px;display:none;">没有找到匹配的文档</div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>© <span data-year>2025</span> 张义飞 · Built with <span class="heart">♥</span> and a lot of coffee</p>
+      <p style="margin-top:6px;font-size:11px;color:#4b5a6e;">&gt;_ zhangyifei · 用代码记录世界</p>
+    </div>
+  </footer>
+
+  <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
+  <script src="js/main.js?v=21"></script>
+</body>
+</html>

@@ -11,6 +11,7 @@
 - 👤 **关于页**：个人简介
 - 📦 **软件下载**：`downloads.html` 发布安装包（小文件网页后台上传 / 大文件 Release 脚本）
 - 🔗 **关联网站**：关于页展示推荐站点，后台增删改（`data/links.json`）
+- 📚 **知识库**：`kb.html` 汇总技术文档，后台上传 Markdown 自动渲染成页面
 
 ## 📁 目录结构
 
@@ -20,10 +21,14 @@
 ├── blog/详细介绍与技术文档.html # 文章页
 ├── blog/posts/*.md             # 文章 Markdown 源文件
 ├── gallery.html               # 相册
+├── kb.html                    # 知识库（列表，后台自动维护）
+├── kb/*.html                  # 知识库文档页（由 .md 自动生成）
+├── docs/kb/*.md               # 知识库 Markdown 源文件
 ├── downloads.html             # 下载页
 ├── files/                     # 下载文件仓库（≤100MB 上传目标）
 ├── data/downloads.json        # 下载文件元数据
 ├── data/links.json            # 关联网站数据（关于页展示）
+├── data/kb.json               # 知识库索引（分类/标签/正文，客户端搜索用）
 ├── admin.html                  # 后台登录页（隐藏路径，不在导航栏）
 ├── js/admin.js                 # 后台交互逻辑
 ├── functions/api/admin.js      # 后台 API（Cloudflare Pages Functions）
@@ -127,6 +132,61 @@ node tools/publish-release.mjs dist/MyApp-Setup.exe \
 
 > 📖 完整图文教程见 [`docs/发布脚本教程.md`](docs/发布脚本教程.md)。
 
+
+## 📚 知识库
+
+导航栏「知识库」（`kb.html`）汇总技术文档／学习笔记，文档页在 `kb/*.html`，
+Markdown 源文件存 `docs/kb/*.md`，由后台「📚 知识库」页管理。
+
+### 后台上传 Markdown
+
+后台「📚 知识库」→「📄 上传 Markdown（可多选）」：
+
+- **支持一次选多个文件批量导入**，读取文件原文后一次性提交
+- 标题 / 分类 / 日期 / 简介 / 标签优先取文件内的 **front matter**；没有 front matter 时从首行推标题
+- 导入时会弹出确认框显示文件数，避免误操作
+- 文件名会转成 URL slug；**slug 冲突会自动加序号**（如 `xxx-2`）
+- 也可以不用上传，直接在左侧表单编写（带实时预览）
+
+### Markdown 格式
+
+```markdown
+---
+title: "Git 常用命令速查"
+category: "开发工具"
+date: "2026-09-10"
+excerpt: "日常工作最常用的 Git 命令。"
+tags: ["Git", "速查"]
+---
+
+# Git 常用命令速查
+
+正文用标准 Markdown（支持代码高亮、表格、列表、引用）。
+```
+
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `title` | 是 | 文档标题（缺省时取首行） |
+| `category` | 否 | 分类，列表按此分组，默认「未分类」 |
+| `date` | 否 | 日期，默认今天 |
+| `excerpt` | 否 | 简介，显示在列表卡片 |
+| `tags` | 否 | 标签，显示在文档页 |
+
+### 知识库页面
+
+- **列表页**（`kb.html`）：按分类分组，带分类筛选条 + **全文搜索**（搜索标题/分类/简介/正文）
+- **文档页**（`kb/<slug>.html`）：面包屑（知识库 / 分类）、自动生成目录 TOC、代码高亮、阅读进度条
+- 后台支持**编辑**（改标题/正文/分类，slug 不变）与**删除**（二次确认）
+- 知识库页面同时进 `sitemap.xml`
+
+### 与「博客」的区别
+
+| | 博客 | 知识库 |
+| --- | --- | --- |
+| 定位 | 成篇的文章、随笔 | 速查表、技术文档、资料归档 |
+| 目录 | `blog/posts/*.md` | `docs/kb/*.md` |
+| 组织 | 按日期时间线 | 按**分类**分组 |
+| 索引 | `data/search-index.json` | `data/kb.json` |
 
 ## 🖼 相册管理
 

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台 | ZH</title>
-  <link rel="stylesheet" href="css/style.css?v=22" />
+  <link rel="stylesheet" href="css/style.css?v=23" />
   <link rel="icon" type="image/png" href="images/avatar.png" />
   <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
   <style>
@@ -241,6 +241,7 @@
         <button class="tab" id="tabGallery">🖼️ 相册</button>
         <button class="tab" id="tabDownloads">📦 下载</button>
         <button class="tab" id="tabLinks">🔗 关联</button>
+        <button class="tab" id="tabKb">📚 知识库</button>
       </div>
 
       <!-- ⚙️ 图片优化设置（全局，localStorage 持久化） -->
@@ -484,6 +485,67 @@
       </div>
       </div>
 
+      <div id="viewKb" style="display:none;">
+      <div class="admin-grid">
+        <!-- 左侧：上传 / 编辑表单 -->
+        <div>
+          <div class="form-group">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+              <button class="btn btn-outline btn-sm" id="kbUploadBtn">📄 上传 Markdown（可多选）</button>
+              <input type="file" id="kbFileInput" accept=".md,.markdown,text/markdown" multiple style="display:none;" />
+              <span style="font-size:11px;color:var(--text-dim);">支持多选批量导入；标题/分类取自文件内的 front matter</span>
+            </div>
+          </div>
+          <div class="proj-grid">
+            <div class="form-group">
+              <label>标题 *</label>
+              <input type="text" id="kbTitleField" class="field" placeholder="文档标题" />
+            </div>
+            <div class="form-group">
+              <label>分类</label>
+              <input type="text" id="kbCategoryField" class="field" placeholder="例如：技术文档" list="kbCategoryList" />
+              <datalist id="kbCategoryList"></datalist>
+            </div>
+          </div>
+          <div class="proj-grid">
+            <div class="form-group">
+              <label>日期</label>
+              <input type="text" id="kbDateField" class="field" placeholder="2026-09-13" />
+            </div>
+            <div class="form-group">
+              <label>标签（逗号分隔）</label>
+              <input type="text" id="kbTagsField" class="field" placeholder="工具, 教程" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>简介</label>
+            <input type="text" id="kbDescField" class="field" placeholder="一句话说明，显示在列表卡片上" />
+          </div>
+          <div class="form-group">
+            <label>正文（Markdown）</label>
+            <textarea id="kbBodyField" class="field" placeholder="# 标题\n\n正文…" style="min-height:220px;"></textarea>
+          </div>
+          <div class="form-group">
+            <label>实时预览</label>
+            <div id="kbPreviewBox" class="preview-wrap"><div class="article-body" id="kbPreviewContent"><p style="color:var(--text-dim);font-size:12px;">等待输入…</p></div></div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
+            <button class="btn" id="saveKbBtn">📚 保存文档</button>
+            <button class="btn btn-outline" id="resetKbBtn" style="display:none;">新建文档</button>
+            <span id="kbStatus" style="font-size:11px;color:var(--text-dim);align-self:center;margin-left:8px;"></span>
+          </div>
+          <input type="hidden" id="kbSlug" value="" />
+        </div>
+
+        <!-- 右侧：文档列表 -->
+        <div class="article-list">
+          <h3>📚 所有文档</h3>
+          <div id="kbList"></div>
+          <div id="kbListLoading" class="loading">加载中</div>
+        </div>
+      </div>
+      </div>
+
       <div id="viewGallery" style="display:none;">
         <div class="article-list" style="max-width:1100px;">
           <h3>🖼️ 相册管理</h3>
@@ -588,7 +650,7 @@
     </div>
   </div>
 
-  <script src="js/admin.js?v=16"></script>
+  <script src="js/admin.js?v=17"></script>
   <script>
     (function () {
       function cur() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }

@@ -350,6 +350,85 @@
     else tagFilter.style.display = "none";
   }
 
+  /* ---- 知识库搜索 + 分类筛选（kb.html） ---- */
+  var kbFilterEl = document.getElementById("kbFilter");
+  if (kbFilterEl) {
+    var kbItems = Array.prototype.slice.call(document.querySelectorAll(".kb-item"));
+    var kbEmptyEl = document.getElementById("kbEmpty");
+    var kbSearchInput = document.getElementById("kbSearchInput");
+    var kbStatsEl = document.getElementById("kbStats");
+    var kbGroups = Array.prototype.slice.call(document.querySelectorAll(".kb-group"));
+    var kbActiveCat = "";
+    var kbQuery = "";
+    var kbIndex = null;
+
+    fetch("data/kb.json", { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("no data")); })
+      .then(function (idx) { kbIndex = Array.isArray(idx) ? idx : null; })
+      .catch(function () { kbIndex = null; });
+
+    function kbEntryFor(item) {
+      var slug = (item.getAttribute("href") || "").replace(/^kb\//, "").replace(/\.html$/, "");
+      return kbIndex ? kbIndex.find(function (e) { return e.slug === slug; }) : null;
+    }
+
+    function kbMatches(item) {
+      var tags = (item.getAttribute("data-tags") || "").split(/\s+/).filter(Boolean);
+      if (kbActiveCat && tags.indexOf(kbActiveCat) === -1) return false;
+      if (!kbQuery) return true;
+      var entry = kbEntryFor(item);
+      if (entry) {
+        return String(entry.title).toLowerCase().indexOf(kbQuery) !== -1 ||
+          String(entry.category || "").toLowerCase().indexOf(kbQuery) !== -1 ||
+          String(entry.text || "").toLowerCase().indexOf(kbQuery) !== -1 ||
+          (entry.tags || []).some(function (t) { return String(t).toLowerCase().indexOf(kbQuery) !== -1; });
+      }
+      return item.textContent.toLowerCase().indexOf(kbQuery) !== -1;
+    }
+
+    function kbApply() {
+      var visible = 0;
+      kbItems.forEach(function (item) {
+        var show = kbMatches(item);
+        item.style.display = show ? "" : "none";
+        if (show) visible++;
+      });
+      // 空分类分组隐藏
+      kbGroups.forEach(function (g) {
+        var any = Array.prototype.some.call(g.querySelectorAll(".kb-item"), function (i) { return i.style.display !== "none"; });
+        g.style.display = any ? "" : "none";
+      });
+      if (kbEmptyEl) kbEmptyEl.style.display = visible ? "none" : "block";
+      // 筛选条
+      kbFilterEl.querySelectorAll(".chip").forEach(function (c) {
+        c.classList.toggle("active", (c.getAttribute("data-cat") || "") === kbActiveCat);
+      });
+      if (kbStatsEl) {
+        kbStatsEl.textContent = visible === kbItems.length
+          ? kbItems.length + " 篇文档"
+          : "匹配 " + visible + " / " + kbItems.length + " 篇";
+      }
+    }
+
+    kbFilterEl.addEventListener("click", function (e) {
+      var btn = e.target.closest ? e.target.closest(".chip") : null;
+      if (!btn) return;
+      kbActiveCat = btn.getAttribute("data-cat") || "";
+      kbApply();
+    });
+
+    if (kbSearchInput) {
+      var kbTimer = null;
+      kbSearchInput.addEventListener("input", function () {
+        clearTimeout(kbTimer);
+        var q = kbSearchInput.value.trim().toLowerCase();
+        kbTimer = setTimeout(function () { kbQuery = q; kbApply(); }, 200);
+      });
+    }
+
+    kbApply();
+  }
+
   /* ---- 上一篇 / 下一篇（文章页，客户端渲染） ---- */
   var postNav = document.getElementById("postNav");
   if (postNav) {

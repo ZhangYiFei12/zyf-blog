@@ -22,6 +22,10 @@ import {
   parseBody,
   buildPage,
   buildArticlePreview,
+  buildKbPage,
+  buildKbIndex,
+  renderKbList,
+  renderKbFilter,
   slugify,
   listItemSnippet,
   renderProjects,
@@ -213,6 +217,19 @@ function buildMarkdown({ title, date, excerpt, tags, body, published }) {
   return `---\ntitle: "${t}"\ndate: "${date}"\nexcerpt: "${e}"\npublished: ${published !== false}\n${tagsLine}\n---\n\n${String(body || "").trim()}\n`;
 }
 
+/* 生成知识库 .md 源文件（保留 category 字段） */
+function buildKbMarkdown(meta, body) {
+  const q = s => String(s || "").replace(/"/g, '\\"');
+  const tags = Array.isArray(meta.tags) && meta.tags.length ? meta.tags : [];
+  const lines = ["---", `title: "${q(meta.title)}"`];
+  if (meta.category) lines.push(`category: "${q(meta.category)}"`);
+  lines.push(`date: "${meta.date || new Date().toISOString().slice(0, 10)}"`);
+  if (meta.excerpt) lines.push(`excerpt: "${q(meta.excerpt)}"`);
+  if (tags.length) lines.push(`tags: [${tags.map(x => `"${q(x)}"`).join(", ")}]`);
+  lines.push("---", "", String(body || "").trim(), "");
+  return lines.join("\n");
+}
+
 /* 根据 posts 重生成 blog.html 列表 + index.html 最新文章，返回变更 */
 /* ---------------- 认证（简单内存限流，尽力而为） ---------------- */
 const loginAttempts = new Map(); // ip -> {count, resetAt}
@@ -248,6 +265,27 @@ async function getGallery(env) {
   } catch (e) {
     return [];
   }
+}
+
+/* 列出知识库文档（docs/kb/*.md），返回 [{slug, name, meta, bodyHtml}] 按日期倒序 */
+async function getAllKbDocs(env) {
+  let files = [];
+  try {
+    const res = await gh(env, `/repos/${repo(env)}/contents/docs/kb?ref=${branch(env)}`);
+    files = await res.json();
+  } catch (e) {
+    return [];
+  }
+  const docs = [];
+  for (const f of (Array.isArray(files) ? files : [])) {
+    if (!f.name || !f.name.endsWith(".md")) continue;
+    const content = await getFile(env, `docs/kb/${f.name}`);
+    if (!content) continue;
+    const { meta, body } = parseFrontMatter(content);
+    docs.push({ slug: slugify(f.name), name: f.name, meta, bodyHtml: parseBody(body) });
+  }
+  docs.sort((a, b) => String(b.meta.date || "").localeCompare(String(a.meta.date || "")));
+  return docs;
 }
 
 /* 读取 data/links.json（关联网站） */
@@ -506,7 +544,7 @@ export async function onRequest(context) {
       { path: `blog/posts/${slug}.md`, content: mdContent },
       { path: `blog/${slug}.html`, content: pageHtml },
       { path: "data/posts.json", content: buildPostsIndex(updatedPosts) },
-      { path: "sitemap.xml", content: buildSitemap(updatedPosts) },
+      { path: "sitemap.xml", content: buildSitemap(updatedPosts, undefined, await getAllKbDocs(env)) },
       { path: "feed.xml", content: buildRss(updatedPosts) },
       { path: "data/search-index.json", content: buildSearchIndex(updatedPosts) },
     ];
@@ -547,7 +585,7 @@ export async function onRequest(context) {
       { path: "blog.html", content: blogHtml },
       { path: "index.html", content: indexHtml },
       { path: "data/posts.json", content: buildPostsIndex(remaining) },
-      { path: "sitemap.xml", content: buildSitemap(remaining) },
+      { path: "sitemap.xml", content: buildSitemap(remaining, undefined, await getAllKbDocs(env)) },
       { path: "feed.xml", content: buildRss(remaining) },
       { path: "data/search-index.json", content: buildSearchIndex(remaining) },
     ]);
@@ -770,6 +808,156 @@ export async function onRequest(context) {
     ]);
 
     return json({ ok: true, id, commitSha, message: "已删除并提交，等待自动部署" });
+  }
+
+  // ---- GET /api/admin/kb（知识库列表）----
+  if (method === "GET" && rest.length === 1 && rest[0] === "kb") {
+    const docs = await getAllKbDocs(env);
+    return json({
+      docs: docs.map(d => ({
+        slug: d.slug,
+        name: d.name,
+        title: d.meta.title || "",
+        category: d.meta.category || "未分类",
+        desc: d.meta.excerpt || d.meta.desc || "",
+        date: d.meta.date || "",
+        tags: d.meta.tags || [],
+      })),
+    });
+  }
+
+  // ---- GET /api/admin/kb/:slug（取单篇 .md 原文）----
+  if (method === "GET" && rest.length === 2 && rest[0] === "kb") {
+    const slug = decodeURIComponent(rest[1]);
+    const docs = await getAllKbDocs(env);
+    const target = docs.find(d => d.slug === slug);
+    if (!target) return json({ error: "文档不存在" }, 404);
+    const raw = await getFile(env, `docs/kb/${target.name}`);
+    return json({ slug, name: target.name, meta: target.meta, body: (parseFrontMatter(raw).body || "") });
+  }
+
+  // ---- POST /api/admin/kb（新建 / 编辑 / 批量导入）----
+  if (method === "POST" && rest.length === 1 && rest[0] === "kb") {
+    const input = await request.json().catch(() => null);
+    if (!input) return json({ error: "请求体无效" }, 400);
+
+    // 批量模式：input.docs = [{ filename, content }] 或 [{ name, md }]
+    const batch = Array.isArray(input.docs) ? input.docs : null;
+    const items = batch
+      ? batch.map(d => ({
+          filename: String(d.filename || d.name || "").trim(),
+          content: String(d.content || d.md || ""),
+          oldSlug: d.oldSlug ? String(d.oldSlug).trim() : "",
+        }))
+      : [{
+          filename: String(input.filename || "").trim(),
+          content: String(input.content || input.md || ""),
+          oldSlug: input.slug ? String(input.slug).trim() : "",
+        }];
+
+    if (!items.length) return json({ error: "没有可导入的文档" }, 400);
+
+    const errors = [];
+    const added = [];
+    const changes = [];
+    const docs = await getAllKbDocs(env);
+    // 逐条处理，slug 冲突时自动加后缀
+    const usedSlugs = new Set(docs.map(d => d.slug));
+
+    for (const it of items) {
+      if (!it.content || !it.content.trim()) { errors.push(it.filename + "：内容为空"); continue; }
+      const { meta, body } = parseFrontMatter(it.content);
+      if (!meta.title) errors.push((it.filename || "未命名") + "：缺少标题（请在 front matter 写 title）");
+      if (!meta.title) continue;
+      if (!meta.date) meta.date = new Date().toISOString().slice(0, 10);
+      if (!meta.category) meta.category = "未分类";
+
+      let slug = it.oldSlug || slugify(it.filename || meta.title) || slugify(meta.title);
+      if (!slug) slug = `kb-${Date.now().toString(36)}`;
+      // 编辑自身不动；新建冲突则加序号
+      if (it.oldSlug) {
+        usedSlugs.delete(slug);
+      } else {
+        let base = slug, n = 2;
+        while (usedSlugs.has(slug)) slug = `${base}-${n++}`;
+      }
+      usedSlugs.add(slug);
+
+      const mdText = buildKbMarkdown(meta, body);
+      const bodyHtml = parseBody(body);
+      const pageHtml = buildKbPage(meta, bodyHtml, { slug });
+
+      changes.push({ path: `docs/kb/${slug}.md`, content: mdText });
+      changes.push({ path: `kb/${slug}.html`, content: pageHtml });
+      // 重命名：删掉旧文件
+      if (it.oldSlug && it.oldSlug !== slug) {
+        changes.push({ path: `docs/kb/${it.oldSlug}.md`, delete: true });
+        changes.push({ path: `kb/${it.oldSlug}.html`, delete: true });
+      }
+      added.push({ slug, title: meta.title, category: meta.category });
+    }
+
+    if (!added.length) {
+      return json({ error: errors.length ? errors.join("；") : "没有有效文档" }, 400);
+    }
+
+    // 重新汇总知识库索引（含本次变更）
+    const finalDocs = docs.filter(d => !changes.some(c => c.path === `docs/kb/${d.name}` && c.delete));
+    for (const a of added) {
+      const idx = finalDocs.findIndex(d => d.slug === a.slug);
+      const mdContent = changes.find(c => c.path === `docs/kb/${a.slug}.md`);
+      const { meta, body } = parseFrontMatter(mdContent.content);
+      const entry = { slug: a.slug, name: `${a.slug}.md`, meta, bodyHtml: parseBody(body) };
+      if (idx >= 0) finalDocs[idx] = entry; else finalDocs.push(entry);
+    }
+    finalDocs.sort((a, b) => String(b.meta.date || "").localeCompare(String(a.meta.date || "")));
+
+    const kbHtml = await getFile(env, "kb.html");
+    const newKbHtml = replaceBetween(
+      replaceBetween(kbHtml, "<!-- KB-FILTER-START -->", "<!-- KB-FILTER-END -->", renderKbFilter(finalDocs)),
+      "<!-- KB-LIST-START -->", "<!-- KB-LIST-END -->", renderKbList(finalDocs)
+    );
+
+    changes.push({ path: "kb.html", content: newKbHtml });
+    changes.push({ path: "data/kb.json", content: buildKbIndex(finalDocs) });
+
+    const isEdit = !!input.slug;
+    const label = batch ? `导入 ${added.length} 篇知识库文档` : `${isEdit ? "编辑" : "新建"}知识库文档：${added[0].title}`;
+    const commitSha = await commitFiles(env, `📚 后台${label}`, changes);
+
+    return json({
+      ok: true,
+      added,
+      errors,
+      commitSha,
+      message: batch
+        ? `已导入 ${added.length} 篇${errors.length ? `，${errors.length} 篇失败` : ""}，部署后生效（约 1 分钟）`
+        : "已保存，Cloudflare 正在自动部署（约 30 秒~1 分钟）",
+    });
+  }
+
+  // ---- DELETE /api/admin/kb/:slug ----
+  if (method === "DELETE" && rest.length === 2 && rest[0] === "kb") {
+    const slug = decodeURIComponent(rest[1]);
+    const docs = await getAllKbDocs(env);
+    const target = docs.find(d => d.slug === slug);
+    if (!target) return json({ error: "文档不存在" }, 404);
+    const remaining = docs.filter(d => d.slug !== slug);
+
+    const kbHtml = await getFile(env, "kb.html");
+    const newKbHtml = replaceBetween(
+      replaceBetween(kbHtml, "<!-- KB-FILTER-START -->", "<!-- KB-FILTER-END -->", renderKbFilter(remaining)),
+      "<!-- KB-LIST-START -->", "<!-- KB-LIST-END -->", renderKbList(remaining)
+    );
+
+    const commitSha = await commitFiles(env, `🗑️ 后台删除知识库文档：${target.meta.title}`, [
+      { path: `docs/kb/${target.name}`, delete: true },
+      { path: `kb/${slug}.html`, delete: true },
+      { path: "kb.html", content: newKbHtml },
+      { path: "data/kb.json", content: buildKbIndex(remaining) },
+    ]);
+
+    return json({ ok: true, commitSha, message: "已删除并提交，等待自动部署" });
   }
 
   // ---- GET /api/admin/links（关联网站列表）----
