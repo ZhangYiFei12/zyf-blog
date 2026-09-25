@@ -971,7 +971,15 @@ body::after {
    文章页
    ============================================================ */
 .article {
-  padding: 56px 0 80px;
+  /* 阅读栏：限制为“正文宽度 + 左右内边距”并整体居中，
+     避免宽屏下正文贴左、右侧留一大片空白 */
+  max-width: 808px; /* 760 正文 + 24 × 2 内边距 */
+  margin: 0 auto;
+  padding: 56px 24px 80px;
+}
+
+@media (max-width: 480px) {
+  .article { padding: 40px 16px 64px; }
 }
 
 .article-header {
@@ -1000,6 +1008,10 @@ body::after {
   line-height: 1.4;
 }
 
+@media (max-width: 600px) {
+  .article-header h1 { font-size: 23px; }
+}
+
 .article-meta {
   display: flex;
   gap: 18px;
@@ -1009,7 +1021,7 @@ body::after {
 }
 
 .article-body {
-  max-width: 760px;
+  max-width: 100%; /* 宽度由 .article 阅读栏统一控制，避免二者不一致时错位 */
   font-size: 16px;
   line-height: 1.85;
   color: var(--text);
