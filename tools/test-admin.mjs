@@ -80,7 +80,7 @@ const EXISTING_BLOG_HTML = `<!DOCTYPE html>
   </main>
   <footer class="footer">
     <div class="container">
-      <p>© <span data-year>2025</span> 张义飞</p>
+      <p>© <span data-year>2025</span> ZH</p>
     </div>
   </footer>
 </body>

@@ -309,8 +309,8 @@ ${articleHtml}
 
   <footer class="footer">
     <div class="container">
-      <p>© <span data-year>2025</span> 张义飞 · Built with <span class="heart">♥</span> and a lot of coffee</p>
-      <p style="margin-top:6px;font-size:11px;color:#4b5a6e;">&gt;_ zhangyifei · 用代码记录世界</p>
+      <p>© <span data-year>2025</span> ZH · Built with <span class="heart">♥</span> and a lot of coffee</p>
+      <p style="margin-top:6px;font-size:11px;color:#4b5a6e;">&gt;_ ZH · 用代码记录世界</p>
     </div>
   </footer>
 
@@ -427,7 +427,7 @@ export function buildRss(posts, base = "https://zyf2026.pages.dev") {
       return `    <item>\n      <title>${title}</title>\n      <link>${url}</link>\n      <guid isPermaLink="true">${url}</guid>\n      <pubDate>${rfc822(p.meta.date)}</pubDate>\n      <description>${desc}</description>\n    </item>`;
     })
     .join("\n");
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n  <channel>\n    <title>ZH | 个人博客</title>\n    <link>${base}/blog.html</link>\n    <description>ZH（张义飞）的个人博客：技术分享、项目实践与生活随笔。</description>\n    <language>zh-CN</language>\n    <atom:link href="${base}/feed.xml" rel="self" type="application/rss+xml" />\n${items}\n  </channel>\n</rss>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n  <channel>\n    <title>ZH | 个人博客</title>\n    <link>${base}/blog.html</link>\n    <description>ZH 的个人博客：技术分享、项目实践与生活随笔。</description>\n    <language>zh-CN</language>\n    <atom:link href="${base}/feed.xml" rel="self" type="application/rss+xml" />\n${items}\n  </channel>\n</rss>\n`;
 }
 
 /* ---------- 站点地图 sitemap.xml ---------- */
@@ -583,8 +583,8 @@ ${bodyHtml}
 
   <footer class="footer">
     <div class="container">
-      <p>© <span data-year>2025</span> 张义飞 · Built with <span class="heart">♥</span> and a lot of coffee</p>
-      <p style="margin-top:6px;font-size:11px;color:#4b5a6e;">&gt;_ zhangyifei · 用代码记录世界</p>
+      <p>© <span data-year>2025</span> ZH · Built with <span class="heart">♥</span> and a lot of coffee</p>
+      <p style="margin-top:6px;font-size:11px;color:#4b5a6e;">&gt;_ ZH · 用代码记录世界</p>
     </div>
   </footer>
 

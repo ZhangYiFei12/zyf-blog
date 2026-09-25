@@ -1,4 +1,4 @@
-# 张义飞个人博客 · zhangyifei.dev
+# ZH 个人博客 · zhangyifei.dev
 
 > 科技简约风格的个人博客，纯静态 HTML + CSS + JavaScript，零构建步骤，直接部署到 Cloudflare Pages。
 
@@ -315,4 +315,4 @@ node tools/md2html.mjs -w           # 监听模式，保存自动重新生成
 
 ## 📄 License
 
-MIT © 张义飞 (Yifei Zhang)
+MIT © ZH
