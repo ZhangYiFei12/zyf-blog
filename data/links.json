@@ -1,5 +1,14 @@
 [
   {
+    "name": "2048",
+    "url": "https://2048-website.pages.dev/",
+    "desc": "",
+    "icon": "",
+    "published": true,
+    "order": 0,
+    "id": "link-muh0x5nn"
+  },
+  {
     "name": "植物大战僵尸（精简版）",
     "url": "https://pvz-web-br3.pages.dev/",
     "desc": "",
