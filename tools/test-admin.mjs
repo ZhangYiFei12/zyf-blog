@@ -708,6 +708,32 @@ mockServer_.listen(mockPort, async () => {
     if (!page || page.indexOf("CRLF 文档") === -1) throw new Error("生成的页面缺少标题");
   });
 
+  await test("知识库新增/删除同步 sitemap", async () => {
+    // 新增后 sitemap 应包含该文档
+    const md = '---\ntitle: "Sitemap 测试文档"\ncategory: "测试"\ndate: "2026-09-21"\n---\n\n内容\n';
+    const addReq = new Request("http://localhost/api/admin/kb", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ filename: "Sitemap测试文档.md", content: md }),
+    });
+    const addRes = await onRequest({ request: addReq, env: ENV, params: {} });
+    const addData = await addRes.json();
+    if (addRes.status !== 200) throw new Error("新增失败 " + addRes.status);
+    const slug = addData.added[0].slug;
+    let sm = getFile("sitemap.xml");
+    if (!sm || sm.indexOf(`/kb/${slug}.html`) === -1) throw new Error("新增后 sitemap 未包含该文档");
+
+    // 删除后 sitemap 不应再有该文档（避免死链）
+    const delReq = new Request("http://localhost/api/admin/kb/" + encodeURIComponent(slug), {
+      method: "DELETE",
+      headers: { Authorization: "Bearer " + token },
+    });
+    const delRes = await onRequest({ request: delReq, env: ENV, params: {} });
+    if (delRes.status !== 200) throw new Error("删除失败 " + delRes.status);
+    sm = getFile("sitemap.xml");
+    if (sm && sm.indexOf(`/kb/${slug}.html`) !== -1) throw new Error("删除后 sitemap 仍残留该文档（死链）");
+  });
+
   // 结果
   console.log(`\n🎯 结果：${passed} 通过，${failed} 失败，共 ${passed + failed} 项`);
   mockServer_.close();

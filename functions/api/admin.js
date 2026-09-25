@@ -920,6 +920,9 @@ export async function onRequest(context) {
 
     changes.push({ path: "kb.html", content: newKbHtml });
     changes.push({ path: "data/kb.json", content: buildKbIndex(finalDocs) });
+    // 同步 sitemap（否则新增的知识库文档不进站点地图）
+    const postsForSitemap = await getAllPosts(env);
+    changes.push({ path: "sitemap.xml", content: buildSitemap(postsForSitemap, undefined, finalDocs) });
 
     const isEdit = !!input.slug;
     const label = batch ? `导入 ${added.length} 篇知识库文档` : `${isEdit ? "编辑" : "新建"}知识库文档：${added[0].title}`;
@@ -955,6 +958,8 @@ export async function onRequest(context) {
       { path: `kb/${slug}.html`, delete: true },
       { path: "kb.html", content: newKbHtml },
       { path: "data/kb.json", content: buildKbIndex(remaining) },
+      // 同步 sitemap（否则已删除的文档会留下死链）
+      { path: "sitemap.xml", content: buildSitemap(await getAllPosts(env), undefined, remaining) },
     ]);
 
     return json({ ok: true, commitSha, message: "已删除并提交，等待自动部署" });
