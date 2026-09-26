@@ -1,5 +1,14 @@
 [
   {
+    "name": "扫雷",
+    "url": "https://saolei2026.pages.dev/",
+    "desc": "",
+    "icon": "",
+    "published": true,
+    "order": 0,
+    "id": "link-muhp6t7n"
+  },
+  {
     "name": "2048",
     "url": "https://2048-website.pages.dev/",
     "desc": "",
