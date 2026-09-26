@@ -1,5 +1,14 @@
 [
   {
+    "name": "小恐龙",
+    "url": "https://dino-run2026.pages.dev/",
+    "desc": "",
+    "icon": "",
+    "published": true,
+    "order": 0,
+    "id": "link-muhplx64"
+  },
+  {
     "name": "扫雷",
     "url": "https://saolei2026.pages.dev/",
     "desc": "",
