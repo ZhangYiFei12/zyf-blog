@@ -1208,6 +1208,77 @@ body::after {
   box-shadow: 0 0 30px var(--glow), 0 0 60px var(--glow);
 }
 
+/* ============================================================
+   Markdown 渲染增强
+   ============================================================ */
+
+/* 标题锚点：默认隐形，hover / 键盘聚焦才出现，不干扰阅读 */
+.article-body h1,
+.article-body h2,
+.article-body h3,
+.article-body h4 { position: relative; }
+
+.article-body .h-anchor {
+  margin-left: 8px;
+  font-size: 0.62em;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 0.2s ease, color 0.2s ease;
+  /* h2 用了 background-clip:text，必须还原 fill 颜色否则锚点会变透明 */
+  -webkit-text-fill-color: currentColor;
+}
+
+.article-body h1:hover .h-anchor,
+.article-body h2:hover .h-anchor,
+.article-body h3:hover .h-anchor,
+.article-body h4:hover .h-anchor,
+.article-body .h-anchor:focus-visible {
+  opacity: 1;
+}
+
+.article-body .h-anchor:hover { color: var(--accent); }
+
+/* 表格：窄屏可横向滚动，不撑破排版 */
+.article-body .table-wrap {
+  margin: 20px 0;
+  overflow-x: auto;
+  border-radius: var(--radius);
+  -webkit-overflow-scrolling: touch;
+}
+
+.article-body .table-wrap table {
+  margin: 0;
+  min-width: 100%;
+}
+
+/* 居中 / 对齐块（Markdown 里的 <div align="center">） */
+.article-body .md-align-center { text-align: center; }
+.article-body .md-align-left { text-align: left; }
+.article-body .md-align-right { text-align: right; }
+
+/* 任务列表：用 CSS 画勾选框，不引入假的表单控件 */
+.article-body .task-item {
+  list-style: none;
+  position: relative;
+  padding-left: 24px;
+}
+
+.article-body .task-item::before {
+  content: "\2610";
+  position: absolute;
+  left: 0;
+  color: var(--text-dim);
+}
+
+.article-body .task-item.task-done { color: var(--text-dim); }
+
+.article-body .task-item.task-done::before {
+  content: "\2611";
+  color: var(--accent);
+}
+
 .back-link {
   display: inline-block;
   margin-top: 40px;
@@ -2132,6 +2203,10 @@ mark {
 
   .article-body h2, .article-body h3 { color: #000 !important; background: none !important; -webkit-text-fill-color: #000 !important; }
   .article-body a { color: #000 !important; text-decoration: underline; }
+
+  /* 标题锚点是纯交互元素，纸质版没有意义 */
+  .article-body .h-anchor { display: none !important; }
+  .article-body .table-wrap { overflow: visible !important; }
 
   /* 链接后附上 URL，便于纸质版查阅 */
   .article-body a[href^="http"]::after {

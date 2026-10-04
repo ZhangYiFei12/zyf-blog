@@ -4,7 +4,7 @@
    ============================================================ */
 
 /* 静态资源版本：改 CSS/JS 后同步递增（资源走 immutable 缓存） */
-export const ASSET_VER = { css: "26", js: "23" };
+export const ASSET_VER = { css: "27", js: "23" };
 
 /* ---------- Front Matter 解析 ---------- */
 export function parseFrontMatter(raw) {
@@ -41,191 +41,562 @@ export function parseFrontMatter(raw) {
   return { meta, body: raw.trim() };
 }
 
-/* ---------- HTML 转义 ---------- */
+/* ---------- HTML 转义 ----------
+   escapeHtml 只管文本（& < >），escapeAttr 额外转义引号（& < > " '）。
+   扫描器里文本一律走 escapeHtml、属性值一律走 escapeAttr，
+   既防住 ![x](y"onerror="...) 这类属性注入，又不会让正文出现多余的 &quot; */
+const TEXT_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;" };
+const ATTR_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export function escapeHtml(s) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(s == null ? "" : s).replace(/[&<>]/g, ch => TEXT_MAP[ch]);
 }
-
 export function escapeAttr(s) {
-  return String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  return String(s == null ? "" : s).replace(/[&<>"']/g, ch => ATTR_MAP[ch]);
 }
 
-/* ---------- 行内格式 ---------- */
-export function inline(text) {
-  let s = escapeHtml(text);
-  // 行内代码（用占位符保护）
-  const codes = [];
-  s = s.replace(/`([^`]+)`/g, (_, c) => {
-    codes.push(c);
-    return "\u0000C" + (codes.length - 1) + "\u0000";
-  });
-  // 图片 ![alt](src)
-  s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, '<img src="$2" alt="$1" />');
-  // 链接 [text](url)（页内锚点 # 或相对路径不加 target=_blank）
-  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, t, u) =>
-    /^#|^\./ .test(u) ? `<a href="${u}">${t}</a>` : `<a href="${u}" target="_blank" rel="noopener">${t}</a>`
-  );
-  // 加粗
-  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
-  // 删除线
-  s = s.replace(/~~([^~]+)~~/g, "<del>$1</del>");
-  // 斜体
-  s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
-  s = s.replace(/(^|[^_])_([^_\n]+)_/g, "$1<em>$2</em>");
-  // 还原行内代码
-  s = s.replace(/\u0000C(\d+)\u0000/g, (_, i) => `<code>${codes[+i]}</code>`);
-  return s;
+/* ---------- URL 安全过滤 ----------
+   先把 HTML 实体与不可见控制字符归一，再判断协议，
+   拦掉 javascript: / vbscript: / data: 等可执行协议
+   （旧版 [点我](javascript:alert(1)) 会原样输出成可点击的 XSS 链接） */
+const CTRL_RE = /[\u0000-\u0020\u00a0\u1680\u2000-\u200f\u2028-\u202f\u205f\u3000\ufeff]/g;
+function urlProbe(raw) {
+  return String(raw == null ? "" : raw)
+    .replace(/&#x([0-9a-f]{1,6});?/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&#(\d{1,7});?/g, (_, d) => String.fromCharCode(Number(d)))
+    .replace(CTRL_RE, "")
+    .toLowerCase();
+}
+export function safeUrl(raw) {
+  const u = String(raw == null ? "" : raw).trim();
+  const p = urlProbe(u);
+  if (/^(?:javascript|vbscript|file|blob|filesystem):/.test(p)) return "#";
+  if (/^data:/.test(p)) return "#";
+  return u;
+}
+export function safeImageUrl(raw) {
+  const u = String(raw == null ? "" : raw).trim();
+  const p = urlProbe(u);
+  if (/^(?:javascript|vbscript|file|blob|filesystem):/.test(p)) return "";
+  if (/^data:(?!image\/)/.test(p)) return "";
+  return u;
 }
 
-/* ---------- 块级解析 ---------- */
-export function parseBody(md) {
-  const lines = md.split("\n");
-  const html = [];
+/* ---------- 标题锚点 id ----------
+   GitHub 风格 slug，与文章里手写目录的锚点格式一致：
+     "📌 项目概述" → "-项目概述"（emoji 去掉后留下的空格变短横线）
+   注意：不能裁剪首尾短横线，否则刚好和手写目录对不上。
+   旧版标题完全没有 id，导致介绍文档里 8 个目录锚点全部点不动。 */
+const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0E}\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu;
+const SLUG_PUNCT_RE = /[\\'!"#$%&()*+,./:;<=>?@[\]^`{|}~]/g;
+export function headingSlug(text) {
+  return String(text == null ? "" : text)
+    .replace(/<[^>]*>/g, "")
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[`*_~]/g, "")
+    .replace(EMOJI_RE, "")
+    .toLowerCase()
+    .replace(SLUG_PUNCT_RE, "")
+    .replace(/\s+/g, "-");
+}
+
+/* ---------- 行内渲染 ----------
+   手写扫描器（取代「先整体转义、再用正则替换」的旧实现）。旧实现有三个硬伤：
+     1. 正则会把已经生成的标签内容再改写一遍 ——
+        [wiki](.../Foo_(bar)) 会产出 <a href="...Foo<em>(bar"> 这种破损 HTML
+     2. 图片/链接的 alt、href 取自转义后的字符串，但转义不含引号 → 属性注入
+     3. URL 里的括号会截断匹配
+   扫描器逐个字符处理，生成的标签直接落到输出里，不再被二次解析。 */
+const INLINE_TAGS = new Set([
+  "br", "wbr", "hr", "kbd", "sup", "sub", "mark", "abbr", "small", "big",
+  "b", "i", "u", "s", "em", "strong", "del", "ins", "cite", "q", "code",
+  "var", "samp", "dfn", "time", "span", "ruby", "rt", "rp", "bdi", "bdo",
+]);
+const VOID_TAGS = new Set(["br", "wbr", "hr"]);
+const ESCAPABLE_CH = /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/;
+
+/* 从 pos（指向 '['）解析 [label](target "title")；失败返回 null */
+function parseLinkTarget(src, pos) {
+  let depth = 0;
+  let close = -1;
+  for (let k = pos; k < src.length; k++) {
+    const c = src[k];
+    if (c === "\\") { k++; continue; }
+    if (c === "[") depth++;
+    else if (c === "]") { depth--; if (depth === 0) { close = k; break; } }
+  }
+  if (close === -1 || src[close + 1] !== "(") return null;
+
+  const label = src.slice(pos + 1, close);
+  let k = close + 2;
+  while (k < src.length && /\s/.test(src[k])) k++;
+
+  let url = "";
+  if (src[k] === "<") {
+    k++;
+    while (k < src.length && src[k] !== ">") {
+      if (src[k] === "\\") k++;
+      url += src[k];
+      k++;
+    }
+    k++;
+  } else {
+    let paren = 0;
+    for (; k < src.length; k++) {
+      const c = src[k];
+      if (c === "\\") { url += src[k + 1] || ""; k++; continue; }
+      if (/\s/.test(c) && paren === 0) break;
+      if (c === "(") { paren++; url += c; continue; }
+      if (c === ")") { if (paren === 0) break; paren--; url += c; continue; }
+      url += c;
+    }
+  }
+
+  while (k < src.length && /\s/.test(src[k])) k++;
+  let title = "";
+  const q = src[k];
+  if (q === '"' || q === "'" || q === "(") {
+    const endq = q === "(" ? ")" : q;
+    let j = k + 1;
+    while (j < src.length && src[j] !== endq) j++;
+    title = src.slice(k + 1, j);
+    k = j + 1;
+    while (k < src.length && /\s/.test(src[k])) k++;
+  }
+  if (src[k] !== ")") return null;
+  return { label, url, title, end: k + 1 };
+}
+
+function renderLink(label, url, title) {
+  const href = safeUrl(url);
+  const t = title ? ` title="${escapeAttr(title)}"` : "";
+  const ext = /^(?:https?:)?\/\//i.test(url) || /^mailto:/i.test(url) || /^tel:/i.test(url);
+  const attrs = ext ? ' target="_blank" rel="noopener noreferrer"' : "";
+  return `<a href="${escapeAttr(href)}"${t}${attrs}>${inline(label, { allowBreak: false })}</a>`;
+}
+
+/* 强调 / 删除线：返回 {html,end} 或 null */
+const EMPH_RULES = [
+  { open: "***", close: "***", wrap: ["<strong><em>", "</em></strong>"], word: true },
+  { open: "___", close: "___", wrap: ["<strong><em>", "</em></strong>"], word: false },
+  { open: "**", close: "**", wrap: ["<strong>", "</strong>"], word: true },
+  { open: "__", close: "__", wrap: ["<strong>", "</strong>"], word: false },
+  { open: "~~", close: "~~", wrap: ["<del>", "</del>"], word: true },
+  { open: "*", close: "*", wrap: ["<em>", "</em>"], word: true },
+  { open: "_", close: "_", wrap: ["<em>", "</em>"], word: false },
+];
+
+function matchEmphasis(src, pos) {
+  const rest = src.slice(pos);
+  for (const r of EMPH_RULES) {
+    if (!rest.startsWith(r.open)) continue;
+    // 下划线不在词内生效，避免 file_name_here 被斜体
+    if (!r.word && pos > 0 && /[\p{L}\p{N}]/u.test(src[pos - 1])) continue;
+    const inner = rest.slice(r.open.length);
+    if (!inner || /^\s/.test(inner)) continue;
+    const idx = inner.indexOf(r.close);
+    if (idx <= 0) continue;
+    const content = inner.slice(0, idx);
+    if (/[\s\n]$/.test(content)) continue;
+    return {
+      html: r.wrap[0] + inline(content, { allowBreak: false }) + r.wrap[1],
+      end: pos + r.open.length + idx + r.close.length,
+    };
+  }
+  return null;
+}
+
+export function inline(text, opts = {}) {
+  const src = String(text == null ? "" : text);
+  const allowBreak = opts.allowBreak !== false;
+  const imgEager = !!opts.eagerImage;
+  let out = "";
   let i = 0;
-  let guard = 0;
 
-  function collectParagraph() {
-    const buf = [];
-    while (i < lines.length) {
-      const l = lines[i];
-      if (l.trim() === "") break;
-      if (/^#{1,6}\s/.test(l) || /^```/.test(l) || /^~~~/.test(l)) break;
-      if (/^\s*(>|[-*+]|\d+\.|\|)/.test(l)) break;
-      buf.push(l);
-      i++;
-    }
-    return buf;
-  }
+  while (i < src.length) {
+    const c = src[i];
 
-  function renderList() {
-    const items = [];
-    while (i < lines.length) {
-      const l = lines[i];
-      const m = l.match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
-      if (!m) break;
-      const ordered = m[2] !== "-" && m[2] !== "*" && m[2] !== "+";
-      const indent = m[1].replace(/\t/g, "  ").length;
-      items.push({ indent, ordered, text: m[3], raw: l });
-      i++;
-      while (i < lines.length && /^\s+[-*+]|^\d+\.\s/.test(lines[i])) {
-        const s = lines[i].match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
-        if (!s) break;
-        const subIndent = s[1].replace(/\t/g, "  ").length;
-        if (subIndent <= indent) break;
-        if (subIndent - indent > 4) break;
-        items.push({ indent: subIndent, ordered: s[2] !== "-" && s[2] !== "*" && s[2] !== "+", text: s[3], raw: lines[i] });
-        i++;
-      }
-    }
-    let out = "";
-    let curIndent = -1;
-    let curList = null;
-    for (const it of items) {
-      if (curIndent !== it.indent) {
-        if (curList) out += `</${curList}>\n`;
-        curList = it.ordered ? "ol" : "ul";
-        out += `<${curList}>\n`;
-        curIndent = it.indent;
-      }
-      out += `  <li>${inline(it.text)}</li>\n`;
-    }
-    if (curList) out += `</${curList}>\n`;
-    return out;
-  }
-
-  function renderTable() {
-    const header = lines[i].split("|").map(c => c.trim()).filter((c, idx, arr) => !(idx === 0 && c === "") && !(idx === arr.length - 1 && c === ""));
-    i++;
-    if (i >= lines.length || !/^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i].replace(/[^|\-: ]/g, ""))) {
-      i--;
-      return "";
-    }
-    i++;
-    const rows = [];
-    while (i < lines.length && lines[i].trim() !== "" && lines[i].includes("|")) {
-      const cells = lines[i].split("|").map(c => c.trim()).filter((c, idx, arr) => !(idx === 0 && c === "") && !(idx === arr.length - 1 && c === ""));
-      rows.push(cells);
-      i++;
-    }
-    let out = "<table>\n<thead><tr>";
-    for (const h of header) out += `<th>${inline(h)}</th>`;
-    out += "</tr></thead>\n<tbody>\n";
-    for (const r of rows) {
-      out += "<tr>";
-      for (const c of r) out += `<td>${inline(c)}</td>`;
-      out += "</tr>\n";
-    }
-    out += "</tbody>\n</table>\n";
-    return out;
-  }
-
-  while (i < lines.length) {
-    if (++guard > lines.length * 20 + 100000) {
-      break;
-    }
-    const l = lines[i];
-
-    if (/^```/.test(l) || /^~~~/.test(l)) {
-      const fence = l.match(/^(`{3,}|~{3,})\s*([a-zA-Z0-9_+-]*)/)[1];
-      const lang = l.match(/^(`{3,}|~{3,})\s*([a-zA-Z0-9_+-]*)/)[2];
-      i++;
-      const code = [];
-      while (i < lines.length && !lines[i].startsWith(fence)) {
-        code.push(lines[i]);
-        i++;
-      }
-      i++;
-      html.push(`<pre><code${lang ? ` class="language-${lang}"` : ""}>${escapeHtml(code.join("\n"))}</code></pre>`);
+    /* 反斜杠转义（旧版完全不支持，\* 会原样显示） */
+    if (c === "\\" && i + 1 < src.length && ESCAPABLE_CH.test(src[i + 1])) {
+      out += escapeHtml(src[i + 1]);
+      i += 2;
       continue;
     }
 
-    const h = l.match(/^(#{1,6})\s+(.*)$/);
-    if (h) {
-      const lvl = h[1].length;
-      html.push(`<h${lvl}>${inline(h[2])}</h${lvl}>`);
-      i++;
-      continue;
-    }
-
-    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(l)) {
-      html.push("<hr />");
-      i++;
-      continue;
-    }
-
-    if (/^\s*>\s?/.test(l)) {
-      const quote = [];
-      while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
-        quote.push(lines[i].replace(/^\s*>\s?/, ""));
-        i++;
-      }
-      html.push(`<blockquote>${inline(quote.join(" "))}</blockquote>`);
-      continue;
-    }
-
-    if (/^\s*([-*+]|\d+\.)\s+/.test(l)) {
-      html.push(renderList());
-      continue;
-    }
-
-    if (l.includes("|") && /^\s*\|/.test(l)) {
-      html.push(renderTable());
-      continue;
-    }
-
-    if (l.trim() !== "") {
-      const para = collectParagraph();
-      if (para.length) {
-        html.push(`<p>${inline(para.join("<br />\n"))}</p>`);
+    /* 行内代码 */
+    if (c === "`") {
+      const m = /^(`+)([\s\S]*?)\1(?!`)/.exec(src.slice(i));
+      if (m) {
+        out += `<code>${escapeHtml(m[2].replace(/^ (\S)/, "$1").replace(/(\S) $/, "$1"))}</code>`;
+        i += m[0].length;
         continue;
       }
     }
 
+    /* 图片 */
+    if (c === "!" && src[i + 1] === "[") {
+      const r = parseLinkTarget(src, i + 1);
+      if (r) {
+        const url = safeImageUrl(r.url);
+        if (url) {
+          const t = r.title ? ` title="${escapeAttr(r.title)}"` : "";
+          out += `<img src="${escapeAttr(url)}" alt="${escapeAttr(r.label)}"${t}`
+            + (imgEager ? ' decoding="async" />' : ' loading="lazy" decoding="async" />');
+        } else {
+          out += escapeHtml(r.label);
+        }
+        i = r.end;
+        continue;
+      }
+    }
+
+    /* 链接 */
+    if (c === "[") {
+      const r = parseLinkTarget(src, i);
+      if (r) {
+        out += renderLink(r.label, r.url, r.title);
+        i = r.end;
+        continue;
+      }
+    }
+
+    /* <...>：HTML 注释 / 自动链接 / 白名单行内标签 */
+    if (c === "<") {
+      const rest = src.slice(i);
+      let m;
+      if ((m = /^<!--[\s\S]*?-->/.exec(rest))) { i += m[0].length; continue; }
+      if ((m = /^<((?:https?|mailto|tel):[^<>\s]+)>/i.exec(rest))) {
+        out += `<a href="${escapeAttr(safeUrl(m[1]))}" target="_blank" rel="noopener noreferrer">`
+          + `${escapeHtml(m[1].replace(/^mailto:/i, ""))}</a>`;
+        i += m[0].length;
+        continue;
+      }
+      if ((m = /^<(\/?)([a-zA-Z][a-zA-Z0-9]*)(\s[^<>]*)?\/?>/.exec(rest))) {
+        const tag = m[2].toLowerCase();
+        if (INLINE_TAGS.has(tag)) {
+          out += VOID_TAGS.has(tag) ? `<${tag} />` : `<${m[1]}${tag}>`;
+          i += m[0].length;
+          continue;
+        }
+      }
+      out += "&lt;";
+      i++;
+      continue;
+    }
+
+    /* 裸 URL 自动链接 */
+    if ((c === "h" || c === "H" || c === "w" || c === "W") && /^(?:https?:\/\/|www\.)/i.test(src.slice(i, i + 8))) {
+      const m = /^(?:https?:\/\/|www\.)[^\s<>"'\u3000]+/i.exec(src.slice(i));
+      if (m) {
+        const shown = m[0].replace(/[.,;:!?、。，；：！？]+$/, "");
+        const href = /^www\./i.test(shown) ? "https://" + shown : shown;
+        out += `<a href="${escapeAttr(safeUrl(href))}" target="_blank" rel="noopener noreferrer">${escapeHtml(shown)}</a>`;
+        i += shown.length;
+        continue;
+      }
+    }
+
+    /* 强调 / 删除线 */
+    const em = matchEmphasis(src, i);
+    if (em) { out += em.html; i = em.end; continue; }
+
+    /* 换行 */
+    if (c === "\n") {
+      out += allowBreak ? "<br />\n" : " ";
+      i++;
+      continue;
+    }
+
+    out += escapeHtml(c);
     i++;
   }
+  return out;
+}
 
-  return html.join("\n\n");
+/* ---------- 块级解析 ---------- */
+const RE_FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
+const RE_HEAD = /^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$/;
+const RE_QUOTE = /^ {0,3}>/;
+const RE_HR = /^ {0,3}(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$/;
+const RE_ITEM = /^( *)([-*+]|\d{1,9}[.)])\s+(.*)$/;
+const RE_CENTER = /^ {0,3}<div\s+align\s*=\s*["']?(center|left|right)["']?\s*>/i;
+const RE_CENTER_END = /^ {0,3}<\/div>\s*$/i;
+const RE_SETEXT = /^ {0,3}(=+|-+)\s*$/;
+const RE_TASK = /^\[([ xX])\]\s*(.*)$/;
+
+export function parseBody(md) {
+  const lines = String(md == null ? "" : md).replace(/\r\n?/g, "\n").split("\n");
+  const out = [];
+  const usedIds = new Map();
+  let i = 0;
+
+  function uniqueId(base) {
+    const b = base || "section";
+    if (!usedIds.has(b)) { usedIds.set(b, 0); return b; }
+    let k = usedIds.get(b) + 1;
+    while (usedIds.has(`${b}-${k}`)) k++;
+    usedIds.set(b, k);
+    usedIds.set(`${b}-${k}`, 0);
+    return `${b}-${k}`;
+  }
+
+  function headingHtml(level, rawText) {
+    const text = String(rawText).trim();
+    const id = uniqueId(headingSlug(text));
+    return `<h${level} id="${escapeAttr(id)}">${inline(text, { allowBreak: false })}`
+      + `<a class="h-anchor" href="#${escapeAttr(id)}" aria-label="本节链接">#</a></h${level}>`;
+  }
+
+  /* 表格：被竖线分隔的单元格，且下一行必须是「列数一致」的合法分隔行。
+     旧实现只要看到 | 就进表格分支，分隔行不合法时 i-- 回退 → 主循环原地打转，
+     一次畸形表格会产出 10 万个空块（约 195KB 垃圾）。现在不合法就不是表格。 */
+  function splitRow(line) {
+    let s = String(line).trim();
+    if (s.startsWith("|")) s = s.slice(1);
+    if (s.endsWith("|") && !s.endsWith("\\|")) s = s.slice(0, -1);
+    return s.split(/(?<!\\)\|/).map(c => c.replace(/\\\|/g, "|").trim());
+  }
+
+  function isTableStart(idx) {
+    const head = lines[idx];
+    const sep = lines[idx + 1];
+    if (head == null || sep == null) return false;
+    if (!head.includes("|")) return false;
+    if (!sep.includes("-") || !sep.includes("|")) return false;
+    const hc = splitRow(head);
+    const sc = splitRow(sep);
+    if (hc.length < 2 || hc.length !== sc.length) return false;
+    return sc.every(c => /^:?-{1,}:?$/.test(c));
+  }
+
+  function renderTable() {
+    const align = splitRow(lines[i + 1]).map(c => {
+      const l = c.startsWith(":");
+      const r = c.endsWith(":");
+      return l && r ? "center" : r ? "right" : l ? "left" : "";
+    });
+    const head = splitRow(lines[i]);
+    i += 2;
+    const rows = [];
+    while (i < lines.length && lines[i].trim() !== "" && lines[i].includes("|")) {
+      rows.push(splitRow(lines[i]));
+      i++;
+    }
+    const cell = (tag, text, k) => {
+      const a = align[k] ? ` style="text-align:${align[k]}"` : "";
+      return `<${tag}${a}>${inline(text, { allowBreak: false })}</${tag}>`;
+    };
+    let html = '<div class="table-wrap">\n<table>\n<thead>\n<tr>';
+    head.forEach((h, k) => { html += cell("th", h, k); });
+    html += "</tr>\n</thead>\n<tbody>\n";
+    for (const r of rows) {
+      html += "<tr>";
+      head.forEach((_, k) => { html += cell("td", r[k] || "", k); });
+      html += "</tr>\n";
+    }
+    html += "</tbody>\n</table>\n</div>";
+    return html;
+  }
+
+  /* 列表：先把所有项按缩进读进来，再用栈构建真正的嵌套结构。
+     旧实现遇到缩进变化就关掉当前列表、另开一个 → 子项变成兄弟项，层级丢失。 */
+  function readListItems() {
+    const items = [];
+    while (i < lines.length) {
+      const m = RE_ITEM.exec(lines[i]);
+      if (!m) break;
+      const indent = m[1].replace(/\t/g, "  ").length;
+      const node = { indent, ordered: m[2] !== "-" && m[2] !== "*" && m[2] !== "+", text: m[3], children: [] };
+      items.push(node);
+      i++;
+      // 续行：缩进更深、且不是新的列表项/块级起始
+      while (
+        i < lines.length &&
+        lines[i].trim() !== "" &&
+        /^\s{2,}/.test(lines[i]) &&
+        !RE_ITEM.test(lines[i]) &&
+        !RE_FENCE.test(lines[i]) &&
+        !RE_CENTER.test(lines[i])
+      ) {
+        node.text += " " + lines[i].trim();
+        i++;
+      }
+    }
+    return items;
+  }
+
+  function buildListTree(items) {
+    const root = { indent: -1, children: [] };
+    const stack = [root];
+    for (const it of items) {
+      while (stack.length > 1 && it.indent <= stack[stack.length - 1].indent) stack.pop();
+      const parent = stack[stack.length - 1];
+      parent.children.push(it);
+      stack.push(it);
+    }
+    return root;
+  }
+
+  function renderListChildren(nodes) {
+    let html = "";
+    let k = 0;
+    while (k < nodes.length) {
+      const ordered = nodes[k].ordered;
+      const group = [];
+      while (k < nodes.length && nodes[k].ordered === ordered) { group.push(nodes[k]); k++; }
+      const tag = ordered ? "ol" : "ul";
+      html += `<${tag}>\n`;
+      for (const node of group) {
+        const task = RE_TASK.exec(node.text);
+        let cls = "";
+        let inner;
+        if (task) {
+          cls = task[1].trim() === "" ? ' class="task-item"' : ' class="task-item task-done"';
+          inner = inline(task[2], { allowBreak: false });
+        } else {
+          inner = inline(node.text);
+        }
+        html += `  <li${cls}>${inner}`;
+        const sub = renderListChildren(node.children);
+        if (sub) html += "\n" + sub.replace(/^(?=.)/gm, "    ") + "  ";
+        html += "</li>\n";
+      }
+      html += `</${tag}>\n`;
+    }
+    return html;
+  }
+
+  function renderList() {
+    return renderListChildren(buildListTree(readListItems()).children);
+  }
+
+  /* 块级起始判定：主循环与段落收集共用同一套规则。
+     旧实现让段落收集单独判断「行首是不是 * + > |」，一旦是就中断且不消费该行，
+     导致 *强调* 开头的段落被整行静默丢弃（数据丢失）。 */
+  function isBlockStart(idx) {
+    const l = lines[idx];
+    if (l == null || l.trim() === "") return true;
+    if (RE_FENCE.test(l)) return true;
+    if (RE_HEAD.test(l)) return true;
+    if (RE_QUOTE.test(l)) return true;
+    if (RE_HR.test(l)) return true;
+    if (RE_ITEM.test(l)) return true;
+    if (RE_CENTER.test(l)) return true;
+    if (RE_CENTER_END.test(l)) return true;
+    return isTableStart(idx);
+  }
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (line.trim() === "") { i++; continue; }
+
+    /* 围栏代码块 */
+    let m = RE_FENCE.exec(line);
+    if (m) {
+      const fence = m[1];
+      const lang = (m[2].trim().split(/\s+/)[0] || "").replace(/[^a-zA-Z0-9_+#.-]/g, "");
+      const closeRe = new RegExp("^ {0,3}" + fence[0] + "{" + fence.length + ",}\\s*$");
+      i++;
+      const buf = [];
+      while (i < lines.length && !closeRe.test(lines[i])) { buf.push(lines[i]); i++; }
+      i++;
+      while (buf.length && buf[buf.length - 1].trim() === "") buf.pop();
+      out.push(`<pre><code${lang ? ` class="language-${escapeAttr(lang)}"` : ""}>${escapeHtml(buf.join("\n"))}</code></pre>`);
+      continue;
+    }
+
+    /* <div align="center"> 居中块（旧版会把它转义成页面上的裸标签文字） */
+    if (RE_CENTER.test(line)) {
+      const align = RE_CENTER.exec(line)[1].toLowerCase();
+      i++;
+      const buf = [];
+      while (i < lines.length && !RE_CENTER_END.test(lines[i])) { buf.push(lines[i]); i++; }
+      if (i < lines.length) i++;
+      const inner = parseBody(buf.join("\n"));
+      out.push(`<div class="md-align-${align}">\n${inner}\n</div>`);
+      continue;
+    }
+
+    /* 标题 */
+    m = RE_HEAD.exec(line);
+    if (m) {
+      out.push(headingHtml(m[1].length, m[2]));
+      i++;
+      continue;
+    }
+
+    /* 分隔线 */
+    if (RE_HR.test(line)) {
+      out.push("<hr />");
+      i++;
+      continue;
+    }
+
+    /* 引用块 */
+    if (RE_QUOTE.test(line)) {
+      const groups = [];
+      let cur = [];
+      while (i < lines.length) {
+        if (RE_QUOTE.test(lines[i])) {
+          const inner = lines[i].replace(/^ {0,3}>\s?/, "");
+          if (inner.trim() === "") {
+            if (cur.length) { groups.push(cur); cur = []; }
+          } else {
+            cur.push(inner);
+          }
+          i++;
+        } else if (lines[i].trim() !== "" && cur.length && !isBlockStart(i)) {
+          cur.push(lines[i]);   // 懒续行
+          i++;
+        } else break;
+      }
+      if (cur.length) groups.push(cur);
+      if (groups.length === 1) {
+        out.push(`<blockquote>${inline(groups[0].join("\n"))}</blockquote>`);
+      } else {
+        out.push("<blockquote>\n" + groups.map(g => `<p>${inline(g.join("\n"))}</p>`).join("\n") + "\n</blockquote>");
+      }
+      continue;
+    }
+
+    /* 表格（必须先确认下一行是合法分隔行） */
+    if (isTableStart(i)) {
+      out.push(renderTable());
+      continue;
+    }
+
+    /* 列表 */
+    if (RE_ITEM.test(line)) {
+      out.push(renderList().replace(/\n$/, ""));
+      continue;
+    }
+
+    /* 段落（含 Setext 标题：=== 一定是标题，--- 仍按分隔线处理） */
+    const buf = [];
+    while (i < lines.length) {
+      const cur = lines[i];
+      if (cur.trim() === "") break;
+      if (buf.length && /^ {0,3}=+\s*$/.test(cur)) break;
+      if (isBlockStart(i)) break;
+      buf.push(cur);
+      i++;
+    }
+    if (!buf.length) { buf.push(lines[i]); i++; }
+
+    if (i < lines.length && /^ {0,3}=+\s*$/.test(lines[i])) {
+      out.push(headingHtml(2, buf.join(" ")));
+      i++;
+      continue;
+    }
+
+    const para = inline(buf.join("\n"));
+    if (para.trim() !== "") out.push(`<p>${para}</p>`);
+  }
+
+  const html = out.join("\n\n");
+  // 首图不做懒加载（通常是首屏 LCP 元素）
+  return html.replace(' loading="lazy"', "");
 }
 
 /* ---------- 文章片段（预览与生产共用，保证所见即所得） ---------- */
@@ -260,6 +631,7 @@ export function readingMinutes(input) {
   const text = String(input || "")
     .replace(/<pre[\s\S]*?<\/pre>/gi, " ")   // 代码块不计入阅读时长
     .replace(/<[^>]+>/g, " ")
+    .replace(/&#x?[0-9a-f]+;?/gi, " ")          // 数字实体（&#39; 等）
     .replace(/&[a-z]+;/gi, " ")
     .replace(/\s+/g, " ")
     .trim();

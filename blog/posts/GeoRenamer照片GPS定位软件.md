@@ -7,7 +7,7 @@ tags: ["工具"]
 
 # 📍 GeoRenamer
 
-**简体中文** | [English](README.en.md)
+**简体中文** | [English](https://github.com/ZhangYiFei12/use-photo-gps-find-address/blob/main/README.en.md)
 
 按位置信息重命名照片/视频 — 读取 GPS 坐标，自动反查地名，按自定义格式批量重命名文件。
 

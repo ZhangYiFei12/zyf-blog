@@ -6,7 +6,7 @@
   <title>MirrorSync 双向同步工具 | ZH</title>
   <meta name="description" content="MirrorSync 双向同步工具" />
   <link rel="canonical" href="https://zyf2026.pages.dev/blog/MirrorSync-双向同步工具" />
-  <link rel="stylesheet" href="../css/style.css?v=26" />
+  <link rel="stylesheet" href="../css/style.css?v=27" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
   <link rel="manifest" href="../manifest.json" />
   <meta name="theme-color" content="#0a0e14" />
@@ -63,26 +63,29 @@
       </header>
 
       <div class="article-body">
-<p>&lt;div align="center"&gt;</p>
+<div class="md-align-center">
+<h1 id="-mirrorsync-双向同步工具">🔄 MirrorSync 双向同步工具<a class="h-anchor" href="#-mirrorsync-双向同步工具" aria-label="本节链接">#</a></h1>
 
-<h1>🔄 MirrorSync 双向同步工具</h1>
+<p><strong>基于 .NET 6 (WPF) 的 Windows 双向文件同步软件</strong></p>
 
 <p>在 A、B 两个文件夹（或盘符）之间<strong>实时双向同步</strong>，支持手动同步、冲突/删除策略、自定义过滤规则、系统托盘常驻。</p>
 
-<p><img src="https://img.shields.io/badge/C%23-10.0-239120?style=flat-square&amp;logo=csharp" alt="C#" />&lt;br /&gt;
-<img src="https://img.shields.io/badge/.NET-6.0-512BD4?style=flat-square&amp;logo=dotnet" alt=".NET" />&lt;br /&gt;
-<img src="https://img.shields.io/badge/UI-WPF-512BD4?style=flat-square" alt="WPF" />&lt;br /&gt;
-<img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?style=flat-square&amp;logo=windows" alt="Platform" />&lt;br /&gt;
-<img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=flat-square" alt="License" /></p>
-
-<p>&lt;/div&gt;</p>
+<p><img src="https://img.shields.io/badge/C%23-10.0-239120?style=flat-square&amp;logo=csharp" alt="C#" decoding="async" /><br />
+<img src="https://img.shields.io/badge/.NET-6.0-512BD4?style=flat-square&amp;logo=dotnet" alt=".NET" decoding="async" /><br />
+<img src="https://img.shields.io/badge/UI-WPF-512BD4?style=flat-square" alt="WPF" loading="lazy" decoding="async" /><br />
+<img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078D6?style=flat-square&amp;logo=windows" alt="Platform" loading="lazy" decoding="async" /><br />
+<img src="https://img.shields.io/badge/License-GPL--3.0-blue?style=flat-square" alt="License" loading="lazy" decoding="async" /></p>
+</div>
 
 <hr />
 
-<h2>✨ 功能特性</h2>
+<h2 id="-功能特性">✨ 功能特性<a class="h-anchor" href="#-功能特性" aria-label="本节链接">#</a></h2>
 
+<div class="table-wrap">
 <table>
-<thead><tr><th>特性</th><th>说明</th></tr></thead>
+<thead>
+<tr><th>特性</th><th>说明</th></tr>
+</thead>
 <tbody>
 <tr><td>🔁 <strong>双向同步</strong></td><td>两侧互为镜像，任意一侧变更自动同步到另一侧</td></tr>
 <tr><td>⚡ <strong>实时监控</strong></td><td><code>FileSystemWatcher</code> 双目录监听，400ms 去抖 + 回声抑制防循环</td></tr>
@@ -97,16 +100,16 @@
 <tr><td>💻 <strong>命令行模式</strong></td><td><code>--sync-once</code> 支持自动化/批量脚本</td></tr>
 </tbody>
 </table>
-
+</div>
 
 <hr />
 
-<h2>🚀 快速开始</h2>
+<h2 id="-快速开始">🚀 快速开始<a class="h-anchor" href="#-快速开始" aria-label="本节链接">#</a></h2>
 
-<h3>方式一：图形界面（日常使用）</h3>
+<h3 id="方式一：图形界面（日常使用）">方式一：图形界面（日常使用）<a class="h-anchor" href="#方式一：图形界面（日常使用）" aria-label="本节链接">#</a></h3>
 
 <ol>
-  <li>从 <a href="https://github.com/ZhangYiFei12/MirrorSync/releases" target="_blank" rel="noopener">Releases</a> 下载安装包并安装（自包含，无需安装 .NET）</li>
+  <li>从 <a href="https://github.com/ZhangYiFei12/MirrorSync/releases" target="_blank" rel="noopener noreferrer">Releases</a> 下载安装包并安装（自包含，无需安装 .NET）</li>
   <li>打开后点击工具栏「<strong>⚙ 设置</strong>」</li>
   <li>填写 <strong>A 盘</strong> 和 <strong>B 盘</strong> 路径（盘符根目录或任意文件夹）</li>
   <li>调整策略与过滤规则，点「保存」</li>
@@ -114,29 +117,31 @@
   <li>关闭窗口默认最小化到<strong>系统托盘</strong>，双击托盘图标恢复</li>
 </ol>
 
-
-<h3>方式二：命令行（自动化/批量）</h3>
+<h3 id="方式二：命令行（自动化批量）">方式二：命令行（自动化/批量）<a class="h-anchor" href="#方式二：命令行（自动化批量）" aria-label="本节链接">#</a></h3>
 
 <pre><code class="language-bash">MirrorSync.exe --sync-once --path-a "D:\A" --path-b "D:\B" \
   --delete auto --conflict newest --result result.json</code></pre>
 
+<div class="table-wrap">
 <table>
-<thead><tr><th>参数</th><th>说明</th></tr></thead>
+<thead>
+<tr><th>参数</th><th>说明</th></tr>
+</thead>
 <tbody>
 <tr><td><code>--sync-once</code></td><td>执行一次全量双向同步后退出（无界面）</td></tr>
 <tr><td><code>--path-a</code> / <code>--path-b</code></td><td>覆盖配置中的同步路径</td></tr>
-<tr><td>`--delete auto\</td><td>prompt\</td><td>never`</td><td>删除策略：自动 / 弹窗(无界面按保留) / 永不</td></tr>
-<tr><td>`--conflict newest\</td><td>prompt\</td><td>keepboth\</td><td>skip`</td><td>冲突策略</td></tr>
+<tr><td><code>--delete auto|prompt|never</code></td><td>删除策略：自动 / 弹窗(无界面按保留) / 永不</td></tr>
+<tr><td><code>--conflict newest|prompt|keepboth|skip</code></td><td>冲突策略</td></tr>
 <tr><td><code>--result file.json</code></td><td>结果写入 JSON</td></tr>
 </tbody>
 </table>
-
+</div>
 
 <p>退出码：<code>0</code> 成功，<code>1</code> 异常，<code>2</code> 有同步错误。</p>
 
 <hr />
 
-<h2>🛠️ 从源码构建</h2>
+<h2 id="-从源码构建">🛠️ 从源码构建<a class="h-anchor" href="#-从源码构建" aria-label="本节链接">#</a></h2>
 
 <p>环境要求：<strong>.NET SDK 6.0+</strong>（Windows）</p>
 
@@ -154,7 +159,7 @@ dotnet publish MirrorSync.csproj -c Release -r win-x64 --self-contained \
 
 <hr />
 
-<h2>📁 项目结构</h2>
+<h2 id="-项目结构">📁 项目结构<a class="h-anchor" href="#-项目结构" aria-label="本节链接">#</a></h2>
 
 <pre><code>MirrorSync/
 ├── App.xaml(.cs)              # 启动入口 + 命令行 headless 模式
@@ -176,21 +181,24 @@ dotnet publish MirrorSync.csproj -c Release -r win-x64 --self-contained \
 
 <hr />
 
-<h2>📍 数据存放位置</h2>
+<h2 id="-数据存放位置">📍 数据存放位置<a class="h-anchor" href="#-数据存放位置" aria-label="本节链接">#</a></h2>
 
+<div class="table-wrap">
 <table>
-<thead><tr><th>内容</th><th>路径</th></tr></thead>
+<thead>
+<tr><th>内容</th><th>路径</th></tr>
+</thead>
 <tbody>
 <tr><td>配置文件</td><td><code>%AppData%\MirrorSync\config.json</code></td></tr>
 <tr><td>同步清单</td><td><code>%AppData%\MirrorSync\manifest.json</code></td></tr>
 <tr><td>日志</td><td><code>%AppData%\MirrorSync\logs\*.log</code>（保留 7 天）</td></tr>
 </tbody>
 </table>
-
+</div>
 
 <hr />
 
-<h2>🔒 安全设计</h2>
+<h2 id="-安全设计">🔒 安全设计<a class="h-anchor" href="#-安全设计" aria-label="本节链接">#</a></h2>
 
 <ul>
   <li>拒绝 A、B 为同一路径或互为子目录（防循环同步）</li>
@@ -199,12 +207,11 @@ dotnet publish MirrorSync.csproj -c Release -r win-x64 --self-contained \
   <li>未捕获异常写入 <code>crash.log</code> 并弹窗，不静默崩溃</li>
 </ul>
 
-
 <hr />
 
-<h2>📄 许可证</h2>
+<h2 id="-许可证">📄 许可证<a class="h-anchor" href="#-许可证" aria-label="本节链接">#</a></h2>
 
-<p>本项目基于 <a href="https://github.com/ZhangYiFei12/MirrorSync/blob/main/LICENSE" target="_blank" rel="noopener">GPL-3.0</a> 许可证开源。</p>
+<p>本项目基于 <a href="https://github.com/ZhangYiFei12/MirrorSync/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">GPL-3.0</a> 许可证开源。</p>
 
 <p>© 2025 ZYF — 由 DSH + DSv4f 开发</p>
       </div>

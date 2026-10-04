@@ -17,6 +17,7 @@ import {
   readingMinutes, parseFrontMatter, collectTags, scoreRelated,
   buildTagPage, buildArchivePage, buildSitemap, buildShareRow,
   buildSearchAll, buildManifest,
+  parseBody, inline, headingSlug, safeUrl, safeImageUrl, escapeHtml, escapeAttr,
 } from "./md2html-core.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -441,6 +442,146 @@ await test("gen-pages 会重建 blog.html 与 index.html 列表", () => {
   assert(g.includes("BLOG-LIST-START"), "gen-pages 未重建 blog.html 列表");
   assert(g.includes("LATEST-START"), "gen-pages 未重建首页最新文章");
   assert(g.includes("FEATURED-START"), "gen-pages 未重建首页精选项目");
+});
+
+/* ============ F. Markdown 渲染器（防回归，均对应已修复的真实缺陷） ============ */
+console.log("");
+console.log("[F] Markdown 渲染器");
+
+const BS = String.fromCharCode(92); // 反斜杠
+
+await test("段落行首为 * + > | 时不再被丢弃（曾静默丢失 92 行正文）", () => {
+  const r = parseBody("第一行\n*强调开头的段落*\n第三行");
+  assert(r.includes("强调开头的段落"), "行首为 * 的段落被丢弃：" + r);
+  assert((r.match(/<p>/g) || []).length === 1, "应合为一个段落（软换行）：" + r);
+  for (const md of ["**仅加粗的行**", "+加号开头", "| 竖线开头"]) {
+    const out = parseBody(md);
+    assert(out.trim() !== "", "整行被丢弃: " + md);
+  }
+});
+
+await test("段落软换行不再输出字面 &lt;br /&gt;", () => {
+  const r = parseBody("第一行\n第二行");
+  assert(r.includes("<br />"), "应有真实 <br />：" + r);
+  assert(!r.includes("&lt;br"), "不应出现被转义的字面 br：" + r);
+});
+
+await test("畸形表格不再产生十万空块（曾输出 195KB 垃圾）", () => {
+  const out = parseBody("| a | b |\n不是分隔行\n| 1 | 2 |");
+  assert(out.length < 500, "输出异常膨胀：" + out.length + " 字符");
+  assert(out.includes("<p>"), "应回退为段落：" + out.slice(0, 120));
+});
+
+await test("内联属性注入被阻断（曾可注入 onerror）", () => {
+  const r = parseBody('![x](y"onerror="alert(1))');
+  assert(!/\sonerror=/.test(r.replace(/&quot;/g, '"')), "onerror 未被阻断：" + r);
+  assert(r.includes("&quot;"), "属性里的引号应被转义：" + r);
+  assert(escapeHtml('a"b') === 'a"b', "文本不应转义引号（避免正文出现 &quot;）");
+  assert(escapeAttr('a"b') === "a&quot;b", "属性必须转义引号");
+});
+
+await test("危险协议全部拦截", () => {
+  for (const bad of ["javascript:alert(1)", "JaVaScRiPt:alert(1)", "vbscript:x", "data:text/html,x", "java\tscript:x", "&#106;avascript:x"]) {
+    const r = inline(`[x](${bad})`);
+    assert(!/href="(?:javascript|vbscript|data)/i.test(r), `未拦截 ${bad} → ${r}`);
+  }
+  assert(safeUrl("https://a.com") === "https://a.com", "正常 https 应保留");
+  assert(safeUrl("../x") === "../x", "相对路径应保留");
+  assert(safeUrl("#a") === "#a", "页内锚点应保留");
+  assert(safeImageUrl("data:image/png;base64,AA") !== "", "data:image 图片应允许");
+  assert(safeImageUrl("data:text/html,x") === "", "data:text 图片应拦截");
+});
+
+await test("URL 含括号不再产生破损 HTML", () => {
+  const r = inline("[wiki](https://en.wikipedia.org/wiki/Foo_(bar))");
+  assert(r.includes('href="https://en.wikipedia.org/wiki/Foo_(bar)"'), "URL 应完整：" + r);
+  assert(!/<a[^>]*<em>/.test(r), "标签被二次改写：" + r);
+});
+
+await test("标题带锚点 id，且与手写目录对应", () => {
+  assert(headingSlug("📌 项目概述") === "-项目概述", "slug 不符：" + headingSlug("📌 项目概述"));
+  assert(headingSlug("🏗️ 技术架构") === "-技术架构", "emoji+变体选择符未处理：" + headingSlug("🏗️ 技术架构"));
+  const h = parseBody("## 标题 ##");
+  assert(/<h2 id="标题">/.test(h), "标题尾部 # 未剔除或无 id：" + h);
+  assert(h.includes('class="h-anchor"'), "缺锚点链接：" + h);
+  const dup = parseBody("## 同一个\n\n## 同一个");
+  assert(dup.includes('id="同一个"') && dup.includes('id="同一个-1"'), "重复标题 id 未去重：" + dup);
+});
+
+await test("真实文章的目录锚点全部可解析", () => {
+  const files = readdirSync(join(ROOT, "blog")).filter(f => f.endsWith(".html") && f !== "template.html");
+  let checked = 0;
+  for (const f of files) {
+    const page = rd("blog/" + f);
+    const ids = new Set([...page.matchAll(/<h[1-6] id="([^"]*)"/g)].map(m => m[1]));
+    for (const m of page.matchAll(/href="#([^"]+)"/g)) {
+      if (m[1] === "mainContent") continue;
+      checked++;
+      assert(ids.has(m[1]), `${f} 的锚点 #${m[1]} 无对应标题`);
+    }
+  }
+  assert(checked > 0, "未检查到任何页内锚点");
+});
+
+await test("嵌套列表结构正确（曾退化为兄弟列表）", () => {
+  const r = parseBody("- 父项\n  - 子项\n- 第二父项");
+  assert(/<li>父项\s*<ul>/.test(r.replace(/\n/g, " ")) || /<li>父项[\s\S]*<ul>[\s\S]*子项[\s\S]*<\/ul>[\s\S]*<\/li>/.test(r), "子列表未嵌在父项内：" + r);
+  assert(/<li>第二父项<\/li>/.test(r), "第二父项应为同级：" + r);
+  const ol = parseBody("- 父项\n  1. 子一\n  2. 子二");
+  assert(/<ol>[\s\S]*子一/.test(ol), "有序子列表丢失：" + ol);
+});
+
+await test("行内 HTML：白名单放行、危险标签转义", () => {
+  assert(inline("按 <kbd>Ctrl</kbd>").includes("<kbd>Ctrl</kbd>"), "kbd 应放行");
+  const script = inline("<script>alert(1)</script>");
+  assert(!/<script/i.test(script), "script 必须被转义：" + script);
+  assert(inline("前<!-- 隐藏 -->后") === "前后", "HTML 注释应移除");
+  const center = parseBody('<div align="center">\n# 标题\n</div>');
+  assert(center.includes('class="md-align-center"'), "居中块未转换：" + center);
+  assert(!center.includes("&lt;div"), "居中块不应显示裸标签：" + center);
+});
+
+await test("基础语法：转义 / 强调 / 代码 / 自动链接 / 任务列表 / 表格", () => {
+  assert(inline(BS + "*literal" + BS + "*") === "*literal*", "反斜杠转义失效");
+  assert(inline("**粗**") === "<strong>粗</strong>", "加粗失效");
+  assert(inline("***粗斜***") === "<strong><em>粗斜</em></strong>", "粗斜体失效");
+  assert(inline("~~删~~") === "<del>删</del>", "删除线失效");
+  assert(inline("`code **x**`") === "<code>code **x**</code>", "代码内不应解析格式");
+  assert(inline("snake_case_name") === "snake_case_name", "词内下划线不应变斜体");
+  assert(/<a href="https:\/\/ex\.com"/.test(inline("<https://ex.com>")), "自动链接失效");
+  assert(/<a href="https:\/\/ex\.com"/.test(inline("见 https://ex.com 好")), "裸 URL 自动链接失效");
+  assert(parseBody("- [x] 完成").includes("task-done"), "任务列表失效");
+  assert(parseBody("a | b\n--- | ---\n1 | 2").includes("<table>"), "无前导竖线的表格失效");
+  assert(parseBody("| a | b |\n|:-:|--:|\n| 1 | 2 |").includes("text-align:center"), "表格对齐失效");
+  assert(parseBody("| a | b |\n| --- | --- |\n| 1 | 2 |").includes('<div class="table-wrap">'), "表格缺滚动容器");
+  // 单列表格（只有一行也没意义）不应当成表格，避免误判正文里的竖线
+  assert(!parseBody("| a |\n| --- |\n| 1 |").includes('<table>'), "单列表格应不当成表格");
+});
+
+await test("首图不懒加载，其余图片懒加载", () => {
+  const r = parseBody("![a](a.png)\n\n![b](b.png)");
+  const first = r.indexOf("a.png");
+  const second = r.indexOf("b.png");
+  assert(!/loading="lazy"[^>]*a\.png/.test(r.slice(0, second)), "首图不应 lazy");
+  assert(/loading="lazy"/.test(r.slice(second)), "第二张图应 lazy");
+  assert(first < second, "图片顺序错误");
+});
+
+await test("CRLF 换行的 Markdown 渲染正常", () => {
+  const r = parseBody("# 标题\r\n\r\n段落文本\r\n\r\n- 列表项\r\n");
+  assert(r.includes("<h1 id=\"标题\">"), "CRLF 标题解析失败：" + r);
+  assert(r.includes("段落文本"), "CRLF 段落丢失：" + r);
+  assert(r.includes("<li>列表项</li>"), "CRLF 列表解析失败：" + r);
+  assert(!r.includes("\r"), "输出不应含 \\r");
+});
+
+await test("无内容丢失：全站文章渲染后不含空段落 / 裸标签", () => {
+  const files = readdirSync(join(ROOT, "blog")).filter(f => f.endsWith(".html") && f !== "template.html");
+  for (const f of files) {
+    const body = rd("blog/" + f);
+    assert(!/<p>\s*<\/p>/.test(body), f + " 含空段落");
+    assert(!/&lt;(br|div|kbd|em|strong) /.test(body), f + " 含被转义的裸标签");
+  }
 });
 
 /* ---------- 结果 ---------- */
