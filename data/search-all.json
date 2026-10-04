@@ -2,7 +2,7 @@
   {
     "type": "post",
     "typeName": "文章",
-    "url": "blog/%E8%AE%BA%E8%AF%AD%E5%8D%81%E4%BA%8C%E7%AB%A0-%E8%AE%AE%E8%AE%BA%E6%96%87%E5%90%88%E9%9B%86.html",
+    "url": "blog/%E8%AE%BA%E8%AF%AD%E5%8D%81%E4%BA%8C%E7%AB%A0-%E8%AE%AE%E8%AE%BA%E6%96%87%E5%90%88%E9%9B%86",
     "title": "《论语》十二章 议论文合集",
     "date": "2026-09-12",
     "tags": [
@@ -14,7 +14,7 @@
   {
     "type": "post",
     "typeName": "文章",
-    "url": "blog/%E7%8E%B0%E4%BB%A3%E4%BA%BA%E7%89%A9%E4%BC%A0%E8%AE%B0%E7%B4%A0%E6%9D%90%E4%B8%8E%E8%AE%AE%E8%AE%BA%E6%96%87%E8%8C%83%E6%96%87%E7%B2%BE%E9%80%89%E5%A2%9E%E8%A1%A5%E7%89%88%E5%88%A0%E9%9B%B7%E5%86%9B.html",
+    "url": "blog/%E7%8E%B0%E4%BB%A3%E4%BA%BA%E7%89%A9%E4%BC%A0%E8%AE%B0%E7%B4%A0%E6%9D%90%E4%B8%8E%E8%AE%AE%E8%AE%BA%E6%96%87%E8%8C%83%E6%96%87%E7%B2%BE%E9%80%89%E5%A2%9E%E8%A1%A5%E7%89%88%E5%88%A0%E9%9B%B7%E5%86%9B",
     "title": "现代人物传记素材与议论文范文精选",
     "date": "2026-09-06",
     "tags": [
@@ -26,7 +26,7 @@
   {
     "type": "post",
     "typeName": "文章",
-    "url": "blog/AI-API-%E4%BD%99%E9%A2%9D%E6%9F%A5%E8%AF%A2%E5%99%A8.html",
+    "url": "blog/AI-API-%E4%BD%99%E9%A2%9D%E6%9F%A5%E8%AF%A2%E5%99%A8",
     "title": "AI API 余额查询器",
     "date": "2026-08-27",
     "tags": [
@@ -38,7 +38,7 @@
   {
     "type": "post",
     "typeName": "文章",
-    "url": "blog/GeoRenamer%E7%85%A7%E7%89%87GPS%E5%AE%9A%E4%BD%8D%E8%BD%AF%E4%BB%B6.html",
+    "url": "blog/GeoRenamer%E7%85%A7%E7%89%87GPS%E5%AE%9A%E4%BD%8D%E8%BD%AF%E4%BB%B6",
     "title": "GeoRenamer照片GPS定位软件",
     "date": "2026-08-27",
     "tags": [
@@ -50,7 +50,7 @@
   {
     "type": "post",
     "typeName": "文章",
-    "url": "blog/MirrorSync-%E5%8F%8C%E5%90%91%E5%90%8C%E6%AD%A5%E5%B7%A5%E5%85%B7.html",
+    "url": "blog/MirrorSync-%E5%8F%8C%E5%90%91%E5%90%8C%E6%AD%A5%E5%B7%A5%E5%85%B7",
     "title": "MirrorSync 双向同步工具",
     "date": "2026-08-27",
     "tags": [
@@ -62,7 +62,7 @@
   {
     "type": "post",
     "typeName": "文章",
-    "url": "blog/%E8%AF%A6%E7%BB%86%E4%BB%8B%E7%BB%8D%E4%B8%8E%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3.html",
+    "url": "blog/%E8%AF%A6%E7%BB%86%E4%BB%8B%E7%BB%8D%E4%B8%8E%E6%8A%80%E6%9C%AF%E6%96%87%E6%A1%A3",
     "title": "📖 AI 文件阅读器 — 详细介绍与技术文档",
     "date": "2026-08-27",
     "tags": [
@@ -76,7 +76,7 @@
   {
     "type": "post",
     "typeName": "文章",
-    "url": "blog/%E8%AF%BE%E4%BB%B6%E6%95%B4%E7%90%86%E5%B7%A5%E5%85%B7.html",
+    "url": "blog/%E8%AF%BE%E4%BB%B6%E6%95%B4%E7%90%86%E5%B7%A5%E5%85%B7",
     "title": "课件整理工具",
     "date": "2026-08-27",
     "tags": [

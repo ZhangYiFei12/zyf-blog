@@ -111,7 +111,11 @@ for (const p of pages) {
     let decoded;
     try { decoded = decodeURIComponent(clean); } catch (e) { decoded = clean; }
     const target = resolve(dir, decoded);
-    if (!existsSync(target)) {
+    // Cloudflare Pages 的 pretty URL：/foo 实际由 foo.html 提供（同理 /foo/ → foo/index.html）
+    const ok = existsSync(target)
+      || existsSync(target + ".html")
+      || existsSync(join(target, "index.html"));
+    if (!ok) {
       report.deadLinks.push({ page: rel(p), href: raw });
     }
   }

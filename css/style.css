@@ -2245,10 +2245,16 @@ mark {
 /* ============================================================
    通用
    ============================================================ */
+/* 渐进增强：内容默认可见（不依赖 JS）。只有 <html> 带 js-anim
+   （由 main.js 确认可用后添加）才启用入场初始态；脚本异常时兜底逻辑会摘掉
+   js-anim，内容立刻恢复可见。 */
 .reveal {
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+html.js-anim .reveal:not(.visible) {
   opacity: 0;
   transform: translateY(18px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
 }
 
 .reveal.visible {
@@ -2754,9 +2760,12 @@ pre code.hljs {
 
 /* ---- 交错浮现 ---- */
 .reveal-stagger > * {
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+html.js-anim .reveal-stagger:not(.in-view) > * {
   opacity: 0;
   transform: translateY(22px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
 }
 
 .reveal-stagger.in-view > * {
@@ -2833,9 +2842,12 @@ pre code.hljs {
 
 /* ---- 文章列表交错浮现 ---- */
 .post-item {
+  transition: opacity 0.55s ease, transform 0.55s ease, border-color 0.25s ease, background 0.25s ease, padding-left 0.25s ease;
+}
+
+html.js-anim .post-item:not(.stagger-in) {
   opacity: 0;
   transform: translateY(18px);
-  transition: opacity 0.55s ease, transform 0.55s ease, border-color 0.25s ease, background 0.25s ease, padding-left 0.25s ease;
 }
 
 .post-item.stagger-in {

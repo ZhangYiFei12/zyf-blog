@@ -4,7 +4,7 @@
    ============================================================ */
 
 /* 静态资源版本：改 CSS/JS 后同步递增（资源走 immutable 缓存） */
-export const ASSET_VER = { css: "25", js: "22" };
+export const ASSET_VER = { css: "26", js: "23" };
 
 /* ---------- Front Matter 解析 ---------- */
 export function parseFrontMatter(raw) {
@@ -321,7 +321,7 @@ export function buildPage(meta, bodyHtml, opts = {}) {
   const excerpt = meta.excerpt || meta.title;
   const slug = opts.slug ? String(opts.slug) : "";
   const SITE = "https://zyf2026.pages.dev";
-  const pageUrl = slug ? `${SITE}/blog/${slug}.html` : SITE + "/";
+  const pageUrl = slug ? `${SITE}/blog/${slug}` : SITE + "/";
   const articleHtml = buildArticlePreview(meta, bodyHtml);
   const jsonLd = [
     buildArticleJsonLd(meta, { url: pageUrl, site: SITE }),
@@ -449,7 +449,7 @@ export function listItemSnippet(meta, slug) {
   const tags = meta.tags && meta.tags.length ? meta.tags : ["随笔"];
   const tagStr = tags.map(t => `            <span class="tag">${t}</span>`).join("\n");
   const dataTags = escapeAttr(tags.join(" "));
-  return `      <a class="post-item" href="blog/${slug}.html" data-tags="${dataTags}">
+  return `      <a class="post-item" href="blog/${slug}" data-tags="${dataTags}">
         <div class="post-left">
           <span class="post-title">${meta.title}</span>
           <span class="post-excerpt">${excerpt}</span>
@@ -532,7 +532,7 @@ export function buildRss(posts, base = "https://zyf2026.pages.dev") {
     .filter(p => p.meta.published !== false)
     .sort((a, b) => String(b.meta.date || "").localeCompare(String(a.meta.date || "")))
     .map(p => {
-      const url = `${base}/blog/${p.slug}.html`;
+      const url = `${base}/blog/${p.slug}`;
       const desc = (p.meta.excerpt || p.meta.title || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       const title = String(p.meta.title || p.slug).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       return `    <item>\n      <title>${title}</title>\n      <link>${url}</link>\n      <guid isPermaLink="true">${url}</guid>\n      <pubDate>${rfc822(p.meta.date)}</pubDate>\n      <description>${desc}</description>\n    </item>`;
@@ -557,7 +557,7 @@ export function buildSitemap(posts, base = "https://zyf2026.pages.dev", kbDocs =
   for (const p of (Array.isArray(posts) ? posts : [])) {
     if (p.meta.published === false) continue; // 草稿不进 sitemap
     urls.push({
-      loc: base + "/blog/" + encodeURIComponent(p.slug) + ".html",
+      loc: base + "/blog/" + encodeURIComponent(p.slug),
       lastmod: p.meta.date || today,
       pri: "0.7",
       freq: "monthly",
@@ -565,7 +565,7 @@ export function buildSitemap(posts, base = "https://zyf2026.pages.dev", kbDocs =
   }
   for (const d of (Array.isArray(kbDocs) ? kbDocs : [])) {
     urls.push({
-      loc: base + "/kb/" + encodeURIComponent(d.slug) + ".html",
+      loc: base + "/kb/" + encodeURIComponent(d.slug),
       lastmod: (d.meta && d.meta.date) || today,
       pri: "0.6",
       freq: "monthly",
@@ -575,7 +575,7 @@ export function buildSitemap(posts, base = "https://zyf2026.pages.dev", kbDocs =
     const name = typeof t === "string" ? t : t.name;
     if (!name) continue;
     urls.push({
-      loc: base + "/tags/" + encodeURIComponent(name) + ".html",
+      loc: base + "/tags/" + encodeURIComponent(name),
       lastmod: today,
       pri: "0.5",
       freq: "weekly",
@@ -629,7 +629,7 @@ export function buildKbPage(meta, bodyHtml, opts = {}) {
   const slug = opts.slug ? String(opts.slug) : "";
   const category = meta.category || "未分类";
   const SITE = "https://zyf2026.pages.dev";
-  const pageUrl = slug ? `${SITE}/kb/${slug}.html` : `${SITE}/kb.html`;
+  const pageUrl = slug ? `${SITE}/kb/${slug}` : `${SITE}/kb.html`;
   const tags = Array.isArray(meta.tags) && meta.tags.length ? meta.tags : [];
   const date = meta.date || new Date().toISOString().slice(0, 10);
   const mins = readingMinutes(bodyHtml);
@@ -775,7 +775,7 @@ export function buildKbCard(d) {
   const tags = Array.isArray(meta.tags) ? meta.tags : [];
   const desc = meta.excerpt || meta.desc || "";
   const dataTags = [(meta.category || "未分类")].concat(tags).join(" ");
-  return `        <a class="kb-item" href="kb/${d.slug}.html" data-tags="${escapeAttr(dataTags)}">
+  return `        <a class="kb-item" href="kb/${d.slug}" data-tags="${escapeAttr(dataTags)}">
           <span class="kb-item-icon">📄</span>
           <span class="kb-item-body">
             <span class="kb-item-title">${escapeHtml(meta.title || d.slug)}</span>
@@ -925,7 +925,7 @@ export function buildTagPage(tag, posts, base = "https://zyf2026.pages.dev") {
     const t = (p.meta && p.meta.tags) || [];
     return p.meta && p.meta.published !== false && t.indexOf(tag) !== -1;
   });
-  const canonical = `${base}/tags/${encodeURIComponent(tag)}.html`;
+  const canonical = `${base}/tags/${encodeURIComponent(tag)}`;
   // 标签页位于 /tags/ 子目录，需为文章链接补上 ../
   let items = list
     .map(p => listItemSnippet(p.meta, p.slug).replace('href="blog/', 'href="../blog/'))
@@ -972,7 +972,7 @@ export function buildArchivePage(posts, base = "https://zyf2026.pages.dev") {
         .map(t => `<span class="tag">${escapeHtml(t)}</span>`).join("\n              ");
       return `        <li class="archive-item">
           <span class="archive-date">${escapeHtml(p.meta.date || "")}</span>
-          <a class="archive-title" href="blog/${encodeURIComponent(p.slug)}.html">${escapeHtml(p.meta.title)}</a>
+          <a class="archive-title" href="blog/${encodeURIComponent(p.slug)}">${escapeHtml(p.meta.title)}</a>
           <span class="archive-tags">
               ${tags}
           </span>
@@ -1071,7 +1071,7 @@ export function buildSearchAll(posts, kbDocs) {
     out.push({
       type: "post",
       typeName: "文章",
-      url: `blog/${encodeURIComponent(p.slug)}.html`,
+      url: `blog/${encodeURIComponent(p.slug)}`,
       title: p.meta.title || p.slug,
       date: p.meta.date || "",
       tags: p.meta.tags || [],
@@ -1083,7 +1083,7 @@ export function buildSearchAll(posts, kbDocs) {
     out.push({
       type: "kb",
       typeName: "知识库",
-      url: `kb/${encodeURIComponent(d.slug)}.html`,
+      url: `kb/${encodeURIComponent(d.slug)}`,
       title: d.meta.title || d.slug,
       date: d.meta.date || "",
       tags: d.meta.tags || [],

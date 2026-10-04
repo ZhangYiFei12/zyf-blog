@@ -249,7 +249,7 @@
               '<div class="date">' + escapeHtml(a.date || "") + (a.tags && a.tags.length ? " · " + escapeHtml(a.tags.join(" / ")) : "") + "</div>" +
             "</div>" +
             '<div class="actions">' +
-              '<a class="btn btn-outline btn-sm" href="blog/' + escapeAttr(encodeURIComponent(a.slug)) + '.html" target="_blank" rel="noopener noreferrer" title="在当前页预览渲染后的页面（草稿仅能通过此直链查看）">预览</a>' +
+              '<a class="btn btn-outline btn-sm" href="blog/' + escapeAttr(encodeURIComponent(a.slug)) + '" target="_blank" rel="noopener noreferrer" title="在当前页预览渲染后的页面（草稿仅能通过此直链查看）">预览</a>' +
               '<button class="btn btn-outline btn-sm" data-action="edit" data-slug="' + escapeAttr(a.slug) + '">编辑</button>' +
               '<button class="btn btn-danger btn-sm" data-action="del" data-slug="' + escapeAttr(a.slug) + '">删除</button>' +
             "</div>";
@@ -303,7 +303,7 @@
         cancelEditBtn.style.display = "inline-flex";
         var pv = $("previewArticleBtn");
         if (pv) {
-          pv.href = "blog/" + encodeURIComponent(data.slug) + ".html";
+          pv.href = "blog/" + encodeURIComponent(data.slug);
           pv.style.display = "inline-flex";
         }
         publishBtn.textContent = "📝 发布";
@@ -1658,7 +1658,7 @@
           "</div>" +
         "</div>" +
         '<div class="actions">' +
-          '<a class="btn btn-outline btn-sm" href="kb/' + escapeAttr(d.slug) + '.html" target="_blank" rel="noopener noreferrer">预览</a>' +
+          '<a class="btn btn-outline btn-sm" href="kb/' + escapeAttr(d.slug) + '" target="_blank" rel="noopener noreferrer">预览</a>' +
           '<button class="btn btn-outline btn-sm" data-action="edit" data-slug="' + escapeAttr(d.slug) + '">编辑</button>' +
           '<button class="btn btn-danger btn-sm" data-action="del" data-slug="' + escapeAttr(d.slug) + '">删除</button>' +
         "</div>";

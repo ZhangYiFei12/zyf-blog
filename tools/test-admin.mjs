@@ -737,7 +737,7 @@ mockServer_.listen(mockPort, async () => {
     // sitemap 中的 URL 为规范编码形式（与线上一致）
     const encSlug = encodeURIComponent(slug);
     let sm = getFile("sitemap.xml");
-    if (!sm || sm.indexOf(`/kb/${encSlug}.html`) === -1) throw new Error("新增后 sitemap 未包含该文档");
+    if (!sm || sm.indexOf(`/kb/${encSlug}`) === -1) throw new Error("新增后 sitemap 未包含该文档");
 
     // 删除后 sitemap 不应再有该文档（避免死链）
     const delReq = new Request("http://localhost/api/admin/kb/" + encodeURIComponent(slug), {
@@ -747,7 +747,7 @@ mockServer_.listen(mockPort, async () => {
     const delRes = await onRequest({ request: delReq, env: ENV, params: {} });
     if (delRes.status !== 200) throw new Error("删除失败 " + delRes.status);
     sm = getFile("sitemap.xml");
-    if (sm && sm.indexOf(`/kb/${encSlug}.html`) !== -1) throw new Error("删除后 sitemap 仍残留该文档（死链）");
+    if (sm && sm.indexOf(`/kb/${encSlug}`) !== -1) throw new Error("删除后 sitemap 仍残留该文档（死链）");
   });
 
   await test("发布文章时同步生成标签页与归档页", async () => {

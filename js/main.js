@@ -5,6 +5,19 @@
 (function () {
   "use strict";
 
+  /* ---- 渐进增强：内容默认可见，JS 确认可用后才启用入场动画 ----
+   * CSS 已不再把 .post-item/.reveal 直接置为 opacity:0，而是等 <html> 上出现
+   * js-anim。这样任何脚本异常都不会导致「内容看不见」。
+   * 两条兜底：① 任意脚本错误 → 立即摘掉 js-anim；
+   *            ② 2.5s 内 main.js 未执行完 → 同样摘掉（应对脚本被拦/解析失败）。
+   */
+  var rootEl = document.documentElement;
+  window.addEventListener("error", function () { rootEl.classList.remove("js-anim"); });
+  rootEl.classList.add("js-anim");
+  setTimeout(function () {
+    if (!window.__zhMainOk) rootEl.classList.remove("js-anim");
+  }, 2500);
+
   /* ---- 自动注入：粒子画布 + 滚动进度条（全站生效） ---- */
   if (!document.getElementById("particles")) {
     var pc = document.createElement("canvas");
@@ -575,7 +588,7 @@
           '<div class="related-title">🔗 ' + (relatedEl.getAttribute("aria-label") || "相关文章") + "</div>" +
           '<div class="related-list">' +
           scored.map(function (x) {
-            return '<a class="related-item" href="' + prefix + esc(encodeURIComponent(x.p.slug)) + '.html">' +
+            return '<a class="related-item" href="' + prefix + esc(encodeURIComponent(x.p.slug)) + '">' +
                      '<span class="related-name">' + esc(x.p.title || x.p.slug) + "</span>" +
                      '<span class="related-meta">' + esc(x.p.date || "") + (x.p.tags && x.p.tags.length ? " · " + esc(x.p.tags.join(" / ")) : "") + "</span>" +
                    "</a>";
@@ -599,8 +612,8 @@
         var newer = posts[idx - 1]; // 更新的文章 → 上一篇
         var older = posts[idx + 1]; // 更旧的文章 → 下一篇
         var html = "";
-        if (newer) html += '<a class="prev" href="' + esc(newer.slug) + '.html"><span class="pn-label">← 上一篇</span><span class="pn-title">' + esc(newer.title) + '</span></a>';
-        if (older) html += '<a class="next" href="' + esc(older.slug) + '.html"><span class="pn-label">下一篇 →</span><span class="pn-title">' + esc(older.title) + '</span></a>';
+        if (newer) html += '<a class="prev" href="' + esc(newer.slug) + '"><span class="pn-label">← 上一篇</span><span class="pn-title">' + esc(newer.title) + '</span></a>';
+        if (older) html += '<a class="next" href="' + esc(older.slug) + '"><span class="pn-label">下一篇 →</span><span class="pn-title">' + esc(older.title) + '</span></a>';
         postNav.innerHTML = html;
       })
       .catch(function () {});
@@ -1416,4 +1429,7 @@
         .catch(function () { /* 注册失败不影响正常浏览 */ });
     });
   }
+
+  /* 标记主脚本执行成功：渐进增强的 js-anim 不再被兜底移除 */
+  window.__zhMainOk = true;
 })();

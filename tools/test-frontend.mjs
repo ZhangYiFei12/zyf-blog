@@ -111,7 +111,8 @@ await test("scoreRelated：标签重合度", () => {
 
 await test("buildTagPage：文章链接带 ../ 前缀（子目录）", () => {
   const html = buildTagPage("工具", [{ slug: "s", meta: { title: "T", date: "2026-01-01", tags: ["工具"] } }]);
-  assert(html.includes('href="../blog/s.html"'), "标签页链接应为 ../blog/");
+  assert(html.includes('href="../blog/s"'), "标签页链接应为 ../blog/（无扩展名）");
+  assert(!/href="\.\.\/blog\/[^"]*\.html"/.test(html), "标签页不应带 .html（非 ASCII 会 404）");
   assert(!/href="blog\//.test(html), "不应存在未加 ../ 的文章链接");
 });
 
@@ -136,7 +137,8 @@ await test("buildSitemap：含归档页与标签页", () => {
   const posts = [{ slug: "s", meta: { title: "T", date: "2026-01-01", tags: ["标签A"] } }];
   const sm = buildSitemap(posts, undefined, [], collectTags(posts));
   assert(sm.includes("/archive.html"), "sitemap 应含归档页");
-  assert(sm.includes(`/tags/${encodeURIComponent("标签A")}.html`), "sitemap 应含标签页");
+  assert(sm.includes(`/tags/${encodeURIComponent("标签A")}`), "sitemap 应含标签页");
+  assert(sm.includes("/archive.html"), "sitemap 应含归档页");
 });
 
 await test("buildShareRow：转义与 URL 编码", () => {
@@ -369,6 +371,76 @@ await test("全站页面有 canonical（除 noindex 页）", () => {
   const pages = readdirSync(ROOT).filter(f => f.endsWith(".html") && f !== "admin.html" && f !== "offline.html");
   const bad = pages.filter(f => !rd(f).includes('rel="canonical"'));
   assert(bad.length === 0, `缺 canonical：${bad.join(", ")}`);
+});
+
+/* ============ E. 链接形式与渐进增强（防回归） ============ */
+console.log("");
+console.log("[E] 链接形式 · 渐进增强");
+
+await test("文章/标签链接一律不带 .html", () => {
+  // 回归：Cloudflare Pages 对非 ASCII 文件名做 .html → 无扩展名跳转时
+  //  Location 头未百分号编码，浏览器会双重编码导致 404（曾使全部文章打不开）
+  const files = [
+    ...readdirSync(ROOT).filter(f => f.endsWith(".html")).map(f => f),
+    ...readdirSync(join(ROOT, "blog")).filter(f => f.endsWith(".html")).map(f => "blog/" + f),
+    ...readdirSync(join(ROOT, "tags")).filter(f => f.endsWith(".html")).map(f => "tags/" + f),
+  ];
+  const bad = [];
+  for (const f of files) {
+    for (const m of rd(f).matchAll(/href="([^"]+)"/g)) {
+      const u = m[1];
+      if (/^(https?:|mailto:|tel:|#|\/\/)/.test(u)) continue;
+      if (/(^|\/)(blog|kb|tags)\/[^"]*\.html$/.test(u)) bad.push(f + " → " + u);
+    }
+  }
+  assert(bad.length === 0, `带 .html 的文章链接：${bad.slice(0, 5).join(", ")}`);
+});
+
+await test("sitemap / feed / search-all 的文章 URL 不带 .html", () => {
+  const sm = rd("sitemap.xml");
+  const badSm = (sm.match(/<loc>[^<]*<\/loc>/g) || []).filter(x => /\/(blog|kb|tags)\//.test(x) && /\.html</.test(x));
+  assert(badSm.length === 0, `sitemap 残留 ${badSm.length} 条`);
+  const fd = rd("feed.xml");
+  const badFd = (fd.match(/<link>[^<]*<\/link>/g) || []).filter(x => /\/blog\//.test(x) && /\.html</.test(x));
+  assert(badFd.length === 0, `feed 残留 ${badFd.length} 条`);
+  const sa = JSON.parse(rd("data/search-all.json"));
+  const badSa = sa.filter(e => /\.html$/.test(e.url));
+  assert(badSa.length === 0, `search-all 残留 ${badSa.length} 条`);
+});
+
+await test("canonical / og:url 指向无扩展名 URL", () => {
+  for (const f of ["blog/详细介绍与技术文档.html", "tags/工具.html"]) {
+    const s = rd(f);
+    const c = (s.match(/rel="canonical" href="([^"]+)"/) || [])[1] || "";
+    assert(c, f + " 缺 canonical");
+    assert(!/\.html$/.test(c), f + " canonical 仍带 .html：" + c);
+  }
+  const a = rd("blog/详细介绍与技术文档.html");
+  const o = (a.match(/og:url" content="([^"]+)"/) || [])[1] || "";
+  assert(o && !/\.html$/.test(o), "og:url 仍带 .html：" + o);
+});
+
+await test("渐进增强：内容不再默认不可见", () => {
+  const css = rd("css/style.css");
+  assert(!/\.post-item\s*\{[^}]*opacity:\s*0/.test(css), ".post-item 仍默认 opacity:0（JS 异常会致内容消失）");
+  assert(!/\.reveal\s*\{[^}]*opacity:\s*0/.test(css), ".reveal 仍默认 opacity:0");
+  const gates = (css.match(/html\.js-anim/g) || []).length;
+  assert(gates >= 3, `js-anim 门控仅 ${gates} 处，应为 3 处（post-item/reveal/reveal-stagger）`);
+});
+
+await test("main.js 有 js-anim 双重兜底", () => {
+  const js = rd("js/main.js");
+  assert(js.includes("js-anim"), "main.js 未添加 js-anim");
+  assert(/addEventListener\("error"/.test(js), "缺少 error 事件兜底");
+  assert(js.includes("__zhMainOk"), "缺少超时兜底标记");
+  assert(/setTimeout\([\s\S]{0,220}__zhMainOk/.test(js), "缺少超时兜底逻辑");
+});
+
+await test("gen-pages 会重建 blog.html 与 index.html 列表", () => {
+  const g = rd("tools/gen-pages.mjs");
+  assert(g.includes("BLOG-LIST-START"), "gen-pages 未重建 blog.html 列表");
+  assert(g.includes("LATEST-START"), "gen-pages 未重建首页最新文章");
+  assert(g.includes("FEATURED-START"), "gen-pages 未重建首页精选项目");
 });
 
 /* ---------- 结果 ---------- */
