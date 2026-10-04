@@ -48,8 +48,11 @@ for (const { st, p } of changes) {
     console.log(`  [${n}] D ${p}`);
     continue;
   }
-  const b64 = fs.readFileSync(p).toString("base64");
-  const blob = ghJson(`repos/${REPO}/git/blobs`, { content: b64, encoding: "base64" });
+  // 用 git 对象内容（而非工作区字节）：.gitattributes 保证仓库内为 LF，
+  // 避免把工作区的 CRLF 原样写进远端造成换行符漂移
+  const oid = execSync(`git rev-parse HEAD:${JSON.stringify(p)}`, { encoding: "utf8" }).trim();
+  const buf = execSync(`git cat-file -p ${oid}`, { encoding: "buffer", maxBuffer: 256 * 1024 * 1024 });
+  const blob = ghJson(`repos/${REPO}/git/blobs`, { content: buf.toString("base64"), encoding: "base64" });
   tree.push({ path: p, mode: "100644", type: "blob", sha: blob.sha });
   console.log(`  [${n}] ${st} ${p}`);
 }
