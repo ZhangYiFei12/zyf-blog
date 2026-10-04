@@ -5,8 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ZH | 个人博客</title>
   <meta name="description" content="ZH 的个人博客：技术分享、项目实践与生活随笔。" />
+  <link rel="canonical" href="https://zyf2026.pages.dev/" />
   <link rel="stylesheet" href="css/style.css?v=25" />
   <link rel="icon" type="image/png" href="images/avatar.png" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0a0e14" />
+  <link rel="apple-touch-icon" href="images/avatar.png" />
   <link rel="alternate" type="application/rss+xml" title="ZH 博客 RSS" href="feed.xml" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="ZH | 个人博客" />
@@ -37,6 +41,7 @@
         <li><a href="kb.html">知识库</a></li>
       </ul>
       <div class="nav-actions">
+        <a class="nav-search" href="search.html" aria-label="搜索" title="搜索（/search.html）">🔍</a>
         <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
         <button class="nav-toggle" id="navToggle" aria-label="菜单" aria-expanded="false" aria-controls="navLinks">☰ 菜单</button>
       </div>
@@ -69,7 +74,7 @@
           <p>
             这里记录有趣的事。
           </p>
-          <div class="socials mt-2">
+          <div class="socials mt-2" data-socials>
             <a href="https://github.com/ZhangYiFei12" target="_blank" rel="noopener"><span class="ico">⌥</span> GitHub</a>
             <a href="https://www.bilibili.com/" target="_blank" rel="noopener"><span class="ico">▶</span> Bilibili</a>
             <a href="mailto:264296445@qq.com"><span class="ico">✉</span> 邮箱</a>

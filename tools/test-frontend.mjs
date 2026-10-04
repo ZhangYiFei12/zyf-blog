@@ -16,6 +16,7 @@ import { fileURLToPath } from "url";
 import {
   readingMinutes, parseFrontMatter, collectTags, scoreRelated,
   buildTagPage, buildArchivePage, buildSitemap, buildShareRow,
+  buildSearchAll, buildManifest,
 } from "./md2html-core.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -261,6 +262,113 @@ await test("标签页数量与 sitemap 条目一致", () => {
   const smTags = (sm.match(/\/tags\//g) || []).length;
   assert(n === smTags, `标签页 ${n} 与 sitemap ${smTags} 不一致`);
   assert(sm.includes("/archive.html"), "sitemap 缺少归档页");
+});
+
+/* ============ D. 第三梯队：搜索 / 打印 / PWA / 评论 ============ */
+console.log("");
+console.log("[D] 搜索 · 打印 · PWA · 评论");
+
+await test("buildSearchAll：合并文章与知识库", () => {
+  const posts = [{ slug: "a", meta: { title: "文章A", date: "2026-01-01", tags: ["x"] }, bodyHtml: "<p>正文</p>" }];
+  const kb = [{ slug: "k", meta: { title: "文档K", category: "C", date: "2026-01-02" }, bodyHtml: "<p>kb</p>" }];
+  const idx = JSON.parse(buildSearchAll(posts, kb));
+  assert(idx.length === 2, "应有 2 条");
+  assert(idx.some(e => e.type === "post") && idx.some(e => e.type === "kb"), "应含两种类型");
+  assert(idx.every(e => e.url && e.title && e.typeName), "条目字段应完整");
+  assert(!idx.some(e => e.slug === "draft"), "草稿不应进入索引");
+});
+
+await test("buildSearchAll：草稿被排除", () => {
+  const idx = JSON.parse(buildSearchAll([{ slug: "d", meta: { title: "草稿", published: false }, bodyHtml: "" }], []));
+  assert(idx.length === 0, "草稿应被排除");
+});
+
+await test("buildManifest：由站点设置派生", () => {
+  const man = JSON.parse(buildManifest({ name: "ZZ", title: "ZZ 站", description: "描述" }));
+  assert(man.short_name === "ZZ" && man.name === "ZZ 站", "名称未同步");
+  assert(man.display === "standalone", "display 应为 standalone");
+  assert(Array.isArray(man.icons) && man.icons.length >= 2, "应有图标");
+  assert(man.icons.some(i => i.type === "image/svg+xml"), "应含 SVG 图标");
+  assert(man.start_url && man.theme_color, "应有 start_url 与 theme_color");
+});
+
+await test("manifest.json 产物有效且与 site.json 一致", () => {
+  const man = JSON.parse(rd("manifest.json"));
+  const site = JSON.parse(rd("data/site.json"));
+  assert(man.name === site.title, `manifest.name(${man.name}) 应等于 site.title(${site.title})`);
+  assert(man.short_name === site.name, "manifest.short_name 应等于 site.name");
+});
+
+await test("PWA 资源齐备（sw.js / offline.html / icon.svg）", () => {
+  assert(existsSync(join(ROOT, "sw.js")), "缺 sw.js");
+  assert(existsSync(join(ROOT, "offline.html")), "缺 offline.html");
+  assert(existsSync(join(ROOT, "images/icon.svg")), "缺 icon.svg");
+  const sw = rd("sw.js");
+  assert(sw.includes("addEventListener('install'") || sw.includes('addEventListener("install"'), "SW 缺 install 事件");
+  assert(sw.includes("/offline.html"), "SW 未引用离线页");
+  assert(sw.includes("cache"), "SW 未使用 Cache API");
+});
+
+await test("sw.js 不被长期缓存（_headers 规则）", () => {
+  const h = rd("_headers");
+  assert(/\/sw\.js[\s\S]{0,120}no-cache/.test(h), "_headers 缺少 /sw.js 不缓存规则");
+  assert(/\/manifest\.json/.test(h), "_headers 缺少 manifest 规则");
+});
+
+await test("搜索页结构完备（输入框 / 结果容器 / 键盘提示）", () => {
+  const h = rd("search.html");
+  assert(h.includes('id="siteSearchInput"'), "缺搜索输入框");
+  assert(h.includes('id="siteSearchResults"'), "缺结果容器");
+  assert(h.includes("aria-controls=\"siteSearchResults\""), "缺 aria-controls");
+  assert(/↑↓|ArrowUp/.test(h) || h.includes("↑↓"), "提示未说明键盘操作");
+  assert(h.includes('rel="canonical"'), "搜索页缺 canonical");
+  assert(h.includes("noindex"), "搜索页应为 noindex");
+});
+
+await test("data/search-all.json 已生成且含类型字段", () => {
+  const idx = JSON.parse(rd("data/search-all.json"));
+  assert(Array.isArray(idx) && idx.length > 0, "索引为空");
+  assert(idx.every(e => e.type && e.typeName && e.url && e.title), "条目字段不完整");
+});
+
+await test("打印样式存在且隐藏交互元素", () => {
+  const css = rd("css/style.css");
+  assert(css.includes("@media print"), "缺 @media print");
+  const printBlock = css.slice(css.indexOf("@media print"));
+  [".navbar", ".footer", ".back-top", ".comments", ".toc"].forEach(sel => {
+    assert(printBlock.includes(sel), `打印样式未隐藏 ${sel}`);
+  });
+  assert(printBlock.includes("@page"), "缺 @page 页边距");
+});
+
+await test("文章页含评论占位容器", () => {
+  const bad = tagged.filter(f => !rd(f).includes('id="comments"'));
+  assert(bad.length === 0, `缺 #comments 的文件：${bad.join(", ")}`);
+});
+
+await test("site.json 的 giscus 配置完整可用", () => {
+  const g = JSON.parse(rd("data/site.json")).giscus;
+  assert(g.enabled === true, "giscus 未启用");
+  ["repo", "repoId", "category", "categoryId"].forEach(k => {
+    assert(g[k] && String(g[k]).trim(), `giscus.${k} 为空`);
+  });
+  assert(/^R_/.test(g.repoId), "repoId 形式应为 R_xxx");
+  assert(/^DIC_/.test(g.categoryId), "categoryId 形式应为 DIC_xxx");
+});
+
+await test("全站页面含 nav-search / manifest / theme-color", () => {
+  const pages = readdirSync(ROOT).filter(f => f.endsWith(".html") && f !== "admin.html" && f !== "offline.html");
+  const bad = pages.filter(f => {
+    const h = rd(f);
+    return !h.includes("nav-search") || !h.includes('rel="manifest"') || !h.includes("theme-color");
+  });
+  assert(bad.length === 0, `缺项文件：${bad.join(", ")}`);
+});
+
+await test("全站页面有 canonical（除 noindex 页）", () => {
+  const pages = readdirSync(ROOT).filter(f => f.endsWith(".html") && f !== "admin.html" && f !== "offline.html");
+  const bad = pages.filter(f => !rd(f).includes('rel="canonical"'));
+  assert(bad.length === 0, `缺 canonical：${bad.join(", ")}`);
 });
 
 /* ---------- 结果 ---------- */

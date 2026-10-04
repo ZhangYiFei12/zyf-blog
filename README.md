@@ -15,6 +15,10 @@
 - 🏷️ **标签页 / 归档页**：`tags/<标签>.html` 聚合页 + `archive.html` 按年归档，随文章发布自动重建
 - 🔗 **相关文章 / 分享**：文章页按标签重合度推荐、一键复制链接或分享到推特/微博
 - ♿ **无障碍 (a11y)**：skip-link、键盘焦点环、`aria-expanded`、ESC 关菜单，色彩对比度通过 WCAG AA
+- 🔍 **站内搜索**：独立搜索页 `search.html`，命中高亮 + ↑↓/Enter/Esc 键盘导航
+- 💬 **评论（giscus）**：基于 GitHub Discussions，零后端，后台可开关
+- 📱 **PWA**：可安装到桌面、离线可访问（Service Worker + 离线页）
+- 🖨 **打印友好**：文章可直接打印 / 存 PDF（白底黑字、附链接 URL）
 
 ## 📁 目录结构
 
@@ -290,6 +294,66 @@ tags: ["Git", "速查"]
 - **相关文章**：客户端读 `data/search-index.json`，按标签重合度排序取前 4 篇
 - **分享**：一键复制链接；推特 / 微博；支持 Web Share API 的浏览器额外显示「系统分享」
 
+## 🔍 站内搜索
+
+导航栏右侧 🔍 进入 `search.html`（搜索页为 `noindex`，不进搜索引擎）。
+
+- 数据源：`data/search-all.json`（文章 + 知识库文档合并，含标题/标签/分类/正文）
+- **命中高亮**：标题、标签、摘要中的关键词用 `<mark>` 标出（先转义再包裹，防 XSS）
+- **键盘导航**：`↑` `↓` 选择、`Enter` 打开、`Esc` 清空
+- **权重排序**：标题完全匹配 > 标题包含 > 标签 > 分类 > 正文
+- 支持 `search.html?q=关键词` 分享链接
+- 博客列表页的内嵌搜索同样支持命中高亮（无关键词时还原原文）
+
+## 💬 评论（giscus）
+
+giscus 基于 GitHub Discussions，无需自建后端。配置存 `data/site.json`，由后台「⚙️ 站点」管理。
+
+### 首次配置
+
+1. 仓库开启 **Discussions**（Settings → Features → Discussions）
+2. 用 `Announcements` 类型的分类（仅维护者能新建讨论，giscus 会代为创建）
+3. 到 [giscus.app](https://giscus.app/zh-CN) 生成配置，把 `repoId` 与 `categoryId` 填入后台
+
+当前配置：
+
+| 项 | 值 |
+| --- | --- |
+| repo | `ZhangYiFei12/zyf-blog` |
+| repoId | `R_kgDOUFjQGA` |
+| category | `Announcements` |
+| categoryId | `DIC_kwDOUFjQGM4DG-7c` |
+| mapping | `pathname`（每篇文章一个讨论） |
+
+### 行为
+
+- 前台仅在 `#comments` 容器存在且配置完整时注入 giscus 脚本；**关闭时零请求**
+- 评论主题跟随站点深浅色（切换主题时通过 postMessage 同步）
+- 未登录 GitHub 的读者只能阅读评论，不能发表
+
+## 📱 PWA / 离线
+
+| 文件 | 作用 |
+| --- | --- |
+| `manifest.json` | 应用名/图标/主题色，由 `data/site.json` 派生 |
+| `sw.js` | Service Worker（**必须放根目录**，放 `/js/` 会被 immutable 规则锁死） |
+| `offline.html` | 离线时的回退页 |
+| `images/icon.svg` | 矢量图标（manifest 用 `sizes: any`） |
+
+缓存策略：
+
+| 资源 | 策略 |
+| --- | --- |
+| HTML / `data/*` | 网络优先（保证内容最新），离线回退缓存 |
+| `/css/` `/js/` `/images/` | 缓存优先（这些资源带 `?v=` 版本号，内容不可变） |
+| 导航请求离线 | 回退 `offline.html` |
+
+> 改动 CSS/JS 时必须递增 `tools/md2html-core.mjs` 里的 `ASSET_VER`，否则用户会因 immutable 缓存看到旧样式。
+
+## 🖨 打印 / 存 PDF
+
+文章页已适配 `@media print`：隐藏导航/页脚/目录/评论区/分享按钮，正文转为白底黑字，代码块与引用改为浅底细框，外链后自动附上 URL，并设置了 `@page` 页边距与分页控制。
+
 ## 🔗 关联网站管理
 
 关于页（`about.html`）简介下方会展示「关联网站」卡片区，数据来自 `data/links.json`，由后台「🔗 关联」页管理。
@@ -315,6 +379,46 @@ tags: ["Git", "速查"]
 - 列表为空（或无可见项）时，整个「关联网站」区自动隐藏
 - 读取失败静默处理，不影响页面其余部分
 - 主题适配深浅色，小屏（≤560px）单列
+
+## ⚙️ 站点设置与运维
+
+后台「⚙️ 站点」tab 集中了五项：
+
+### 站点信息与社交链接
+
+站点名/全称/描述/地址/作者存 `data/site.json`，用于派生 `manifest.json` 与 RSS；
+社交链接（名称/网址/图标）由前台客户端渲染到首页与关于页的 `[data-socials]` 容器，
+改完无需重新构建页面。
+
+### 评论设置
+
+giscus 开关与配置（见上方「评论」章节）。启用时校验 `repoId` / `categoryId` 必填。
+
+### 部署状态
+
+读取最近 5 次提交及其构建状态（Cloudflare Pages 会回写提交状态），
+显示 `✅ 部署成功` / `⏳ 构建中` / `❌ 部署失败`，不用再去控制台看。
+
+### 数据备份导出
+
+一键导出全部内容为单个 JSON：
+
+```json
+{
+  "exportedAt": "...", "repo": "...", "branch": "main",
+  "site": { ... }, "counts": { "articles": 7, "gallery": 44, ... },
+  "articles": [{ "slug", "name", "meta", "markdown" }],   // 含 .md 原文
+  "projects": [...], "gallery": [...], "downloads": [...], "links": [...], "kb": [...]
+}
+```
+
+文章与知识库带 `.md` 原文，以便完整恢复；图片本身仍以仓库 `images/uploads/` 为准。
+
+### 写作便利
+
+- **粘贴/拖拽上传**：在后台正文框直接粘贴截图，或把图片文件拖进去，自动压缩上传并插入 Markdown
+- **草稿预览链接**：文章列表每行有「预览」新窗口打开渲染页（草稿只能通过这个直链看到）
+- **相册说明编辑**：相册卡片 🏷️ 按钮可改 caption 与日期（仅改 `gallery.json`，不动图片）
 
 ## 📝 如何新增文章
 
@@ -370,8 +474,8 @@ node tools/md2html.mjs -w           # 监听模式，保存自动重新生成
 ```bash
 node tools/dev-server.mjs &          # 前端测试需要
 node tools/check-integrity.mjs       # 资源完整性（死链/孤儿图）
-node tools/test-admin.mjs            # 后台 API（34 项）
-node tools/test-frontend.mjs         # 前端（26 项）
+node tools/test-admin.mjs            # 后台 API（42 项）
+node tools/test-frontend.mjs         # 前端（39 项）
 node tools/gen-pages.mjs             # 重建派生页面
 ```
 

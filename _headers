@@ -40,3 +40,11 @@
 # 归档页
 /archive.html
   Cache-Control: public, max-age=0, must-revalidate
+
+# Service Worker 绝不长期缓存（否则无法更新）
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# PWA manifest
+/manifest.json
+  Cache-Control: public, max-age=0, must-revalidate

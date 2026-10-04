@@ -207,6 +207,16 @@ function mockServer(req, res) {
     } else if (path === `/repos/${process.env.GITHUB_REPO}/contents/docs/kb` && method === "GET") {
       const entries = Object.keys(files).filter(k => k.startsWith("docs/kb/")).map(k => ({ name: k.replace("docs/kb/", ""), type: "file" }));
       respond(200, entries);
+    } else if (path === `/repos/${process.env.GITHUB_REPO}/commits` && method === "GET") {
+      respond(200, [{
+        sha: headCommitSha,
+        commit: { message: "test commit\n\nbody", author: { date: "2026-09-25T10:00:00Z" } },
+      }]);
+    } else if (/^\/repos\/[^/]+\/[^/]+\/commits\/[^/]+\/status$/.test(path) && method === "GET") {
+      respond(200, {
+        state: "success",
+        statuses: [{ description: "Deployed to Cloudflare Pages", target_url: "https://dash.cloudflare.com/" }],
+      });
     } else if (path.startsWith(`/repos/${process.env.GITHUB_REPO}/contents/`) && method === "GET") {
       const filePath = path.replace(`/repos/${process.env.GITHUB_REPO}/contents/`, "");
       try {
@@ -782,6 +792,110 @@ mockServer_.listen(mockPort, async () => {
     if (hasFile("tags/同步标记.html")) throw new Error("失效标签页未清理");
     const sm = getFile("sitemap.xml");
     if (sm.indexOf("同步标记") !== -1) throw new Error("sitemap 残留已失效标签");
+  });
+
+  // 15. 站点设置 / 部署状态 / 备份 / 相册元数据
+
+  await test("读取站点设置（默认值兑底）", async () => {
+    const req = new Request("http://localhost/api/admin/site", { headers: { Authorization: "Bearer " + token } });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status);
+    if (!data.site || typeof data.site !== "object") throw new Error("未返回 site 对象");
+    if (!data.site.giscus || typeof data.site.giscus.enabled !== "boolean") throw new Error("giscus 默认值缺失");
+  });
+
+  await test("保存站点设置 + 同步 manifest.json", async () => {
+    const req = new Request("http://localhost/api/admin/site", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({
+        name: "ZH", title: "ZH 博客", description: "测试描述",
+        url: "https://example.com/", author: "ZH",
+        socials: [{ name: "GitHub", url: "https://github.com/x", icon: "⌥" }, { name: "", url: "" }],
+        giscus: { enabled: true, repo: "a/b", repoId: "R_x", category: "Announcements", categoryId: "DIC_x", mapping: "pathname", lang: "zh-CN" },
+      }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + " " + JSON.stringify(data));
+    const site = JSON.parse(getFile("data/site.json"));
+    if (site.url !== "https://example.com") throw new Error("URL 尾部斜杠未清理：" + site.url);
+    if (site.socials.length !== 1) throw new Error("空社交行应被过滤，实际 " + site.socials.length);
+    if (!site.giscus.enabled) throw new Error("giscus 未启用");
+    // manifest 应同步生成
+    const man = JSON.parse(getFile("manifest.json"));
+    if (man.name !== "ZH 博客") throw new Error("manifest.name 未同步：" + man.name);
+    if (man.short_name !== "ZH") throw new Error("manifest.short_name 未同步");
+    if (!Array.isArray(man.icons) || !man.icons.length) throw new Error("manifest 缺 icons");
+  });
+
+  await test("启用评论但缺 repoId/categoryId → 400", async () => {
+    const req = new Request("http://localhost/api/admin/site", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ giscus: { enabled: true, repo: "a/b" } }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    if (res.status !== 400) throw new Error("期望 400，得到 " + res.status);
+  });
+
+  await test("相册元数据更新（caption / date）", async () => {
+    const list = JSON.parse(getFile("data/gallery.json"));
+    if (!list.length) throw new Error("相册为空，无法测试");
+    const file = list[0].file;
+    const req = new Request("http://localhost/api/admin/gallery/meta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ file: file, caption: "这是一张测试图片", date: "2026-09-20" }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + " " + JSON.stringify(data));
+    const after = JSON.parse(getFile("data/gallery.json")).find(g => g.file === file);
+    if (after.caption !== "这是一张测试图片") throw new Error("caption 未保存：" + after.caption);
+    if (after.date !== "2026-09-20") throw new Error("date 未保存：" + after.date);
+  });
+
+  await test("相册元数据更新：图片不存在 → 404", async () => {
+    const req = new Request("http://localhost/api/admin/gallery/meta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ file: "不存在的图.jpg", caption: "x" }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    if (res.status !== 404) throw new Error("期望 404，得到 " + res.status);
+  });
+
+  await test("部署状态查询", async () => {
+    const req = new Request("http://localhost/api/admin/deploy", { headers: { Authorization: "Bearer " + token } });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status);
+    if (!Array.isArray(data.commits) || !data.commits.length) throw new Error("未返回提交列表");
+    const c = data.commits[0];
+    if (!c.shortSha || !c.message) throw new Error("提交字段缺失");
+    if (c.state !== "success") throw new Error("状态未解析：" + c.state);
+  });
+
+  await test("数据备份导出（含文章原文与计数）", async () => {
+    const req = new Request("http://localhost/api/admin/backup", { headers: { Authorization: "Bearer " + token } });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status);
+    if (!data.exportedAt) throw new Error("缺 exportedAt");
+    if (!data.counts || typeof data.counts.articles !== "number") throw new Error("缺 counts");
+    if (!Array.isArray(data.articles) || !data.articles.length) throw new Error("未导出文章");
+    if (typeof data.articles[0].markdown !== "string" || !data.articles[0].markdown.length) {
+      throw new Error("文章 markdown 原文未导出");
+    }
+    if (!data.site || !data.site.name) throw new Error("未导出站点设置");
+  });
+
+  await test("站点设置未授权 → 401", async () => {
+    const req = new Request("http://localhost/api/admin/site");
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    if (res.status !== 401) throw new Error("期望 401，得到 " + res.status);
   });
 
   // 结果

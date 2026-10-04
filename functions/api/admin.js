@@ -23,6 +23,7 @@ import {
   buildPage,
   buildArticlePreview,
   buildKbPage,
+  buildManifest,
   buildKbIndex,
   renderKbList,
   renderKbFilter,
@@ -317,6 +318,69 @@ async function buildTagAndArchiveChanges(env, posts) {
   }
   changes.push({ path: "archive.html", content: buildArchivePage(posts) });
   return { changes, tags };
+}
+
+/* 站点设置默认值（data/site.json 缺失时的兜底） */
+const SITE_DEFAULTS = {
+  name: "ZH",
+  title: "ZH 博客",
+  description: "科技简约风格的个人博客：技术分享、项目实践与生活随笔。",
+  url: "https://zyf2026.pages.dev",
+  author: "ZH",
+  socials: [],
+  giscus: {
+    enabled: false, repo: "", repoId: "", category: "", categoryId: "",
+    mapping: "pathname", lang: "zh-CN", reactions: true, inputPosition: "bottom",
+  },
+};
+
+/* 读取站点设置 */
+async function getSite(env) {
+  try {
+    const raw = await getFile(env, "data/site.json");
+    const obj = JSON.parse(raw);
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return { ...SITE_DEFAULTS };
+    return {
+      ...SITE_DEFAULTS,
+      ...obj,
+      giscus: { ...SITE_DEFAULTS.giscus, ...(obj.giscus || {}) },
+    };
+  } catch (e) {
+    return { ...SITE_DEFAULTS };
+  }
+}
+
+/* 校验并规整站点设置 */
+function normSite(input) {
+  const g = (input && input.giscus) || {};
+  const str = (v, d) => String(v == null ? (d || "") : v).trim();
+  return {
+    name: str(input.name, SITE_DEFAULTS.name) || "ZH",
+    title: str(input.title, SITE_DEFAULTS.title) || "ZH 博客",
+    description: str(input.description),
+    url: str(input.url, SITE_DEFAULTS.url).replace(/\/+$/, ""),
+    author: str(input.author, SITE_DEFAULTS.author),
+    socials: Array.isArray(input.socials)
+      ? input.socials
+          .map(s => ({
+            name: str(s && s.name),
+            url: str(s && s.url),
+            icon: str(s && s.icon) || "🔗",
+          }))
+          .filter(s => s.name && s.url)
+      : [],
+    giscus: {
+      enabled: !!g.enabled,
+      repo: str(g.repo),
+      repoId: str(g.repoId),
+      category: str(g.category),
+      categoryId: str(g.categoryId),
+      mapping: ["pathname", "url", "title", "og:title"].includes(g.mapping) ? g.mapping : "pathname",
+      lang: str(g.lang) || "zh-CN",
+      reactions: g.reactions !== false,
+      inputPosition: g.inputPosition === "top" ? "top" : "bottom",
+    },
+  };
 }
 
 /* 读取 data/links.json（关联网站） */
@@ -767,6 +831,25 @@ export async function onRequest(context) {
     return json({ ok: true, commitSha, message: "已重新压缩并提交，部署后生效（约 1 分钟）" });
   }
 
+  // ---- POST /api/admin/gallery/meta（仅更新相册元数据：caption / date，不动图片）----
+  if (method === "POST" && rest.length === 2 && rest[0] === "gallery" && rest[1] === "meta") {
+    const input = await request.json().catch(() => null);
+    const file = String((input && input.file) || "").trim();
+    if (!file) return json({ error: "缺少文件名" }, 400);
+    const gallery = await getGallery(env);
+    const target = gallery.find(g => g && g.file === file);
+    if (!target) return json({ error: "相册中未找到该图片" }, 404);
+    if (input.caption !== undefined) target.caption = String(input.caption || "").trim().slice(0, 200);
+    if (input.date !== undefined) {
+      const d = String(input.date || "").trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) target.date = d;
+    }
+    const commitSha = await commitFiles(env, `🏷️ 后台更新相册信息：${file}`, [
+      { path: "data/gallery.json", content: JSON.stringify(gallery, null, 2) },
+    ]);
+    return json({ ok: true, commitSha, message: "已保存，部署后生效（约 1 分钟）" });
+  }
+
   // ---- DELETE /api/admin/gallery/<filename>（删除相册图片）----
   if (method === "DELETE" && rest.length === 2 && rest[0] === "gallery") {
     const filename = String(rest[1] || "").replace(/[^a-z0-9.\-]/gi, "");
@@ -1002,6 +1085,90 @@ export async function onRequest(context) {
     ]);
 
     return json({ ok: true, commitSha, message: "已删除并提交，等待自动部署" });
+  }
+
+  // ---- GET /api/admin/site（站点设置）----
+  if (method === "GET" && rest.length === 1 && rest[0] === "site") {
+    return json({ site: await getSite(env) });
+  }
+
+  // ---- POST /api/admin/site（保存站点设置）----
+  if (method === "POST" && rest.length === 1 && rest[0] === "site") {
+    const input = await request.json().catch(() => null);
+    if (!input) return json({ error: "请求体无效" }, 400);
+    const site = normSite(input);
+    if (site.giscus.enabled && (!site.giscus.repoId || !site.giscus.categoryId)) {
+      return json({ error: "启用评论需要填写 repoId 与 categoryId（见 giscus.app 生成的配置）" }, 400);
+    }
+    const commitSha = await commitFiles(env, "⚙️ 后台更新站点设置", [
+      { path: "data/site.json", content: JSON.stringify(site, null, 2) + "\n" },
+      { path: "manifest.json", content: buildManifest(site) },
+    ]);
+    return json({ ok: true, commitSha, message: "已保存，部署后生效（约 1 分钟）" });
+  }
+
+  // ---- GET /api/admin/deploy（部署状态：最近一次提交的构建结果）----
+  if (method === "GET" && rest.length === 1 && rest[0] === "deploy") {
+    try {
+      // 最近 5 次提交 + 各自的 check runs 状态（Cloudflare Pages 会回写提交状态）
+      const res = await gh(env, `/repos/${repo(env)}/commits?sha=${branch(env)}&per_page=5`);
+      const commits = await res.json();
+      const out = [];
+      for (const c of (Array.isArray(commits) ? commits : [])) {
+        let state = "unknown", desc = "", url = "";
+        try {
+          const st = await gh(env, `/repos/${repo(env)}/commits/${c.sha}/status`);
+          const sd = await st.json();
+          if (sd && sd.state) { state = sd.state; }
+          if (sd && Array.isArray(sd.statuses) && sd.statuses.length) {
+            desc = String(sd.statuses[0].description || "");
+            url = String(sd.statuses[0].target_url || "");
+          }
+        } catch (e) { /* 无状态信息时保留 unknown */ }
+        out.push({
+          sha: c.sha,
+          shortSha: String(c.sha).slice(0, 7),
+          message: String((c.commit && c.commit.message) || "").split("\n")[0],
+          date: String((c.commit && c.commit.author && c.commit.author.date) || ""),
+          state,
+          desc,
+          url,
+        });
+      }
+      return json({ commits: out, branch: branch(env) });
+    } catch (e) {
+      return json({ error: "读取部署状态失败：" + e.message }, 502);
+    }
+  }
+
+  // ---- GET /api/admin/backup（导出全部内容为 JSON 备份）----
+  if (method === "GET" && rest.length === 1 && rest[0] === "backup") {
+    const [posts, projects, gallery, downloads, links, kbDocs, site] = await Promise.all([
+      getAllPosts(env), getProjects(env), getGallery(env),
+      getDownloads(env), getLinks(env), getAllKbDocs(env), getSite(env),
+    ]);
+    // 文章与知识库带上 .md 原文，便于完整恢复
+    const articles = [];
+    for (const p of posts) {
+      const md = await getFile(env, `blog/posts/${p.name}`);
+      articles.push({ slug: p.slug, name: p.name, meta: p.meta, markdown: md || "" });
+    }
+    const kb = [];
+    for (const d of kbDocs) {
+      const md = await getFile(env, `docs/kb/${d.name}`);
+      kb.push({ slug: d.slug, name: d.name, meta: d.meta, markdown: md || "" });
+    }
+    return json({
+      exportedAt: new Date().toISOString(),
+      repo: repo(env),
+      branch: branch(env),
+      site,
+      counts: {
+        articles: articles.length, projects: projects.length, gallery: gallery.length,
+        downloads: downloads.length, links: links.length, kb: kb.length,
+      },
+      articles, projects, gallery, downloads, links, kb,
+    });
   }
 
   // ---- GET /api/admin/links（关联网站列表）----

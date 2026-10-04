@@ -3,6 +3,9 @@
    供 CLI（md2html.mjs）与 Cloudflare Pages 后台函数共用
    ============================================================ */
 
+/* 静态资源版本：改 CSS/JS 后同步递增（资源走 immutable 缓存） */
+export const ASSET_VER = { css: "25", js: "22" };
+
 /* ---------- Front Matter 解析 ---------- */
 export function parseFrontMatter(raw) {
   const meta = { title: "", date: "", excerpt: "", tags: [], published: true, category: "" };
@@ -337,8 +340,11 @@ export function buildPage(meta, bodyHtml, opts = {}) {
   <title>${escapeHtml(meta.title)} | ZH</title>
   <meta name="description" content="${escapeAttr(excerpt)}" />
   <link rel="canonical" href="${escapeAttr(pageUrl)}" />
-  <link rel="stylesheet" href="../css/style.css?v=25" />
+  <link rel="stylesheet" href="../css/style.css?v=${ASSET_VER.css}" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
+  <link rel="manifest" href="../manifest.json" />
+  <meta name="theme-color" content="#0a0e14" />
+  <link rel="apple-touch-icon" href="../images/avatar.png" />
   <meta property="og:type" content="article" />
   <meta property="og:title" content="${escapeAttr(meta.title)}" />
   <meta property="og:description" content="${escapeAttr(excerpt)}" />
@@ -370,6 +376,7 @@ ${jsonLd}
         <li><a href="../kb.html">知识库</a></li>
       </ul>
       <div class="nav-actions">
+        <a class="nav-search" href="../search.html" aria-label="搜索" title="搜索">🔍</a>
         <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
         <button class="nav-toggle" id="navToggle" aria-label="菜单" aria-expanded="false" aria-controls="navLinks">☰ 菜单</button>
       </div>
@@ -383,6 +390,8 @@ ${articleHtml}
 ${buildShareRow(meta.title, pageUrl)}
 
 ${relatedPlaceholder("相关文章")}
+
+    <section class="comments" id="comments" aria-label="评论"></section>
 
     <nav class="post-nav" id="postNav"></nav>
 
@@ -398,7 +407,7 @@ ${relatedPlaceholder("相关文章")}
   </footer>
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
-  <script src="../js/main.js?v=22"></script>
+  <script src="../js/main.js?v=${ASSET_VER.js}"></script>
 </body>
 </html>
 `;
@@ -641,8 +650,11 @@ export function buildKbPage(meta, bodyHtml, opts = {}) {
   <title>${escapeHtml(meta.title)} | 知识库 | ZH</title>
   <meta name="description" content="${escapeAttr(excerpt)}" />
   <link rel="canonical" href="${escapeAttr(pageUrl)}" />
-  <link rel="stylesheet" href="../css/style.css?v=25" />
+  <link rel="stylesheet" href="../css/style.css?v=${ASSET_VER.css}" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
+  <link rel="manifest" href="../manifest.json" />
+  <meta name="theme-color" content="#0a0e14" />
+  <link rel="apple-touch-icon" href="../images/avatar.png" />
   <meta property="og:type" content="article" />
   <meta property="og:title" content="${escapeAttr(meta.title)}" />
   <meta property="og:description" content="${escapeAttr(excerpt)}" />
@@ -674,6 +686,7 @@ ${jsonLd}
         <li><a href="../kb.html" class="active">知识库</a></li>
       </ul>
       <div class="nav-actions">
+        <a class="nav-search" href="../search.html" aria-label="搜索" title="搜索">🔍</a>
         <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
         <button class="nav-toggle" id="navToggle" aria-label="菜单" aria-expanded="false" aria-controls="navLinks">☰ 菜单</button>
       </div>
@@ -710,6 +723,8 @@ ${buildShareRow(meta.title, pageUrl)}
 
 ${relatedPlaceholder("相关知识")}
 
+    <section class="comments" id="comments" aria-label="评论"></section>
+
   </main>
 
   <footer class="footer">
@@ -720,7 +735,7 @@ ${relatedPlaceholder("相关知识")}
   </footer>
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
-  <script src="../js/main.js?v=22"></script>
+  <script src="../js/main.js?v=${ASSET_VER.js}"></script>
 </body>
 </html>
 `;
@@ -825,7 +840,6 @@ function buildListShell({ title, description, canonical, bodyHtml, navActive, ro
   const SITE = "https://zyf2026.pages.dev";
   const navItem = (href, label, key) =>
     `        <li><a href="${p}${href}"${navActive === key ? ' class="active"' : ""}>${label}</a></li>`;
-  const cssV = "24";
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -835,8 +849,11 @@ function buildListShell({ title, description, canonical, bodyHtml, navActive, ro
   <title>${escapeHtml(title)} | ZH</title>
   <meta name="description" content="${escapeAttr(description)}" />
   <link rel="canonical" href="${escapeAttr(canonical)}" />
-  <link rel="stylesheet" href="${p}css/style.css?v=${cssV}" />
+  <link rel="stylesheet" href="${p}css/style.css?v=${ASSET_VER.css}" />
   <link rel="icon" type="image/png" href="${p}images/avatar.png" />
+  <link rel="manifest" href="${p}manifest.json" />
+  <meta name="theme-color" content="#0a0e14" />
+  <link rel="apple-touch-icon" href="${p}images/avatar.png" />
   <link rel="alternate" type="application/rss+xml" title="ZH 博客 RSS" href="${p}feed.xml" />
   <meta property="og:type" content="website" />
   <meta property="og:title" content="${escapeAttr(title)}" />
@@ -875,6 +892,7 @@ ${navItem("gallery.html", "相册", "gallery")}
 ${navItem("kb.html", "知识库", "kb")}
       </ul>
       <div class="nav-actions">
+        <a class="nav-search" href="${p}search.html" aria-label="搜索" title="搜索">🔍</a>
         <button class="theme-toggle" id="themeToggle" aria-label="切换主题" title="切换深浅色主题">☀</button>
         <button class="nav-toggle" id="navToggle" aria-label="菜单" aria-expanded="false" aria-controls="navLinks">☰ 菜单</button>
       </div>
@@ -895,7 +913,7 @@ ${bodyHtml}
   </footer>
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
-  <script src="${p}js/main.js?v=22"></script>
+  <script src="${p}js/main.js?v=${ASSET_VER.js}"></script>
 </body>
 </html>
 `;
@@ -1008,4 +1026,70 @@ export function scoreRelated(currentTags, candidateTags) {
   let n = 0;
   for (const t of (candidateTags || [])) if (a.has(t)) n++;
   return n;
+}
+
+/* ============================================================
+   站点设置派生：PWA manifest
+   ============================================================ */
+export function buildManifest(site = {}) {
+  const name = site.title || "ZH 博客";
+  const short = site.name || "ZH";
+  const desc = site.description || "";
+  return JSON.stringify({
+    name,
+    short_name: short,
+    description: desc,
+    start_url: "/index.html",
+    scope: "/",
+    display: "standalone",
+    background_color: "#0a0e14",
+    theme_color: "#0a0e14",
+    lang: "zh-CN",
+    dir: "ltr",
+    categories: ["blog", "personal", "technology"],
+    icons: [
+      { src: "/images/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
+      { src: "/images/avatar.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/images/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
+    ],
+  }, null, 2) + "\n";
+}
+
+/* ---------- 站点级搜索索引（文章 + 知识库，供独立搜索页使用） ---------- */
+export function buildSearchAll(posts, kbDocs) {
+  const stripHtml = html =>
+    String(html || "")
+      .replace(/&lt;[^>]+&gt;/g, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+      .replace(/\s+/g, " ")
+      .trim();
+  const out = [];
+  for (const p of (Array.isArray(posts) ? posts : [])) {
+    if (p.meta.published === false) continue;
+    out.push({
+      type: "post",
+      typeName: "文章",
+      url: `blog/${encodeURIComponent(p.slug)}.html`,
+      title: p.meta.title || p.slug,
+      date: p.meta.date || "",
+      tags: p.meta.tags || [],
+      category: "",
+      text: [p.meta.excerpt || "", stripHtml(p.bodyHtml)].filter(Boolean).join(" ").slice(0, 2000),
+    });
+  }
+  for (const d of (Array.isArray(kbDocs) ? kbDocs : [])) {
+    out.push({
+      type: "kb",
+      typeName: "知识库",
+      url: `kb/${encodeURIComponent(d.slug)}.html`,
+      title: d.meta.title || d.slug,
+      date: d.meta.date || "",
+      tags: d.meta.tags || [],
+      category: d.meta.category || "未分类",
+      text: [d.meta.excerpt || d.meta.desc || "", stripHtml(d.bodyHtml)].filter(Boolean).join(" ").slice(0, 2000),
+    });
+  }
+  return JSON.stringify(out, null, 2) + "\n";
 }

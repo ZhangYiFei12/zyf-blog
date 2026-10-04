@@ -20,8 +20,8 @@ import { fileURLToPath } from "url";
 import {
   parseFrontMatter, parseBody, slugify,
   buildKbPage, buildKbIndex, renderKbList, renderKbFilter,
-  buildPostsIndex, buildSitemap, buildRss, buildSearchIndex,
-  buildTagPage, buildArchivePage, collectTags,
+  buildPostsIndex, buildSitemap, buildRss, buildSearchIndex, buildSearchAll,
+  buildTagPage, buildArchivePage, collectTags, buildManifest,
 } from "./md2html-core.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -86,9 +86,15 @@ if (existsSync(join(ROOT, "kb.html"))) {
 /* ---------- 6. 数据与 SEO 文件 ---------- */
 wr("data/posts.json", buildPostsIndex(posts));
 wr("data/search-index.json", buildSearchIndex(posts));
+wr("data/search-all.json", buildSearchAll(posts, kbDocs));
 wr("data/kb.json", buildKbIndex(kbDocs));
 wr("sitemap.xml", buildSitemap(posts, undefined, kbDocs, tags));
 wr("feed.xml", buildRss(posts));
+
+/* PWA manifest（由站点设置派生） */
+let site = {};
+try { site = JSON.parse(rd("data/site.json")); } catch (e) { site = {}; }
+wr("manifest.json", buildManifest(site));
 
 /* ---------- 输出 ---------- */
 console.log("✅ 派生页面已生成");
@@ -96,5 +102,5 @@ console.log(`   文章：${posts.length} 篇`);
 console.log(`   知识库：${kbDocs.length} 篇`);
 console.log(`   标签页：${tags.length} 个 ${tags.length ? "(" + tags.map(t => t.name + ":" + t.count).join(", ") + ")" : ""}`);
 console.log(`   归档页：archive.html`);
-console.log(`   数据：posts.json / search-index.json / kb.json`);
-console.log(`   SEO：sitemap.xml / feed.xml`);
+console.log(`   数据：posts.json / search-index.json / search-all.json / kb.json`);
+console.log(`   SEO：sitemap.xml / feed.xml / manifest.json`);

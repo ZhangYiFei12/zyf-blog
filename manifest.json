@@ -1,0 +1,37 @@
+{
+  "name": "ZH 博客",
+  "short_name": "ZH",
+  "description": "科技简约风格的个人博客：技术分享、项目实践与生活随笔。",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a0e14",
+  "theme_color": "#0a0e14",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "categories": [
+    "blog",
+    "personal",
+    "technology"
+  ],
+  "icons": [
+    {
+      "src": "/images/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/images/avatar.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/images/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

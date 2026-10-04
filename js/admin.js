@@ -93,12 +93,14 @@
   var tabDownloads = $("tabDownloads");
   var tabLinks = $("tabLinks");
   var tabKb = $("tabKb");
+  var tabSite = $("tabSite");
   var viewArticles = $("viewArticles");
   var viewProjects = $("viewProjects");
   var viewGallery = $("viewGallery");
   var viewDownloads = $("viewDownloads");
   var viewLinks = $("viewLinks");
   var viewKb = $("viewKb");
+  var viewSite = $("viewSite");
   var galleryGrid = $("galleryGrid");
   var galleryLoading = $("galleryLoading");
   var galleryUploadBtn = $("galleryUploadBtn");
@@ -247,6 +249,7 @@
               '<div class="date">' + escapeHtml(a.date || "") + (a.tags && a.tags.length ? " · " + escapeHtml(a.tags.join(" / ")) : "") + "</div>" +
             "</div>" +
             '<div class="actions">' +
+              '<a class="btn btn-outline btn-sm" href="blog/' + escapeAttr(encodeURIComponent(a.slug)) + '.html" target="_blank" rel="noopener noreferrer" title="在当前页预览渲染后的页面（草稿仅能通过此直链查看）">预览</a>' +
               '<button class="btn btn-outline btn-sm" data-action="edit" data-slug="' + escapeAttr(a.slug) + '">编辑</button>' +
               '<button class="btn btn-danger btn-sm" data-action="del" data-slug="' + escapeAttr(a.slug) + '">删除</button>' +
             "</div>";
@@ -298,6 +301,11 @@
         $("bodyField").value = data.body || "";
         editSlug.value = data.slug;
         cancelEditBtn.style.display = "inline-flex";
+        var pv = $("previewArticleBtn");
+        if (pv) {
+          pv.href = "blog/" + encodeURIComponent(data.slug) + ".html";
+          pv.style.display = "inline-flex";
+        }
         publishBtn.textContent = "📝 发布";
         draftBtn.textContent = "💾 存草稿";
         updatePreview();
@@ -315,6 +323,8 @@
     $("bodyField").value = "";
     editSlug.value = "";
     cancelEditBtn.style.display = "none";
+    var pv2 = $("previewArticleBtn");
+    if (pv2) pv2.style.display = "none";
     publishBtn.textContent = "📝 发布";
     draftBtn.textContent = "💾 存草稿";
     updatePreview();
@@ -562,9 +572,9 @@
 
   uploadImgBtn.addEventListener("click", function () { imgFileInput.click(); });
 
-  imgFileInput.addEventListener("change", function () {
-    var files = Array.prototype.slice.call(imgFileInput.files || []);
-    if (!files.length) return;
+  /* 上传一批图片并把 Markdown 插入正文（选择文件 / 粘贴 / 拖拽共用） */
+  function uploadImagesToBody(files) {
+    if (!files || !files.length) return;
     var HARD_LIMIT = 5 * 1024 * 1024;
     var targetBytes = imgSettings.target * 1024;
     var quality = imgSettings.quality;
@@ -641,7 +651,55 @@
       reader.readAsDataURL(file);
     };
     processNext(0);
+  }
+
+  imgFileInput.addEventListener("change", function () {
+    var files = Array.prototype.slice.call(imgFileInput.files || []);
+    if (!files.length) return;
+    uploadImagesToBody(files);
   });
+
+  /* 正文框：粘贴截图直接上传并插入 Markdown */
+  (function () {
+    var body = $("bodyField");
+    if (!body) return;
+
+    body.addEventListener("paste", function (e) {
+      var items = (e.clipboardData && e.clipboardData.items) || [];
+      var imgs = [];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].kind === "file" && /^image\//.test(items[i].type)) {
+          var f = items[i].getAsFile();
+          if (f) imgs.push(f);
+        }
+      }
+      if (!imgs.length) return; // 普通文本粘贴不受影响
+      e.preventDefault();
+      uploadImagesToBody(imgs);
+    });
+
+    /* 拖拽图片文件到正文框 */
+    var stop = function (e) { e.preventDefault(); e.stopPropagation(); };
+    ["dragenter", "dragover"].forEach(function (ev) {
+      body.addEventListener(ev, function (e) {
+        if (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") !== -1) {
+          stop(e);
+          body.classList.add("drop-active");
+        }
+      });
+    });
+    ["dragleave", "dragend"].forEach(function (ev) {
+      body.addEventListener(ev, function () { body.classList.remove("drop-active"); });
+    });
+    body.addEventListener("drop", function (e) {
+      body.classList.remove("drop-active");
+      var fl = (e.dataTransfer && e.dataTransfer.files) || [];
+      var imgs = Array.prototype.filter.call(fl, function (f) { return /^image\//.test(f.type); });
+      if (!imgs.length) return;
+      stop(e);
+      uploadImagesToBody(imgs);
+    });
+  })();
 
   function deleteArticle(slug) {
     if (!confirm("确定删除这篇文章吗？\n删除后不可恢复。")) return;
@@ -663,17 +721,20 @@
     tabDownloads.className = "tab" + (name === "downloads" ? " active" : "");
     tabLinks.className = "tab" + (name === "links" ? " active" : "");
     tabKb.className = "tab" + (name === "kb" ? " active" : "");
+    tabSite.className = "tab" + (name === "site" ? " active" : "");
     viewArticles.style.display = name === "articles" ? "block" : "none";
     viewProjects.style.display = name === "projects" ? "block" : "none";
     viewGallery.style.display = name === "gallery" ? "block" : "none";
     viewDownloads.style.display = name === "downloads" ? "block" : "none";
     viewLinks.style.display = name === "links" ? "block" : "none";
     viewKb.style.display = name === "kb" ? "block" : "none";
+    viewSite.style.display = name === "site" ? "block" : "none";
     if (name === "projects") loadProjects();
     if (name === "gallery") loadGallery();
     if (name === "downloads") loadDownloads();
     if (name === "links") loadLinks();
     if (name === "kb") loadKb();
+    if (name === "site") { loadSite(); loadDeploy(); }
   }
 
   tabArticles.addEventListener("click", function () { switchTab("articles"); });
@@ -682,6 +743,7 @@
   tabDownloads.addEventListener("click", function () { switchTab("downloads"); });
   tabLinks.addEventListener("click", function () { switchTab("links"); });
   tabKb.addEventListener("click", function () { switchTab("kb"); });
+  tabSite.addEventListener("click", function () { switchTab("site"); });
 
   /* ---------- 项目列表 ---------- */
 
@@ -906,12 +968,14 @@
         '<div class="gal-thumb">' +
           '<img src="' + escapeAttr(g.thumbUrl || g.url) + '" alt="' + escapeAttr(g.caption || g.file) + '" loading="lazy" />' +
           '<div class="gal-actions">' +
+            '<button class="btn btn-outline btn-sm" data-action="meta" data-file="' + escapeAttr(g.file) + '" title="编辑说明与日期">🏷️</button>' +
             '<button class="btn btn-outline btn-sm" data-action="opt" data-file="' + escapeAttr(g.file) + '" title="重新压缩（可设置大小/质量）">压缩</button>' +
             '<button class="btn btn-danger btn-sm" data-action="del" data-file="' + escapeAttr(g.file) + '">删除</button>' +
           '</div>' +
         '</div>' +
         '<div class="gal-info">' +
           '<div class="gal-name" title="' + escapeAttr(g.file) + '">' + escapeHtml(g.file) + '</div>' +
+          (g.caption ? '<div class="gal-caption" title="' + escapeAttr(g.caption) + '">' + escapeHtml(g.caption) + '</div>' : '') +
           '<div class="gal-sizes">' +
             '<span class="gal-size-row"><i>原图</i><b>' + (size ? formatSize(size) : "未知") + '</b>' +
               (origSize && origSize > size ? '<em class="gal-saved">省 ' + ratio + '%</em>' : '') + '</span>' +
@@ -927,9 +991,62 @@
   galleryGrid.addEventListener("click", function (e) {
     var btn = e.target.closest("button[data-action='del']");
     if (btn) { deleteGalleryImage(btn.getAttribute("data-file"), btn); return; }
+    var metaBtn = e.target.closest("button[data-action='meta']");
+    if (metaBtn) { openGalMeta(metaBtn.getAttribute("data-file")); return; }
     var optBtn = e.target.closest("button[data-action='opt']");
     if (optBtn) optimizeGalleryImage(optBtn.getAttribute("data-file"), optBtn);
   });
+
+  /* ---------- 相册信息编辑（caption / date） ---------- */
+  var galMetaFile = null;
+  var galMetaOverlay = $("galMetaOverlay");
+
+  function openGalMeta(file) {
+    var g = null;
+    galleryCache.forEach(function (x) { if (x && x.file === file) g = x; });
+    if (!g) { showToast("未找到该图片", "error"); return; }
+    galMetaFile = file;
+    $("galMetaFile").textContent = file;
+    $("galMetaPreview").src = g.thumbUrl || g.url;
+    $("galMetaCaption").value = g.caption || "";
+    $("galMetaDate").value = /^\d{4}-\d{2}-\d{2}$/.test(g.date || "") ? g.date : "";
+    galMetaOverlay.style.display = "flex";
+    setTimeout(function () { $("galMetaCaption").focus(); }, 30);
+  }
+
+  function closeGalMeta() {
+    galMetaOverlay.style.display = "none";
+    galMetaFile = null;
+  }
+
+  if (galMetaOverlay) {
+    $("galMetaCancel").addEventListener("click", closeGalMeta);
+    galMetaOverlay.addEventListener("click", function (e) { if (e.target === galMetaOverlay) closeGalMeta(); });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape" && galMetaOverlay.style.display !== "none") closeGalMeta();
+    });
+    $("galMetaSave").addEventListener("click", function () {
+      if (!galMetaFile) { closeGalMeta(); return; }
+      var btn = $("galMetaSave");
+      btn.disabled = true;
+      btn.textContent = "保存中…";
+      api("/gallery/meta", {
+        method: "POST",
+        body: {
+          file: galMetaFile,
+          caption: $("galMetaCaption").value.trim(),
+          date: $("galMetaDate").value || "",
+        },
+      })
+        .then(function (data) {
+          showToast(data.message || "已保存", "success");
+          closeGalMeta();
+          loadGallery();
+        })
+        .catch(function (err) { showToast(err.message || "保存失败", "error"); })
+        .then(function () { btn.disabled = false; btn.textContent = "保存"; });
+    });
+  }
 
   function deleteGalleryImage(file, btn) {
     if (!file) return;
@@ -1732,6 +1849,170 @@
       })
       .catch(function (err) { showToast(err.message || "删除失败", "error"); });
   }
+
+  /* ---------- 站点设置 / 部署状态 / 数据备份 ---------- */
+
+  function loadSite() {
+    api("/site")
+      .then(function (data) {
+        var s = (data && data.site) || {};
+        $("siteNameField").value = s.name || "";
+        $("siteTitleField").value = s.title || "";
+        $("siteDescField").value = s.description || "";
+        $("siteUrlField").value = s.url || "";
+        $("siteAuthorField").value = s.author || "";
+        var g = s.giscus || {};
+        $("giscusEnabled").checked = !!g.enabled;
+        $("giscusRepo").value = g.repo || "";
+        $("giscusRepoId").value = g.repoId || "";
+        $("giscusCategory").value = g.category || "";
+        $("giscusCategoryId").value = g.categoryId || "";
+        $("giscusMapping").value = g.mapping || "pathname";
+        $("giscusLang").value = g.lang || "zh-CN";
+        $("giscusPos").value = g.inputPosition || "bottom";
+        $("giscusReactions").checked = g.reactions !== false;
+        renderSocialRows(Array.isArray(s.socials) ? s.socials : []);
+      })
+      .catch(function (err) { showToast("加载站点设置失败：" + (err.message || ""), "error"); });
+  }
+
+  /* 社交链接：动态行 */
+  function socialRowEl(item) {
+    var row = document.createElement("div");
+    row.className = "social-row";
+    row.innerHTML =
+      '<input type="text" class="field s-icon" placeholder="⌥" value="' + escapeAttr((item && item.icon) || "") + '" />' +
+      '<input type="text" class="field s-name" placeholder="GitHub" value="' + escapeAttr((item && item.name) || "") + '" />' +
+      '<input type="text" class="field s-url" placeholder="https://…" value="' + escapeAttr((item && item.url) || "") + '" />' +
+      '<button type="button" class="btn btn-danger btn-sm s-del" title="删除">✕</button>';
+    row.querySelector(".s-del").addEventListener("click", function () { row.remove(); });
+    return row;
+  }
+
+  function renderSocialRows(list) {
+    var box = $("socialRows");
+    box.innerHTML = "";
+    if (!list.length) { box.appendChild(socialRowEl({})); return; }
+    list.forEach(function (it) { box.appendChild(socialRowEl(it)); });
+  }
+
+  $("addSocialBtn").addEventListener("click", function () {
+    $("socialRows").appendChild(socialRowEl({}));
+  });
+
+  function collectSocials() {
+    var out = [];
+    Array.prototype.forEach.call($("socialRows").querySelectorAll(".social-row"), function (r) {
+      var name = r.querySelector(".s-name").value.trim();
+      var url = r.querySelector(".s-url").value.trim();
+      var icon = r.querySelector(".s-icon").value.trim();
+      if (name && url) out.push({ name: name, url: url, icon: icon || "🔗" });
+    });
+    return out;
+  }
+
+  $("saveSiteBtn").addEventListener("click", function () {
+    var payload = {
+      name: $("siteNameField").value.trim(),
+      title: $("siteTitleField").value.trim(),
+      description: $("siteDescField").value.trim(),
+      url: $("siteUrlField").value.trim(),
+      author: $("siteAuthorField").value.trim(),
+      socials: collectSocials(),
+      giscus: {
+        enabled: $("giscusEnabled").checked,
+        repo: $("giscusRepo").value.trim(),
+        repoId: $("giscusRepoId").value.trim(),
+        category: $("giscusCategory").value.trim(),
+        categoryId: $("giscusCategoryId").value.trim(),
+        mapping: $("giscusMapping").value,
+        lang: $("giscusLang").value.trim() || "zh-CN",
+        reactions: $("giscusReactions").checked,
+        inputPosition: $("giscusPos").value,
+      },
+    };
+    if (payload.giscus.enabled && (!payload.giscus.repoId || !payload.giscus.categoryId)) {
+      showToast("启用评论需要先填写 repoId 与 categoryId", "error");
+      return;
+    }
+    var btn = $("saveSiteBtn");
+    btn.disabled = true;
+    btn.textContent = "保存中…";
+    $("siteStatus").textContent = "";
+    api("/site", { method: "POST", body: payload })
+      .then(function (data) {
+        $("siteStatus").textContent = "✔ " + (data.message || "已保存");
+        showToast("站点设置已保存", "success");
+        loadDeploy();
+      })
+      .catch(function (err) { showToast(err.message || "保存失败", "error"); })
+      .then(function () { btn.disabled = false; btn.textContent = "💾 保存站点设置"; });
+  });
+
+  /* 部署状态 */
+  var DEPLOY_LABEL = {
+    success: "✅ 部署成功",
+    pending: "⏳ 构建中",
+    failure: "❌ 部署失败",
+    error: "❌ 出错",
+    unknown: "• 无状态",
+  };
+
+  function loadDeploy() {
+    var box = $("deployList");
+    box.innerHTML = '<div class="loading">读取中</div>';
+    api("/deploy")
+      .then(function (data) {
+        var list = (data && data.commits) || [];
+        if (!list.length) { box.innerHTML = '<div class="empty-state">暂无提交记录</div>'; return; }
+        box.innerHTML = list.map(function (c) {
+          var label = DEPLOY_LABEL[c.state] || ("• " + c.state);
+          var color = c.state === "success" ? "var(--accent)"
+                    : c.state === "failure" || c.state === "error" ? "var(--danger)"
+                    : "var(--text-dim)";
+          var when = c.date ? String(c.date).replace("T", " ").slice(0, 16) : "";
+          return '<div class="deploy-item">' +
+            '<div class="deploy-head">' +
+              '<code>' + escapeHtml(c.shortSha) + "</code>" +
+              '<span style="color:' + color + ';font-size:11px;">' + escapeHtml(label) + "</span>" +
+              '<span style="font-size:11px;color:var(--text-dim);margin-left:auto;">' + escapeHtml(when) + "</span>" +
+            "</div>" +
+            '<div class="deploy-msg">' + escapeHtml(c.message) + "</div>" +
+            (c.desc ? '<div class="deploy-desc">' + escapeHtml(c.desc) + "</div>" : "") +
+          "</div>";
+        }).join("");
+      })
+      .catch(function (err) {
+        box.innerHTML = '<div class="empty-state" style="color:var(--danger);">读取失败：' + escapeHtml(err.message || "") + "</div>";
+      });
+  }
+
+  $("refreshDeployBtn").addEventListener("click", loadDeploy);
+
+  /* 数据备份导出 */
+  $("exportBackupBtn").addEventListener("click", function () {
+    var btn = $("exportBackupBtn");
+    btn.disabled = true;
+    btn.textContent = "导出中…";
+    $("backupStatus").textContent = "";
+    api("/backup")
+      .then(function (data) {
+        var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "zyf-blog-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        var c = data.counts || {};
+        $("backupStatus").textContent = "✔ 已导出：文章 " + (c.articles || 0) + " · 项目 " + (c.projects || 0)
+          + " · 相册 " + (c.gallery || 0) + " · 下载 " + (c.downloads || 0)
+          + " · 关联 " + (c.links || 0) + " · 知识库 " + (c.kb || 0);
+        showToast("备份已下载", "success");
+      })
+      .catch(function (err) { showToast(err.message || "导出失败", "error"); })
+      .then(function () { btn.disabled = false; btn.textContent = "⬇️ 导出备份 JSON"; });
+  });
 
   /* ---------- 转义 ---------- */
 

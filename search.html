@@ -3,21 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>404 · 页面不存在 | ZH</title>
-  <meta name="description" content="页面不存在" />
-  <link rel="canonical" href="https://zyf2026.pages.dev/404.html" />
+  <title>搜索 | ZH</title>
+  <meta name="description" content="站内搜索：一次搜遍全部文章与知识库文档。" />
+  <link rel="canonical" href="https://zyf2026.pages.dev/search.html" />
   <link rel="stylesheet" href="css/style.css?v=25" />
   <link rel="icon" type="image/png" href="images/avatar.png" />
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#0a0e14" />
   <link rel="apple-touch-icon" href="images/avatar.png" />
+  <link rel="alternate" type="application/rss+xml" title="ZH 博客 RSS" href="feed.xml" />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="404 · 页面不存在 | ZH" />
-  <meta property="og:description" content="页面不存在" />
-  <meta property="og:url" content="https://zyf2026.pages.dev/404.html" />
+  <meta property="og:title" content="搜索 · ZH" />
+  <meta property="og:description" content="站内搜索：一次搜遍全部文章与知识库文档。" />
+  <meta property="og:url" content="https://zyf2026.pages.dev/search.html" />
   <meta property="og:image" content="https://zyf2026.pages.dev/images/avatar.png" />
   <meta property="og:site_name" content="ZH 博客" />
   <meta name="twitter:card" content="summary" />
+  <meta name="robots" content="noindex" />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SearchResultsPage","name":"搜索","url":"https://zyf2026.pages.dev/search.html","inLanguage":"zh-CN","isPartOf":{"@type":"WebSite","name":"ZH 博客","url":"https://zyf2026.pages.dev/"}}</script>
   <script>try{var t=localStorage.getItem("zyf-theme");if(t==="light"||(!t&&window.matchMedia("(prefers-color-scheme: light)").matches))document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
 </head>
 <body>
@@ -36,6 +39,7 @@
         <li><a href="about.html">关于</a></li>
         <li><a href="downloads.html">下载</a></li>
         <li><a href="gallery.html">相册</a></li>
+        <li><a href="kb.html">知识库</a></li>
       </ul>
       <div class="nav-actions">
         <a class="nav-search" href="search.html" aria-label="搜索" title="搜索（/search.html）">🔍</a>
@@ -46,12 +50,39 @@
   </nav>
 
   <main class="container" id="mainContent">
-    <div class="notfound">
-      <div class="code">404</div>
-      <h2>页面不存在</h2>
-      <p>你要找的页面可能被移动、删除，或者地址有误。</p>
-      <a class="back-home" href="index.html">← 返回首页</a>
+
+    <div class="page-head">
+      <h1>搜<span class="accent">索</span></h1>
+      <p>一次搜遍全部文章与知识库文档。</p>
     </div>
+
+    <section class="section" style="border-top:none;padding-top:0;">
+
+      <div class="search-page-box">
+        <input
+          type="search"
+          id="siteSearchInput"
+          class="search-page-input"
+          placeholder="🔍 输入关键词…（↑↓ 选择 · Enter 打开 · Esc 清空）"
+          autocomplete="off"
+          aria-label="站内搜索"
+          aria-controls="siteSearchResults"
+          aria-describedby="siteSearchHint"
+        />
+        <div class="search-page-hint" id="siteSearchHint"></div>
+      </div>
+
+      <div class="search-results" id="siteSearchResults" role="listbox" aria-label="搜索结果"></div>
+
+      <div class="photo-empty" id="siteSearchEmpty" style="display:none;"></div>
+
+      <div class="search-tips" id="siteSearchTips">
+        <div class="search-tips-title">💡 试试这些</div>
+        <div class="search-tips-list" id="siteSearchPopular"></div>
+      </div>
+
+    </section>
+
   </main>
 
   <footer class="footer">

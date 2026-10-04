@@ -1,0 +1,23 @@
+{
+  "name": "ZH",
+  "title": "ZH 博客",
+  "description": "科技简约风格的个人博客：技术分享、项目实践与生活随笔。",
+  "url": "https://zyf2026.pages.dev",
+  "author": "ZH",
+  "socials": [
+    { "name": "GitHub", "url": "https://github.com/ZhangYiFei12", "icon": "⌥" },
+    { "name": "Bilibili", "url": "https://www.bilibili.com/", "icon": "▶" },
+    { "name": "邮箱", "url": "mailto:264296445@qq.com", "icon": "✉" }
+  ],
+  "giscus": {
+    "enabled": true,
+    "repo": "ZhangYiFei12/zyf-blog",
+    "repoId": "R_kgDOUFjQGA",
+    "category": "Announcements",
+    "categoryId": "DIC_kwDOUFjQGM4DG-7c",
+    "mapping": "pathname",
+    "lang": "zh-CN",
+    "reactions": true,
+    "inputPosition": "bottom"
+  }
+}
