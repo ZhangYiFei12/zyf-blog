@@ -1437,8 +1437,11 @@ export function buildSearchAll(posts, kbDocs) {
       .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
       .replace(/\s+/g, " ")
       .trim();
+  // 组内按日期倒序：让输出与调用方的输入顺序无关
+  // （后台读目录是字母序、本地脚本是日期序，不排的话两边产物会不一致）
+  const byDate = (a, b) => String(b.meta.date || "").localeCompare(String(a.meta.date || ""));
   const out = [];
-  for (const p of (Array.isArray(posts) ? posts : [])) {
+  for (const p of (Array.isArray(posts) ? posts : []).slice().sort(byDate)) {
     if (p.meta.published === false) continue;
     out.push({
       type: "post",
@@ -1451,7 +1454,7 @@ export function buildSearchAll(posts, kbDocs) {
       text: [p.meta.excerpt || "", stripHtml(p.bodyHtml)].filter(Boolean).join(" ").slice(0, 2000),
     });
   }
-  for (const d of (Array.isArray(kbDocs) ? kbDocs : [])) {
+  for (const d of (Array.isArray(kbDocs) ? kbDocs : []).slice().sort(byDate)) {
     out.push({
       type: "kb",
       typeName: "知识库",
