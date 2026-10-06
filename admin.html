@@ -390,15 +390,21 @@
             <button class="btn" id="publishBtn">📝 发布</button>
             <button class="btn btn-outline" id="draftBtn">💾 存草稿</button>
             <button class="btn btn-outline" id="cancelEditBtn" style="display:none;">取消编辑</button>
-            <a class="btn btn-outline" id="previewArticleBtn" style="display:none;" target="_blank" rel="noopener noreferrer" title="新窗口打开渲染后的页面（草稿可通过此直链预览）">🔗 预览</a>
+            <a class="btn btn-outline" id="previewArticleBtn" style="display:none;" title="在已登录的新窗口里预览（不生成任何公开页面）">🔗 预览</a>
             <span id="publishStatus" style="font-size:11px;color:var(--text-dim);align-self:center;margin-left:8px;"></span>
+            <span id="autosaveStatus" style="font-size:11px;color:var(--text-dim);align-self:center;margin-left:4px;" role="status" aria-live="polite"></span>
           </div>
           <input type="hidden" id="editSlug" value="" />
         </div>
 
-        <!-- 右侧：文章列表 -->
+        <!-- 右侧：草稿箱 + 文章列表 -->
         <div class="article-list">
-          <h3>📄 所有文章</h3>
+          <h3>💾 草稿箱</h3>
+          <p style="font-size:11px;color:var(--text-dim);margin:-4px 0 8px;">未发布内容存在私有 KV（绑定名 DRAFTS_KV），只有登录后台能看，不会出现在线上页面、搜索与 RSS 里。</p>
+          <div id="draftList"></div>
+          <div id="draftListLoading" class="loading">加载中</div>
+
+          <h3 style="margin-top:22px;">📄 所有文章</h3>
           <div class="admin-tabs" id="articleFilter" style="margin-bottom:10px;">
             <button class="tab active" data-filter="">全部</button>
             <button class="tab" data-filter="published">已发布</button>
@@ -839,7 +845,7 @@
     </div>
   </div>
 
-  <script src="js/admin.js?v=19"></script>
+  <script src="js/admin.js?v=20"></script>
   <script>
     (function () {
       function cur() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }

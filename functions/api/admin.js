@@ -5,9 +5,13 @@
      POST   /api/admin/login                → 校验密码 → 签发 HMAC 令牌
      POST   /api/admin/preview              → 服务器端渲染 Markdown 预览
      GET    /api/admin/articles             → 列出文章
-     GET    /api/admin/articles/:slug       → 取单篇 .md 原文
-     POST   /api/admin/articles             → 新建/编辑文章并提交
+     GET    /api/admin/articles/:slug       → 取单篇 .md 原文（附带同名私有草稿）
+     POST   /api/admin/articles             → 新建/编辑文章（发布=提交仓库，存草稿=只写私有 KV）
      DELETE /api/admin/articles/:slug       → 删除文章并提交
+     GET    /api/admin/drafts               → 列出全部私有草稿（仅元信息）
+     GET    /api/admin/drafts/:type/:id     → 读取单个私有草稿
+     POST   /api/admin/drafts               → 保存私有草稿（不提交仓库、不生成公开页面）
+     DELETE /api/admin/drafts/:type/:id     → 删除私有草稿
 
    密钥（Cloudflare Pages 环境变量 / Secrets）：
      ADMIN_PASS      后台密码
@@ -15,6 +19,10 @@
      GITHUB_TOKEN    对该仓库有 contents 读写权限的 Token
      GITHUB_REPO     （可选，默认 ZhangYiFei12/zyf-blog）
      GITHUB_BRANCH   （可选，默认 main）
+
+   KV 绑定：
+     DRAFTS_KV       私有草稿存储（未发布内容与已发布文章的待发布修改）
+                     生产环境与预览环境都要绑定，否则后台存草稿会报错
    ============================================================ */
 
 import {
@@ -38,6 +46,7 @@ import {
   buildSitemap,
   buildRss,
   buildSearchIndex,
+  buildSearchAll,
 } from "../../tools/md2html-core.mjs";
 
 const DEFAULT_REPO = "ZhangYiFei12/zyf-blog";
@@ -199,6 +208,118 @@ async function commitFiles(env, message, changes) {
     body: { sha: newCommit.sha, force: false },
   });
   return newCommit.sha;
+}
+
+/* ---------------- 私有草稿（Cloudflare KV） ----------------
+ * 草稿只存 KV，既不提交到公开仓库、也不生成公开 HTML。
+ * 这样「存草稿」不会把未发布内容泄露到线上，也不会进搜索索引 / RSS / sitemap。
+ *
+ * key： draft:<type>:<id>     type ∈ article | kb
+ *      id = 已存在文章的 slug，或新建时为客户端生成的临时 id
+ * value： JSON { type, id, slug, title, date, tags, excerpt, category, body, basePublished, updatedAt }
+ */
+const DRAFT_PREFIX = "draft:";
+const DRAFT_TYPES = new Set(["article", "kb"]);
+const DRAFT_MAX_BYTES = 900 * 1024; // 单条草稿上限
+
+function kvReady(env) {
+  return !!(env && env.DRAFTS_KV && typeof env.DRAFTS_KV.put === "function");
+}
+
+/* KV 未绑定时给出可操作的提示（而不是无信息的 500） */
+function kvMissing() {
+  return json({
+    error: "草稿存储未配置：请在 Cloudflare Pages 项目设置里，为生产环境与预览环境都绑定 KV 命名空间，变量名 DRAFTS_KV",
+    code: "KV_NOT_BOUND",
+  }, 500);
+}
+
+function draftKey(type, id) {
+  return `${DRAFT_PREFIX}${type}:${id}`;
+}
+
+/* 只保留白名单字段，避免把任意字段写进 KV */
+function normDraft(type, id, input) {
+  const tags = Array.isArray(input && input.tags)
+    ? input.tags.map(t => String(t).trim()).filter(Boolean).slice(0, 20)
+    : [];
+  return {
+    type,
+    id,
+    slug: String((input && input.slug) || "").trim().slice(0, 200),
+    title: String((input && input.title) || "").slice(0, 300),
+    date: /^\d{4}-\d{2}-\d{2}$/.test(String((input && input.date) || ""))
+      ? String(input.date)
+      : new Date().toISOString().slice(0, 10),
+    excerpt: String((input && input.excerpt) || "").slice(0, 1000),
+    category: String((input && input.category) || "").slice(0, 100),
+    tags,
+    body: String((input && input.body) || ""),
+    // 该草稿对应的文章是否已在仓库中发布（前端用它提示「线上仍是旧版」）
+    basePublished: !!(input && input.basePublished),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+async function putDraft(env, d) {
+  const payload = JSON.stringify(d);
+  if (payload.length > DRAFT_MAX_BYTES) {
+    throw new Error("草稿内容过大（超过 900KB），请先精简正文");
+  }
+  await env.DRAFTS_KV.put(draftKey(d.type, d.id), payload);
+  return d;
+}
+
+async function getDraft(env, type, id) {
+  if (!kvReady(env)) return null;
+  try {
+    const raw = await env.DRAFTS_KV.get(draftKey(type, id));
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function delDraft(env, type, id) {
+  if (!kvReady(env)) return;
+  try { await env.DRAFTS_KV.delete(draftKey(type, id)); } catch (e) { /* 忽略 */ }
+}
+
+/* 列出全部草稿（仅元信息，不带正文，避免列表接口过大） */
+async function listDrafts(env) {
+  if (!kvReady(env)) return [];
+  const out = [];
+  let cursor;
+  do {
+    const page = await env.DRAFTS_KV.list({ prefix: DRAFT_PREFIX, cursor });
+    for (const k of page.keys || []) {
+      const raw = await env.DRAFTS_KV.get(k.name);
+      if (!raw) continue;
+      try {
+        const o = JSON.parse(raw);
+        out.push({
+          type: o.type, id: o.id, slug: o.slug, title: o.title, date: o.date,
+          category: o.category, tags: o.tags || [], basePublished: !!o.basePublished,
+          updatedAt: o.updatedAt, bytes: raw.length,
+        });
+      } catch (e) { /* 跳过损坏条目 */ }
+    }
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  out.sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+  return out;
+}
+
+/* 全站搜索索引（data/search-all.json）的变更集
+ * 后台文章 / 知识库的增删改都必须重建它，否则独立搜索页的结果会滞后。
+ */
+function searchAllChange(posts, kbDocs) {
+  return { path: "data/search-all.json", content: buildSearchAll(posts, kbDocs) };
+}
+
+/* 只取已发布文章（草稿绝不进任何公开产物） */
+function onlyPublished(posts) {
+  return (posts || []).filter(p => p && p.meta && p.meta.published !== false);
 }
 
 /* 在标记区间内替换内容 */
@@ -422,9 +543,28 @@ function b64Bytes(b64) {
 }
 
 /* 由 thumbUrl 推出仓库内相对路径 */
+/* 从图库 URL 取仓库相对路径：要去掉开头的斜杠与 ?v= 版本查询串，
+ * 否则拿它去 git tree 里查文件大小会查不到。 */
 function thumbRelPath(thumbUrl) {
-  const p = String(thumbUrl || "").replace(/^\/?(images\/uploads\/)?/, "");
+  const p = String(thumbUrl || "")
+    .split("?")[0]
+    .split("#")[0]
+    .replace(/^\/?(images\/uploads\/)?/, "");
   return p || "";
+}
+
+/* 给图库 URL 打版本号。
+ * /images/* 在 _headers 里是 immutable 长缓存，Service Worker 也是缓存优先，
+ * 所以重新压缩覆盖同名文件后，新旧浏览器都会继续用旧图。
+ * 加上 ?v=<时间戳> 后 URL 变化 → 缓存未命中 → 立刻拉到新图。
+ * 时间戳必须单调递增，否则同一毫秒内连续压缩会拿到相同 URL。 */
+let lastVersionStamp = 0;
+function versionedUrl(url) {
+  const base = String(url || "").split("?")[0];
+  if (!base) return "";
+  const now = Date.now();
+  lastVersionStamp = now > lastVersionStamp ? now : lastVersionStamp + 1;
+  return `${base}?v=${lastVersionStamp.toString(36)}`;
 }
 
 /* 校验并规整项目对象 */
@@ -578,7 +718,9 @@ export async function onRequest(context) {
     try {
       const md = await getFile(env, `blog/posts/${slug}.md`);
       const { meta, body } = parseFrontMatter(md);
-      return json({ slug, meta, body });
+      // 同时带上同名私有草稿：前端据此提示「有未发布修改」并提供恢复
+      const draft = await getDraft(env, "article", slug);
+      return json({ slug, meta, body, draft: draft || null });
     } catch (e) {
       return json({ error: "文章不存在" }, 404);
     }
@@ -610,6 +752,37 @@ export async function onRequest(context) {
       // 不允许重命名到已存在 slug
     }
 
+    /* ---------- 存草稿：只写私有 KV ----------
+     * 不提交仓库、不生成公开 HTML、不进搜索索引 / RSS / sitemap。
+     * 编辑已发布文章时，线上依旧是仓库里那份旧版内容，直到真正「发布」。
+     */
+    if (isDraft) {
+      if (!kvReady(env)) return kvMissing();
+      // 草稿 id：编辑已发布文章用 slug；新建用客户端生成的临时 id，
+      // 这样「新建一篇同名文章」不会覆掉那篇已发布文章的草稿。
+      const draftId = String(input.slug || input.draftId || slug).trim();
+      if (!draftId || draftId.length > 200) return json({ error: "草稿标识无效" }, 400);
+      const d = normDraft("article", draftId, {
+        ...input, slug, tags, date, excerpt,
+        basePublished: !!existing,
+      });
+      try {
+        await putDraft(env, d);
+      } catch (e) {
+        return json({ error: String(e.message || e) }, 400);
+      }
+      return json({
+        ok: true,
+        slug,
+        draftId,
+        draft: true,
+        updatedAt: d.updatedAt,
+        message: existing
+          ? "草稿已存入私有存储；线上仍是已发布的旧版，发布后才替换"
+          : "草稿已存入私有存储（未发布：线上、搜索、RSS、站点地图均不可见）",
+      });
+    }
+
     // 组装 Markdown
     const mdContent = buildMarkdown({ title, date, excerpt, tags, body: input.body, published: !isDraft });
 
@@ -635,21 +808,25 @@ export async function onRequest(context) {
     blogHtml = replaceBetween(blogHtml, "<!-- BLOG-LIST-START -->", "<!-- BLOG-LIST-END -->", blogList);
     indexHtml = replaceBetween(indexHtml, "<!-- LATEST-START -->", "<!-- LATEST-END -->", latest);
 
+    // KB 文档只取一次（下面搜索索引与 sitemap 都要用）
+    const kbDocs = await getAllKbDocs(env);
+
     const commitChanges = [
       { path: `blog/posts/${slug}.md`, content: mdContent },
       { path: `blog/${slug}.html`, content: pageHtml },
-      { path: "data/posts.json", content: buildPostsIndex(updatedPosts) },
-      { path: "feed.xml", content: buildRss(updatedPosts) },
-      { path: "data/search-index.json", content: buildSearchIndex(updatedPosts) },
+      { path: "data/posts.json", content: buildPostsIndex(publishedPosts) },
+      { path: "feed.xml", content: buildRss(publishedPosts) },
+      // 搜索索引只收已发布文章，草稿绝不入内
+      { path: "data/search-index.json", content: buildSearchIndex(publishedPosts) },
+      searchAllChange(publishedPosts, kbDocs),
     ];
-    // 派生页面：标签页 + 归档页 + sitemap（含标签页）
-    const tagInfo = await buildTagAndArchiveChanges(env, updatedPosts);
+    // 派生页面：标签页 + 归档页 + sitemap（均只基于已发布文章）
+    const tagInfo = await buildTagAndArchiveChanges(env, publishedPosts);
     commitChanges.push(...tagInfo.changes);
     commitChanges.push({
       path: "sitemap.xml",
-      content: buildSitemap(updatedPosts, undefined, await getAllKbDocs(env), tagInfo.tags),
+      content: buildSitemap(publishedPosts, undefined, kbDocs, tagInfo.tags),
     });
-    // 已发布文章才更新公开页面
     if (publishedPosts.length) {
       commitChanges.push(
         { path: "blog.html", content: blogHtml },
@@ -658,9 +835,36 @@ export async function onRequest(context) {
     }
 
     const isEdit = !!input.slug;
-    const commitSha = await commitFiles(env, `📝 ${isEdit ? "后台编辑" : "后台发布"}：${title}`, commitChanges);
+    let commitSha;
+    try {
+      commitSha = await commitFiles(env, `📝 ${isEdit ? "后台编辑" : "后台发布"}：${title}`, commitChanges);
+    } catch (e) {
+      // 发布失败：不删草稿，把内容先留在私有 KV，避免用户白写一遍
+      let kept = false;
+      if (kvReady(env)) {
+        try {
+          const draftId = String(input.draftId || input.slug || slug).trim() || slug;
+          await putDraft(env, normDraft("article", draftId, { ...input, slug, tags, date, excerpt, basePublished: !!existing }));
+          kept = true;
+        } catch (e2) { /* 保留失败也不影响报错 */ }
+      }
+      return json({
+        error: `发布失败：${String(e.message || e)}${kept ? "；内容已保留在私有草稿中，可稍后重试发布" : ""}`,
+        code: "COMMIT_FAILED",
+      }, 502);
+    }
 
-    return json({ ok: true, slug, commitSha, message: isDraft ? "草稿已保存（仅后台可见）" : "已发布，Cloudflare 正在自动部署（约 30 秒~1 分钟）" });
+    // 提交成功后才删除草稿（失败则保留，见上）
+    const usedDraftId = String(input.draftId || "").trim();
+    await delDraft(env, "article", slug);
+    if (usedDraftId && usedDraftId !== slug) await delDraft(env, "article", usedDraftId);
+
+    return json({
+      ok: true,
+      slug,
+      commitSha,
+      message: "已发布，Cloudflare 正在自动部署（约 30 秒~1 分钟）",
+    });
   }
 
   // ---- DELETE /api/admin/articles/:slug ----
@@ -671,7 +875,7 @@ export async function onRequest(context) {
     if (!target) return json({ error: "文章不存在" }, 404);
 
     const remaining = posts.filter(p => p.slug !== slug);
-    const publishedRemaining = remaining.filter(p => p.meta.published !== false);
+    const publishedRemaining = onlyPublished(remaining);
     const blogList = publishedRemaining.map(p => listItemSnippet(p.meta, p.slug)).join("\n\n");
     const latest = publishedRemaining[0] ? listItemSnippet(publishedRemaining[0].meta, publishedRemaining[0].slug) : "";
 
@@ -680,20 +884,74 @@ export async function onRequest(context) {
     blogHtml = replaceBetween(blogHtml, "<!-- BLOG-LIST-START -->", "<!-- BLOG-LIST-END -->", blogList);
     indexHtml = replaceBetween(indexHtml, "<!-- LATEST-START -->", "<!-- LATEST-END -->", latest);
 
-    const delTagInfo = await buildTagAndArchiveChanges(env, remaining);
+    const delTagInfo = await buildTagAndArchiveChanges(env, publishedRemaining);
+    const kbDocs = await getAllKbDocs(env);
     const commitSha = await commitFiles(env, `🗑️ 后台删除：${target.meta.title}`, [
       { path: `blog/posts/${slug}.md`, delete: true },
       { path: `blog/${slug}.html`, delete: true },
       { path: "blog.html", content: blogHtml },
       { path: "index.html", content: indexHtml },
       { path: "data/posts.json", content: buildPostsIndex(remaining) },
-      { path: "feed.xml", content: buildRss(remaining) },
-      { path: "data/search-index.json", content: buildSearchIndex(remaining) },
+      { path: "feed.xml", content: buildRss(publishedRemaining) },
+      { path: "data/search-index.json", content: buildSearchIndex(publishedRemaining) },
+      searchAllChange(publishedRemaining, kbDocs),
       ...delTagInfo.changes,
-      { path: "sitemap.xml", content: buildSitemap(remaining, undefined, await getAllKbDocs(env), delTagInfo.tags) },
+      { path: "sitemap.xml", content: buildSitemap(publishedRemaining, undefined, kbDocs, delTagInfo.tags) },
     ]);
 
+    // 文章已不存在，对应的草稿也一并清掉
+    await delDraft(env, "article", slug);
+
     return json({ ok: true, slug, commitSha, message: "已删除并提交，等待自动部署" });
+  }
+
+  /* ================= 私有草稿（仅登录后台可见） ================= */
+
+  // ---- GET /api/admin/drafts（列出草稿）----
+  if (method === "GET" && rest.length === 1 && rest[0] === "drafts") {
+    if (!kvReady(env)) return json({ drafts: [], kvBound: false, warning: "DRAFTS_KV 未绑定，草稿功能不可用" });
+    return json({ drafts: await listDrafts(env), kvBound: true });
+  }
+
+  // ---- GET /api/admin/drafts/:type/:id ----
+  if (method === "GET" && rest.length === 3 && rest[0] === "drafts") {
+    const type = String(rest[1] || "");
+    if (!DRAFT_TYPES.has(type)) return json({ error: "草稿类型无效" }, 400);
+    if (!kvReady(env)) return kvMissing();
+    const d = await getDraft(env, type, decodeURIComponent(rest[2]));
+    if (!d) return json({ error: "草稿不存在" }, 404);
+    return json({ draft: d });
+  }
+
+  // ---- POST /api/admin/drafts（保存草稿，只写 KV）----
+  if (method === "POST" && rest.length === 1 && rest[0] === "drafts") {
+    const input = await request.json().catch(() => null);
+    if (!input) return json({ error: "请求体无效" }, 400);
+    const type = String(input.type || "article");
+    if (!DRAFT_TYPES.has(type)) return json({ error: "草稿类型无效" }, 400);
+    if (!kvReady(env)) return kvMissing();
+    const id = String(input.id || input.slug || "").trim();
+    if (!id || id.length > 200) return json({ error: "草稿标识无效" }, 400);
+    // 标题与正文都空白的草稿没有保留价值，直接拒绝（避免自动保存产生空草稿）
+    if (!String(input.title || "").trim() && !String(input.body || "").trim()) {
+      return json({ error: "草稿为空" }, 400);
+    }
+    const d = normDraft(type, id, input);
+    try {
+      await putDraft(env, d);
+    } catch (e) {
+      return json({ error: String(e.message || e) }, 400);
+    }
+    return json({ ok: true, id, type, updatedAt: d.updatedAt });
+  }
+
+  // ---- DELETE /api/admin/drafts/:type/:id ----
+  if (method === "DELETE" && rest.length === 3 && rest[0] === "drafts") {
+    const type = String(rest[1] || "");
+    if (!DRAFT_TYPES.has(type)) return json({ error: "草稿类型无效" }, 400);
+    if (!kvReady(env)) return kvMissing();
+    await delDraft(env, type, decodeURIComponent(rest[2]));
+    return json({ ok: true, message: "草稿已删除" });
   }
 
   // ---- POST /api/admin/upload（图片上传，提交到 images/uploads/）----
@@ -811,8 +1069,9 @@ export async function onRequest(context) {
     if (thumbB64 && thumbB64.length <= 1024 * 1024) {
       thumbSize = b64Bytes(thumbB64);
       if (target.thumbUrl) {
-        const tp = String(target.thumbUrl).replace(/^\//, "");
-        if (tp) changes.push({ path: tp, content: thumbB64, encoding: "base64" });
+        // 已有缩略图：覆盖原路径（thumbRelPath 会剥掉 ?v= 版本串）
+        const tp = "images/uploads/" + thumbRelPath(target.thumbUrl);
+        if (tp !== "images/uploads/") changes.push({ path: tp, content: thumbB64, encoding: "base64" });
       } else {
         const thumbName = `thumb-${filename.replace(/\.[^.]+$/, "")}.${thumbExt}`;
         changes.push({ path: `images/uploads/${thumbName}`, content: thumbB64, encoding: "base64" });
@@ -824,7 +1083,10 @@ export async function onRequest(context) {
     const prevOrig = Number(target.origSize) || 0;
     if (!prevOrig && target.size) target.origSize = target.size; // 首次压缩前无记录时以当前为准
     if (thumbSize !== null) target.thumbSize = thumbSize;
-    target.thumbUrl = thumbUrl;
+    // 关键：重新压缩后覆盖了同名文件，必须换 URL 才能绕过 immutable 长缓存与 SW 缓存
+    target.url = versionedUrl(target.url || `/images/uploads/${filename}`);
+    if (thumbUrl) target.thumbUrl = versionedUrl(thumbUrl);
+    else target.thumbUrl = thumbUrl;
     changes.push({ path: "data/gallery.json", content: JSON.stringify(gallery, null, 2) });
 
     const commitSha = await commitFiles(env, `⚙️ 后台重新压缩相册图片：${filename}`, changes);
@@ -860,8 +1122,9 @@ export async function onRequest(context) {
     const target = gallery.find(g => g && g.file === filename) || {};
     const deletes = [{ path: `images/uploads/${filename}`, delete: true }];
     if (target.thumbUrl) {
-      const t = String(target.thumbUrl).replace(/^\//, "");
-      if (t) deletes.push({ path: t, delete: true });
+      // thumbRelPath 会剥掉 ?v= 版本串，否则会算出不存在的路径
+      const t = "images/uploads/" + thumbRelPath(target.thumbUrl);
+      if (t !== "images/uploads/") deletes.push({ path: t, delete: true });
     }
     const commitSha = await commitFiles(env, `🗑️ 后台删除相册图片：${filename}`, [
       ...deletes,
@@ -1043,8 +1306,10 @@ export async function onRequest(context) {
     changes.push({ path: "kb.html", content: newKbHtml });
     changes.push({ path: "data/kb.json", content: buildKbIndex(finalDocs) });
     // 同步 sitemap（否则新增的知识库文档不进站点地图）
-    const postsForSitemap = await getAllPosts(env);
+    const postsForSitemap = onlyPublished(await getAllPosts(env));
     changes.push({ path: "sitemap.xml", content: buildSitemap(postsForSitemap, undefined, finalDocs, collectTags(postsForSitemap)) });
+    // 同步全站搜索索引（否则独立搜索页看不到新增/修改的文档）
+    changes.push(searchAllChange(postsForSitemap, finalDocs));
 
     const isEdit = !!input.slug;
     const label = batch ? `导入 ${added.length} 篇知识库文档` : `${isEdit ? "编辑" : "新建"}知识库文档：${added[0].title}`;
@@ -1075,13 +1340,16 @@ export async function onRequest(context) {
       "<!-- KB-LIST-START -->", "<!-- KB-LIST-END -->", renderKbList(remaining)
     );
 
+    const kbPostsForIndex = onlyPublished(await getAllPosts(env));
     const commitSha = await commitFiles(env, `🗑️ 后台删除知识库文档：${target.meta.title}`, [
       { path: `docs/kb/${target.name}`, delete: true },
       { path: `kb/${slug}.html`, delete: true },
       { path: "kb.html", content: newKbHtml },
       { path: "data/kb.json", content: buildKbIndex(remaining) },
       // 同步 sitemap（否则已删除的文档会留下死链）
-      { path: "sitemap.xml", content: buildSitemap(await getAllPosts(env), undefined, remaining, collectTags(await getAllPosts(env))) },
+      { path: "sitemap.xml", content: buildSitemap(kbPostsForIndex, undefined, remaining, collectTags(kbPostsForIndex)) },
+      // 同步全站搜索索引（否则搜索页仍会返回已删除的文档）
+      searchAllChange(kbPostsForIndex, remaining),
     ]);
 
     return json({ ok: true, commitSha, message: "已删除并提交，等待自动部署" });

@@ -138,6 +138,211 @@
   var pendingDeleteBtn = null;
   var pendingDeleteTimer = null;
 
+  /* ---------- 草稿本地状态 ---------- */
+  var draftList = $("draftList");
+  var draftListLoading = $("draftListLoading");
+  var autosaveStatus = $("autosaveStatus");
+  var AUTOSAVE_DELAY = 5000;   // 停止输入 5 秒后自动保存
+  var currentDraftId = "";     // 当前编辑器对应的草稿 key
+  var autosaveTimer = null;
+  var lastSavedSnapshot = "";  // 用于跳过无变化的保存
+
+  /* 新建一篇还没发布的文章时，需要一个稳定的草稿 key，
+     否则标题一变就会多出一份草稿。 */
+  function newDraftId() {
+    return "new-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+  }
+
+  function editorSnapshot() {
+    return [
+      $("titleField").value, $("dateField").value, $("tagsField").value,
+      $("excerptField").value, $("bodyField").value,
+    ].join("\u0000");
+  }
+
+  function setAutosaveState(state, text) {
+    if (!autosaveStatus) return;
+    autosaveStatus.textContent = text || "";
+    autosaveStatus.style.color = state === "error" ? "var(--danger)"
+      : state === "ok" ? "var(--accent)" : "var(--text-dim)";
+  }
+
+  /* 草稿 payload（与后端 /api/admin/drafts 的字段白名单一致） */
+  function draftPayload(type) {
+    return {
+      type: type || "article",
+      id: currentDraftId,
+      slug: editSlug.value || "",
+      title: $("titleField").value.trim(),
+      date: $("dateField").value.trim() || today(),
+      tags: $("tagsField").value.split(/[,，]/).map(function (s) { return s.trim(); }).filter(Boolean),
+      excerpt: $("excerptField").value.trim(),
+      body: $("bodyField").value,
+      basePublished: !!(editSlug.value),
+    };
+  }
+
+  /* 自动保存：只写私有 KV，不碰公开仓库 */
+  function autosaveDraft() {
+    if (!currentDraftId) currentDraftId = newDraftId();
+    var payload = draftPayload("article");
+    if (!payload.title && !payload.body.trim()) return;      // 空编辑器不存
+    var snap = editorSnapshot();
+    if (snap === lastSavedSnapshot) { setAutosaveState("ok", "✓ 已保存"); return; }
+    setAutosaveState("saving", "保存中…");
+    api("/drafts", { method: "POST", body: payload })
+      .then(function () {
+        lastSavedSnapshot = snap;
+        var t = new Date();
+        var hh = String(t.getHours()).padStart(2, "0");
+        var mm = String(t.getMinutes()).padStart(2, "0");
+        setAutosaveState("ok", "✓ 已保存 " + hh + ":" + mm);
+        loadDrafts();
+      })
+      .catch(function (err) {
+        setAutosaveState("error", "✗ 保存失败：" + err.message);
+      });
+  }
+
+  function scheduleAutosave() {
+    clearTimeout(autosaveTimer);
+    setAutosaveState("", "");
+    autosaveTimer = setTimeout(autosaveDraft, AUTOSAVE_DELAY);
+  }
+
+  /* ---------- 草稿箱 ---------- */
+
+  function loadDrafts() {
+    if (!draftList) return;
+    if (draftListLoading) draftListLoading.style.display = "block";
+    api("/drafts")
+      .then(function (data) {
+        renderDrafts(data.drafts || [], data.kvBound !== false);
+      })
+      .catch(function (err) {
+        draftList.innerHTML = '<p style="font-size:11px;color:var(--danger);">草稿读取失败：' + escapeHtml(err.message) + "</p>";
+      })
+      .finally(function () { if (draftListLoading) draftListLoading.style.display = "none"; });
+  }
+
+  function fmtTime(iso) {
+    if (!iso) return "";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    var p = function (n) { return String(n).padStart(2, "0"); };
+    return (d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+
+  function renderDrafts(list, kvBound) {
+    if (!kvBound) {
+      draftList.innerHTML = '<p style="font-size:11px;color:var(--danger);">未绑定 DRAFTS_KV，草稿功能不可用。请在 Cloudflare Pages 项目设置里绑定 KV 命名空间。</p>';
+      return;
+    }
+    if (!list.length) {
+      draftList.innerHTML = '<p style="font-size:11px;color:var(--text-dim);">暂无草稿</p>';
+      return;
+    }
+    draftList.innerHTML = list.map(function (d) {
+      var isArticle = d.type === "article";
+      var badge = d.basePublished ? '<span class="tag">待发布修改</span>' : '<span class="tag">未发布</span>';
+      var sub = d.basePublished ? "线上仍是已发布的旧版" : "线上不可见";
+      return '<div class="post-item" style="cursor:default;padding:10px 12px;">' +
+        '<div class="post-left">' +
+          '<span class="post-title">' + escapeHtml(d.title || "（无标题草稿）") + '</span>' +
+          '<span class="post-excerpt" style="font-size:11px;">' + escapeHtml(sub) + ' · ' + escapeHtml(fmtTime(d.updatedAt)) + '</span>' +
+          '<div class="post-tags">' + badge + '</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:6px;">' +
+          '<button class="btn btn-outline btn-sm" data-draft-restore="' + escapeAttr(d.type) + '|' + escapeAttr(d.id) + '">继续编辑</button>' +
+          '<button class="btn btn-outline btn-sm" data-draft-del="' + escapeAttr(d.type) + '|' + escapeAttr(d.id) + '">删除</button>' +
+        '</div>' +
+      '</div>';
+    }).join("");
+  }
+
+  /* 草稿箱按钮（事件委派） */
+  if (draftList) {
+    draftList.addEventListener("click", function (e) {
+      var btn = e.target.closest ? e.target.closest("[data-draft-restore],[data-draft-del]") : null;
+      if (!btn) return;
+      var restore = btn.getAttribute("data-draft-restore");
+      var del = btn.getAttribute("data-draft-del");
+      if (restore) {
+        var p = restore.split("|");
+        restoreDraft(p[0], p[1]);
+      } else if (del) {
+        var q = del.split("|");
+        if (!window.confirm("确定删除这份草稿？此操作不可撤销。")) return;
+        api("/drafts/" + encodeURIComponent(q[0]) + "/" + encodeURIComponent(q[1]), { method: "DELETE" })
+          .then(function () { showToast("草稿已删除", "success"); loadDrafts(); })
+          .catch(function (err) { showToast(err.message, "error"); });
+      }
+    });
+  }
+
+  /* 把草稿内容填回编辑器。已发布文章走 loadArticle 以保留原 slug。 */
+  function restoreDraft(type, id) {
+    if (type !== "article") { showToast("暂不支持该类型草稿", "info"); return; }
+    showToast("恢复草稿中…", "info");
+    api("/drafts/" + encodeURIComponent(type) + "/" + encodeURIComponent(id))
+      .then(function (data) {
+        var d = data.draft;
+        applyDraftToEditor(d);
+        showToast("已恢复草稿（未发布）", "success");
+      })
+      .catch(function (err) { showToast(err.message, "error"); });
+  }
+
+  function applyDraftToEditor(d) {
+    $("titleField").value = d.title || "";
+    $("dateField").value = d.date || today();
+    $("tagsField").value = (d.tags || []).join(", ");
+    $("excerptField").value = d.excerpt || "";
+    $("bodyField").value = d.body || "";
+    editSlug.value = d.slug || "";
+    currentDraftId = d.id;
+    lastSavedSnapshot = editorSnapshot();
+    cancelEditBtn.style.display = "inline-flex";
+    updatePreviewBtnVisibility();
+    publishBtn.textContent = "📝 发布";
+    draftBtn.textContent = "💾 存草稿";
+    setAutosaveState("ok", d.basePublished ? "有未发布修改（线上仍是旧版）" : "草稿未发布");
+    updatePreview();
+    $("titleField").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  /* 预览按钮：已发布的才指向线上页面；未发布的走已认证的弹窗预览 */
+  function updatePreviewBtnVisibility() {
+    var pv = $("previewArticleBtn");
+    if (!pv) return;
+    pv.style.display = editSlug.value ? "inline-flex" : "none";
+    pv.textContent = editSlug.value ? "🔗 线上页面" : "🔗 预览";
+  }
+
+  /* 已认证的草稿预览：用当前令牌取渲染结果，在新窗口展示。
+     整个过程不写任何公开文件，所以草稿不会被提前泄露。 */
+  function openAuthedPreview() {
+    var payload = draftPayload("article");
+    api("/preview", {
+      method: "POST",
+      body: { title: payload.title || "（无标题）", date: payload.date, tags: payload.tags, excerpt: payload.excerpt, body: payload.body },
+    }).then(function (data) {
+      var cssHref = "/css/style.css";
+      var link = document.querySelector('link[rel="stylesheet"]');
+      if (link && link.getAttribute("href")) cssHref = link.getAttribute("href");
+      var cssAbs = new URL(cssHref, window.location.href).href;
+      var theme = document.documentElement.getAttribute("data-theme") || "dark";
+      var html = '<!DOCTYPE html><html lang="zh-CN" data-theme="' + theme + '"><head><meta charset="UTF-8" />'
+        + '<meta name="robots" content="noindex,nofollow" /><title>草稿预览（仅本地）</title>'
+        + '<link rel="stylesheet" href="' + cssAbs + '" /></head><body><main class="container">'
+        + '<article class="article"><div class="article-body">' + data.html + '</div></article>'
+        + '</main></body></html>';
+      var url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+      var w = window.open(url, "_blank");
+      if (!w) showToast("预览窗口被浏览器拦截，请允许弹出窗口", "error");
+    }).catch(function (err) { showToast("预览失败：" + err.message, "error"); });
+  }
+
   /* ---------- 工具 ---------- */
 
   function getToken() { return sessionStorage.getItem(TOKEN_KEY); }
@@ -188,6 +393,8 @@
     adminView.style.display = "block";
     loadArticles();
     loadProjects();
+    // 重新登录后要把上次未发的草稿捞回来
+    loadDrafts();
   }
 
   function login() {
@@ -300,17 +507,23 @@
         $("excerptField").value = data.meta.excerpt || "";
         $("bodyField").value = data.body || "";
         editSlug.value = data.slug;
+        currentDraftId = data.slug;
         cancelEditBtn.style.display = "inline-flex";
-        var pv = $("previewArticleBtn");
-        if (pv) {
-          pv.href = "blog/" + encodeURIComponent(data.slug);
-          pv.style.display = "inline-flex";
-        }
         publishBtn.textContent = "📝 发布";
         draftBtn.textContent = "💾 存草稿";
-        updatePreview();
+
+        // 有同名草稿 → 直接用草稿内容继续编辑（线上仍是已发布的旧版）
+        if (data.draft) {
+          applyDraftToEditor(data.draft);
+          showToast("已恢复未发布的草稿修改（线上仍是旧版）", "success");
+        } else {
+          lastSavedSnapshot = editorSnapshot();
+          setAutosaveState("", "");
+          updatePreviewBtnVisibility();
+          updatePreview();
+          showToast("已载入《" + (data.meta.title || "") + "》", "success");
+        }
         $("titleField").scrollIntoView({ behavior: "smooth", block: "start" });
-        showToast("已载入《" + (data.meta.title || "") + "》", "success");
       })
       .catch(function (err) { showToast(err.message, "error"); });
   }
@@ -322,6 +535,10 @@
     $("excerptField").value = "";
     $("bodyField").value = "";
     editSlug.value = "";
+    currentDraftId = newDraftId();   // 新文章：给一个稳定的草稿 key
+    lastSavedSnapshot = "";
+    clearTimeout(autosaveTimer);
+    setAutosaveState("", "");
     cancelEditBtn.style.display = "none";
     var pv2 = $("previewArticleBtn");
     if (pv2) pv2.style.display = "none";
@@ -330,7 +547,11 @@
     updatePreview();
   }
 
-  cancelEditBtn.addEventListener("click", resetEditor);
+  cancelEditBtn.addEventListener("click", function () {
+    // 取消编辑不等于丢弃草稿：已保存的草稿仍留在草稿箱里，可随时恢复
+    resetEditor();
+    loadDrafts();
+  });
 
   /* ---------- 上传 .md 文件（解析 Front Matter 填入表单） ---------- */
 
@@ -415,9 +636,46 @@
       });
   }
 
-  // 所有字段变化都触发实时预览
+  // 所有字段变化都触发实时预览 + 自动保存（停输 5 秒）
   ["titleField", "dateField", "tagsField", "excerptField", "bodyField"].forEach(function (id) {
-    $(id).addEventListener("input", schedulePreview);
+    $(id).addEventListener("input", function () {
+      schedulePreview();
+      scheduleAutosave();
+    });
+  });
+
+  // 预览按钮：已发布 → 新窗口打线上页；未发布 → 用已认证接口弹本地预览
+  (function () {
+    var pv = $("previewArticleBtn");
+    if (!pv) return;
+    pv.addEventListener("click", function (e) {
+      if (editSlug.value) {
+        e.preventDefault();
+        window.open("blog/" + encodeURIComponent(editSlug.value), "_blank", "noopener");
+      } else {
+        e.preventDefault();
+        openAuthedPreview();
+      }
+    });
+  })();
+
+  // 关页面前把未保存的改动落进私有草稿（尽力而为）
+  window.addEventListener("beforeunload", function () {
+    clearTimeout(autosaveTimer);
+    if (currentDraftId && editorSnapshot() !== lastSavedSnapshot) {
+      var payload = draftPayload("article");
+      if (payload.title || payload.body.trim()) {
+        try {
+          var token = getToken();
+          fetch(API + "/drafts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+            body: JSON.stringify(payload),
+            keepalive: true,
+          });
+        } catch (e) { /* 忽略 */ }
+      }
+    }
   });
 
   /* ---------- 发布 / 存草稿 ---------- */
@@ -437,20 +695,44 @@
       published: isPublished,
     };
     if (editSlug.value) payload.slug = editSlug.value;
+    // 带上草稿 key，发布成功后后端会一并删除草稿
+    if (currentDraftId) payload.draftId = currentDraftId;
 
     var btn = isPublished ? publishBtn : draftBtn;
     btn.disabled = true;
     btn.textContent = "提交中…";
     publishStatus.textContent = "";
+    clearTimeout(autosaveTimer);
 
     api("/articles", { method: "POST", body: payload })
       .then(function (data) {
+        if (data.draft) {
+          // 存草稿：只写了私有 KV，线上没有任何变化
+          if (data.draftId) currentDraftId = data.draftId;
+          lastSavedSnapshot = editorSnapshot();
+          setAutosaveState("ok", "✓ 草稿已保存" + (editSlug.value ? "（线上仍是旧版）" : ""));
+          publishStatus.textContent = "✔ " + data.message;
+          showToast(data.message, "success");
+          loadDrafts();
+          return;
+        }
+        // 发布成功：草稿已在后端删除
         publishStatus.textContent = "✔ " + data.message;
+        setAutosaveState("ok", "✓ 已发布");
         showToast(data.message, "success");
+        if (data.slug) {
+          editSlug.value = data.slug;
+          currentDraftId = data.slug;
+          updatePreviewBtnVisibility();
+        }
         loadArticles();
+        loadDrafts();
       })
       .catch(function (err) {
+        // 发布失败：后端已把内容保留在私有草稿里，这里提示不要重写
+        setAutosaveState("error", "✗ " + (err.message || "提交失败"));
         showToast(err.message, "error");
+        loadDrafts();
       })
       .finally(function () {
         btn.disabled = false;

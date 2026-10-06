@@ -584,6 +584,76 @@ await test("无内容丢失：全站文章渲染后不含空段落 / 裸标签",
   }
 });
 
+/* ============ G. 后台草稿与自动保存（前/后端契约） ============ */
+console.log("");
+console.log("[G] 草稿箱 · 自动保存 · 缓存版本");
+
+await test("后台页面含草稿箱与自动保存状态元素", () => {
+  const html = rd("admin.html");
+  for (const id of ["draftList", "draftListLoading", "autosaveStatus"]) {
+    assert(html.includes(`id="${id}"`), "缺元素 " + id);
+  }
+  assert(/aria-live="polite"/.test(html), "自动保存状态应可被读屏器感知");
+  assert(html.includes("DRAFTS_KV"), "页面应提示需要绑定 DRAFTS_KV");
+});
+
+await test("前端自动保存：停输 5 秒写入私有草稿", () => {
+  const js = rd("js/admin.js");
+  assert(/AUTOSAVE_DELAY\s*=\s*5000/.test(js), "自动保存延迟应为 5000ms");
+  assert(/scheduleAutosave/.test(js), "缺 scheduleAutosave");
+  assert(/autosaveDraft/.test(js), "缺 autosaveDraft");
+  assert(/api\("\/drafts"/.test(js), "应调用 /drafts 接口存草稿");
+  // 状态提示三态
+  for (const s of ["保存中", "已保存", "保存失败"]) {
+    assert(js.includes(s), "缺状态提示：" + s);
+  }
+});
+
+await test("前端已发布旧版提示与草稿恢复入口", () => {
+  const js = rd("js/admin.js");
+  assert(/有未发布修改/.test(js), "缺「有未发布修改」提示");
+  assert(/线上仍是/.test(js), "缺「线上仍是旧版」提示");
+  assert(/restoreDraft|data-draft-restore/.test(js), "草稿箱缺恢复入口");
+  assert(/applyDraftToEditor/.test(js), "缺把草稿填回编辑器的逻辑");
+  assert(/loadDrafts\(\)/.test(js), "登录后应加载草稿列表");
+});
+
+await test("草稿预览不生成公开页面（走已认证接口）", () => {
+  const js = rd("js/admin.js");
+  assert(/openAuthedPreview/.test(js), "缺已认证预览函数");
+  assert(/\/preview/.test(js), "预览应调用 /preview 接口");
+  assert(/noindex/.test(js), "预览页应带 noindex");
+  // 预览按钮不能再硬编码指向公开文章页（未发布时那个地址是 404）
+  assert(!/pv\.href\s*=\s*"blog\//.test(js), "预览按钮不应再硬编码公开文章直链");
+});
+
+await test("静态后台页不暴露草稿接口给未登录用户", () => {
+  const html = rd("admin.html");
+  assert(/noindex/.test(html), "admin.html 应 noindex");
+  const js = rd("js/admin.js");
+  // 草稿接口必须带令牌（api() 统一加 Authorization）
+  assert(/Authorization/.test(js), "api() 应附带 Authorization 头");
+});
+
+await test("维护：admin.js 资源版本已递增", () => {
+  const html = rd("admin.html");
+  const m = html.match(/admin\.js\?v=(\d+)/);
+  assert(m, "未找到 admin.js 版本号");
+  assert(Number(m[1]) >= 20, "admin.js 变更后必须递增版本号，当前 v" + m[1]);
+});
+
+await test("SW 对图片是缓存优先，因此必须靠 URL 版本号破缓存", () => {
+  const sw = rd("sw.js");
+  assert(/isStatic/.test(sw) && /caches\.match\(req\)/.test(sw), "SW 静态分支应为缓存优先");
+  const headers = rd("_headers");
+  assert(/\/images\/\*/.test(headers) && /immutable/.test(headers), "图片应为 immutable 长缓存");
+  // 因此后端重新压缩后必须换 URL
+  const api = rd("functions/api/admin.js");
+  assert(/function versionedUrl/.test(api), "缺 versionedUrl");
+  assert(/target\.url = versionedUrl\(/.test(api), "重新压缩后应给原图 URL 打版本号");
+  assert(/target\.thumbUrl = versionedUrl\(/.test(api), "重新压缩后应给缩略图 URL 打版本号");
+});
+
 /* ---------- 结果 ---------- */
 console.log(`\n🎯 结果：${passed} 通过，${failed} 失败，共 ${passed + failed} 项`);
 if (failed > 0) process.exit(1);

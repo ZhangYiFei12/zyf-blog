@@ -30,6 +30,26 @@ function getFile(path) { return files[path] || null; }
 function deleteFile(path) { delete files[path]; }
 function hasFile(path) { return path in files; }
 
+/* 内存 KV：模拟 Cloudflare KV 的 DRAFTS_KV 绑定。
+   只需要 put / get / delete / list 四个方法，与生产代码用到的 API 一致。 */
+function makeKV() {
+  const store = new Map();
+  return {
+    _store: store,
+    _keys() { return [...store.keys()]; },
+    async put(key, value) { store.set(String(key), String(value)); },
+    async get(key) { return store.has(String(key)) ? store.get(String(key)) : null; },
+    async delete(key) { store.delete(String(key)); },
+    async list(opts = {}) {
+      const prefix = opts.prefix || "";
+      const keys = [...store.keys()].filter(k => k.startsWith(prefix)).sort()
+        .map(name => ({ name }));
+      return { keys, list_complete: true, cursor: undefined };
+    },
+  };
+}
+const DRAFTS_KV = makeKV();
+
 // 初始化：模拟现有仓库
 const EXISTING_MD = `---
 title: "📖 AI 文件阅读器 — 详细介绍与技术文档"
@@ -147,9 +167,13 @@ setFile("docs/kb/测试知识库文档.md", EXISTING_KB_MD);
 
 let commitCount = 0;
 let headCommitSha = "abc123";
+/* 测试开关：failCommit > 0 时下一次 git commit 返回 500（用于验证“发布失败保留草稿”） */
+const mockState = { failCommit: 0 };
 let treeSha = "tree123";
 const blobStore = {}; // sha -> content
 let blobCounter = 0;
+/* 暂存的 tree（到 refs PATCH 才真正落盘，模拟真实 GitHub 行为） */
+let pendingTree = [];
 
 function mockServer(req, res) {
   const url = new URL(req.url, "http://localhost:18999");
@@ -173,20 +197,26 @@ function mockServer(req, res) {
       respond(201, { sha });
     } else if (path === `/repos/${process.env.GITHUB_REPO}/git/trees` && method === "POST") {
       treeSha = "newtree_" + Date.now();
-      if (json && json.tree) {
-        for (const t of json.tree) {
-          if (t.sha === null) {
-            deleteFile(t.path); // 删除
-          } else if (blobStore[t.sha] !== undefined) {
-            setFile(t.path, blobStore[t.sha]); // 写入/更新
-          }
-        }
-      }
+      /* 保真：创建 tree 不会移动分支，也不应该改动文件。
+         真实 GitHub 只有在 PATCH refs/heads/main 时才真正提交，
+         所以这里先暂存，到 refs PATCH 阶段才落地 ——
+         否则「commit 失败」的用例会因为文件已被提前写入而失真。 */
+      pendingTree = (json && json.tree) ? json.tree.slice() : [];
       respond(201, { sha: treeSha });
     } else if (path === `/repos/${process.env.GITHUB_REPO}/git/commits` && method === "POST") {
+      if (mockState.failCommit > 0) {
+        respond(500, { message: "simulated commit failure" });
+        return;
+      }
       headCommitSha = "commit_" + (++commitCount);
       respond(201, { sha: headCommitSha });
     } else if (path === `/repos/${process.env.GITHUB_REPO}/git/refs/heads/main` && method === "PATCH") {
+      // 到这一步才算真正提交：把暂存的 tree 落盘
+      for (const t of pendingTree) {
+        if (t.sha === null) deleteFile(t.path);
+        else if (blobStore[t.sha] !== undefined) setFile(t.path, blobStore[t.sha]);
+      }
+      pendingTree = [];
       respond(200, { object: { sha: headCommitSha } });
     } else if (path.startsWith(`/repos/${process.env.GITHUB_REPO}/git/trees/`) && method === "GET") {
       // 模拟目录树：/git/trees/main:images/uploads
@@ -254,10 +284,14 @@ mockServer_.listen(mockPort, async () => {
     }
   }
 
+  let token = "";
+
   async function call(method, path, body) {
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers.Authorization = "Bearer " + token;
     const req = new Request(`http://localhost${path}`, {
       method,
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: body ? JSON.stringify(body) : undefined,
     });
     const env = {
@@ -267,6 +301,7 @@ mockServer_.listen(mockPort, async () => {
       GITHUB_REPO: process.env.GITHUB_REPO,
       GITHUB_BRANCH: process.env.GITHUB_BRANCH,
       GITHUB_API_BASE: process.env.GITHUB_API_BASE,
+      DRAFTS_KV,
     };
     const ctx = { request: req, env, params: {} };
     const res = await onRequest(ctx);
@@ -295,7 +330,6 @@ mockServer_.listen(mockPort, async () => {
   });
 
   // 3. 登录 - 成功
-  let token = "";
   await test("登录成功 → 获得 token", async () => {
     const r = await call("POST", "/api/admin/login", { password: "test123" });
     if (r.status !== 200) throw new Error("期望 200 但得到 " + r.status);
@@ -305,8 +339,11 @@ mockServer_.listen(mockPort, async () => {
 
   // 4. 无 token 访问 → 401
   await test("无 token 访问文章列表 → 401", async () => {
-    const r = await call("GET", "/api/admin/articles");
-    if (r.status !== 401) throw new Error("期望 401 但得到 " + r.status);
+    // 显式构造不带 Authorization 的请求（call() 会自动带上登录令牌）
+    const req = new Request("http://localhost/api/admin/articles");
+    const env = { ADMIN_PASS: "test123", SESSION_SECRET: "test-secret-key-1234567890", GITHUB_TOKEN: "x", GITHUB_REPO: "test/test", GITHUB_BRANCH: "main", GITHUB_API_BASE: "http://localhost:18999" };
+    const res = await onRequest({ request: req, env, params: {} });
+    if (res.status !== 401) throw new Error("期望 401 但得到 " + res.status);
   });
 
   // 5. 列出文章（token 有效）
@@ -422,7 +459,9 @@ mockServer_.listen(mockPort, async () => {
 
   // 11. 下载文件管理（files 路由）
   setFile("data/downloads.json", "[]");
-  const ENV = { ADMIN_PASS: "test123", SESSION_SECRET: "test-secret-key-1234567890", GITHUB_TOKEN: "x", GITHUB_REPO: "test/test", GITHUB_BRANCH: "main", GITHUB_API_BASE: "http://localhost:18999" };
+  const ENV = { ADMIN_PASS: "test123", SESSION_SECRET: "test-secret-key-1234567890", GITHUB_TOKEN: "x", GITHUB_REPO: "test/test", GITHUB_BRANCH: "main", GITHUB_API_BASE: "http://localhost:18999", DRAFTS_KV };
+  /* 不带 KV 绑定的环境：用于验证未配置绑定时给出可操作提示 */
+  const ENV_NO_KV = { ADMIN_PASS: "test123", SESSION_SECRET: "test-secret-key-1234567890", GITHUB_TOKEN: "x", GITHUB_REPO: "test/test", GITHUB_BRANCH: "main", GITHUB_API_BASE: "http://localhost:18999" };
 
   await test("列出下载文件（初始空）", async () => {
     const req = new Request("http://localhost/api/admin/files", { headers: { Authorization: "Bearer " + token } });
@@ -896,6 +935,285 @@ mockServer_.listen(mockPort, async () => {
     const req = new Request("http://localhost/api/admin/site");
     const res = await onRequest({ request: req, env: ENV, params: {} });
     if (res.status !== 401) throw new Error("期望 401，得到 " + res.status);
+  });
+
+  /* ============================================================
+     私有草稿（P0）：存草稿不得生成公开页面、不得提交到仓库
+     ============================================================ */
+
+  await test("存草稿：不提交仓库、不生成公开 HTML", async () => {
+    const before = commitCount;
+    const beforeFiles = Object.keys(files).sort().join("|");
+    const req = new Request("http://localhost/api/admin/articles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({
+        title: "未发布草稿标题", date: "2026-10-01", tags: ["草稿"],
+        body: "# 未发布草稿标题\n\n这是不该被公开的内容。", published: false,
+      }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + ": " + JSON.stringify(data));
+    if (!data.draft) throw new Error("未标记为草稿");
+    if (commitCount !== before) throw new Error("存草稿竟然产生了 git 提交");
+    if (Object.keys(files).sort().join("|") !== beforeFiles) throw new Error("存草稿修改了仓库文件");
+    // 不得生成公开页面
+    const slug = data.slug;
+    if (hasFile(`blog/posts/${slug}.md`)) throw new Error("草稿 .md 被写入了仓库");
+    if (hasFile(`blog/${slug}.html`)) throw new Error("草稿生成了公开 HTML");
+    // 不得进公开数据
+    for (const f of ["data/posts.json", "data/search-index.json", "data/search-all.json", "feed.xml", "sitemap.xml"]) {
+      const c = getFile(f) || "";
+      if (c.includes("未发布草稿标题")) throw new Error(f + " 包含了未发布草稿");
+    }
+    if ((getFile("blog.html") || "").includes("未发布草稿标题")) throw new Error("blog.html 列出了未发布草稿");
+  });
+
+  await test("草稿存在私有 KV 中且可读回", async () => {
+    const keys = DRAFTS_KV._keys().filter(k => k.startsWith("draft:article:"));
+    if (!keys.length) throw new Error("KV 中没有草稿");
+    const raw = await DRAFTS_KV.get(keys[0]);
+    const d = JSON.parse(raw);
+    if (d.title !== "未发布草稿标题") throw new Error("草稿标题不对: " + d.title);
+    if (!d.updatedAt) throw new Error("草稿缺 updatedAt");
+    const r = await call("GET", "/api/admin/drafts");
+    if (r.status !== 200) throw new Error("列表接口 " + r.status);
+    if (!r.data.drafts.some(x => x.title === "未发布草稿标题")) throw new Error("草稿列表未包含该草稿");
+    // 列表不应带正文（避免接口过大）
+    if (r.data.drafts.some(x => typeof x.body === "string" && x.body.length)) throw new Error("列表接口不应返回正文");
+  });
+
+  await test("草稿直链不可访问（无公开 HTML）", async () => {
+    const slug = encodeURIComponent("未发布草稿标题");
+    if (hasFile(`blog/${slug}.html`)) throw new Error("存在公开草稿页");
+    if (hasFile("blog/未发布草稿标题.html")) throw new Error("存在公开草稿页");
+    // 草稿也不能出现在任何公开产物里
+    const all = ["data/posts.json", "data/search-all.json", "sitemap.xml", "feed.xml"]
+      .map(f => getFile(f) || "").join("");
+    if (all.includes("未发布草稿标题")) throw new Error("草稿泄露到公开产物");
+  });
+
+  await test("编辑已发布文章存草稿：线上旧版不受影响", async () => {
+    const slug = "详细介绍与技术文档";
+    const originHtml = getFile(`blog/${slug}.html`);
+    const originMd = getFile(`blog/posts/${slug}.md`);
+    if (!originHtml || !originMd) throw new Error("前置失败：找不到已发布文章");
+    const req = new Request("http://localhost/api/admin/articles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({
+        slug, title: "改过的标题（未发布）", date: "2026-10-02", tags: ["AI"],
+        body: "# 改过的正文（未发布）\n\n不应生效。", published: false,
+      }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + ": " + JSON.stringify(data));
+    // 仓库里的文章页与 .md 必须原封不动
+    if (getFile(`blog/${slug}.html`) !== originHtml) throw new Error("文章页被草稿覆盖了");
+    if (getFile(`blog/posts/${slug}.md`) !== originMd) throw new Error("文章 .md 被草稿覆盖了");
+    if ((getFile("blog.html") || "").includes("改过的标题")) throw new Error("列表出现未发布的标题");
+  });
+
+  await test("读取已发布文章时会附带同名草稿（供恢复）", async () => {
+    const r = await call("GET", "/api/admin/articles/" + encodeURIComponent("详细介绍与技术文档"));
+    if (r.status !== 200) throw new Error("期望 200 但得到 " + r.status);
+    if (!r.data.meta || r.data.meta.title.indexOf("详细介绍") === -1) throw new Error("正文应为已发布版本");
+    if (!r.data.draft) throw new Error("未返回待发布草稿");
+    if (r.data.draft.title !== "改过的标题（未发布）") throw new Error("草稿内容不对: " + r.data.draft.title);
+  });
+
+  await test("发布成功后自动删除对应草稿", async () => {
+    const slug = "详细介绍与技术文档";
+    if (!(await DRAFTS_KV.get("draft:article:" + slug))) throw new Error("前置失败：没有草稿");
+    const req = new Request("http://localhost/api/admin/articles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({
+        slug, title: "改过的标题（已发布）", date: "2026-10-02", tags: ["AI"],
+        body: "# 改过的正文（已发布）", published: true,
+      }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + ": " + JSON.stringify(data));
+    if (await DRAFTS_KV.get("draft:article:" + slug)) throw new Error("发布后草稿未删除");
+    if (!(getFile(`blog/posts/${slug}.md`) || "").includes("改过的标题（已发布）")) throw new Error("发布未生效");
+  });
+
+  await test("发布失败时保留草稿并报错（不丢内容）", async () => {
+    const before = Number(mockState.failCommit || 0);
+    mockState.failCommit = 1; // 让 mock 在下一次 commit 时返回 500
+    try {
+      const req = new Request("http://localhost/api/admin/articles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({
+          title: "发布会失败的文章", date: "2026-10-03", tags: ["草稿"],
+          body: "# 发布会失败的文章\n\n内容必须保住。", published: true, draftId: "fail-case",
+        }),
+      });
+      const res = await onRequest({ request: req, env: ENV, params: {} });
+      const data = await res.json();
+      if (res.status !== 502) throw new Error("期望 502 但得到 " + res.status);
+      if (data.code !== "COMMIT_FAILED") throw new Error("缺 COMMIT_FAILED 标记");
+      const kept = await DRAFTS_KV.get("draft:article:fail-case");
+      if (!kept) throw new Error("发布失败后草稿未保留");
+      if (!JSON.parse(kept).body.includes("内容必须保住")) throw new Error("保留的草稿内容不完整");
+      if (hasFile("blog/发布会失败的文章.html")) throw new Error("失败的发布不应产生公开页面");
+    } finally {
+      mockState.failCommit = before;
+    }
+  });
+
+  await test("DRAFTS_KV 未绑定 → 存草稿报可操作错误", async () => {
+    const req = new Request("http://localhost/api/admin/articles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ title: "无 KV 测试", body: "内容", published: false }),
+    });
+    const res = await onRequest({ request: req, env: ENV_NO_KV, params: {} });
+    const data = await res.json();
+    if (res.status !== 500) throw new Error("期望 500 但得到 " + res.status);
+    if (data.code !== "KV_NOT_BOUND") throw new Error("缺 KV_NOT_BOUND 标记");
+    if (!/DRAFTS_KV/.test(data.error)) throw new Error("错误信息应指明 DRAFTS_KV 绑定：" + data.error);
+  });
+
+  await test("DRAFTS_KV 未绑定时列出草稿不报错（返回空 + 警告）", async () => {
+    const req = new Request("http://localhost/api/admin/drafts", { headers: { Authorization: "Bearer " + token } });
+    const res = await onRequest({ request: req, env: ENV_NO_KV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status);
+    if (data.kvBound !== false) throw new Error("应标记 kvBound=false");
+    if (!Array.isArray(data.drafts) || data.drafts.length) throw new Error("应返回空数组");
+  });
+
+  await test("删除草稿", async () => {
+    await DRAFTS_KV.put("draft:article:to-del", JSON.stringify({ type: "article", id: "to-del", title: "待删", body: "x", updatedAt: new Date().toISOString() }));
+    const r = await call("DELETE", "/api/admin/drafts/article/to-del");
+    if (r.status !== 200) throw new Error("期望 200 但得到 " + r.status);
+    if (await DRAFTS_KV.get("draft:article:to-del")) throw new Error("草稿未删除");
+  });
+
+  await test("草稿接口：类型校验与空草稿拒绝", async () => {
+    const bad = await call("GET", "/api/admin/drafts/bogus/x");
+    if (bad.status !== 400) throw new Error("非法类型应 400，得到 " + bad.status);
+    const empty = await call("POST", "/api/admin/drafts", { type: "article", id: "empty-one", title: "", body: "" });
+    if (empty.status !== 400) throw new Error("空草稿应 400，得到 " + empty.status);
+    const missing = await call("GET", "/api/admin/drafts/article/不存在的草稿");
+    if (missing.status !== 404) throw new Error("不存在的草稿应 404，得到 " + missing.status);
+  });
+
+  await test("草稿接口未授权 → 401", async () => {
+    const req = new Request("http://localhost/api/admin/drafts");
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    if (res.status !== 401) throw new Error("期望 401，得到 " + res.status);
+  });
+
+  /* ============================================================
+     全站搜索索引同步（P1）
+     ============================================================ */
+
+  await test("发布文章后 search-all.json 立即包含该文章", async () => {
+    const req = new Request("http://localhost/api/admin/articles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({
+        title: "搜索索引同步测试", date: "2026-10-04", excerpt: "摘要关键词ABC",
+        tags: ["测试"], body: "# 搜索索引同步测试\n\n正文关键词XYZ。", published: true,
+      }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    if (res.status !== 200) throw new Error("发布失败 " + res.status);
+    const all = JSON.parse(getFile("data/search-all.json") || "[]");
+    const hit = all.find(e => e.title === "搜索索引同步测试");
+    if (!hit) throw new Error("search-all.json 未包含新文章");
+    if (hit.type !== "post") throw new Error("类型字段错误: " + hit.type);
+    if (hit.url.indexOf(".html") !== -1) throw new Error("搜索链接不该带 .html: " + hit.url);
+    // 搜索索引也不能落后
+    const idx = JSON.parse(getFile("data/search-index.json") || "[]");
+    if (!JSON.stringify(idx).includes("搜索索引同步测试")) throw new Error("search-index.json 未同步");
+  });
+
+  await test("删除文章后 search-all.json 立即移除该文章", async () => {
+    const r = await call("DELETE", "/api/admin/articles/" + encodeURIComponent("搜索索引同步测试"));
+    if (r.status !== 200) throw new Error("删除失败 " + r.status);
+    const all = JSON.parse(getFile("data/search-all.json") || "[]");
+    if (all.some(e => e.title === "搜索索引同步测试")) throw new Error("search-all.json 仍含已删文章");
+  });
+
+  await test("知识库新增后 search-all.json 立即包含该文档", async () => {
+    const r = await call("POST", "/api/admin/kb", {
+      filename: "搜索同步的知识库文档.md",
+      content: `---\ntitle: "搜索同步的知识库文档"\ncategory: "测试"\ndate: "2026-10-05"\n---\n\n# 搜索同步的知识库文档\n\n知识库正文。\n`,
+    });
+    if (r.status !== 200) throw new Error("新增失败 " + r.status + ": " + JSON.stringify(r.data));
+    const all = JSON.parse(getFile("data/search-all.json") || "[]");
+    const hit = all.find(e => e.title === "搜索同步的知识库文档");
+    if (!hit) throw new Error("search-all.json 未包含新知识库文档");
+    if (hit.type !== "kb") throw new Error("类型字段错误: " + hit.type);
+    if (hit.url.indexOf(".html") !== -1) throw new Error("搜索链接不该带 .html: " + hit.url);
+  });
+
+  await test("知识库删除后 search-all.json 立即移除该文档", async () => {
+    const r = await call("DELETE", "/api/admin/kb/" + encodeURIComponent("搜索同步的知识库文档"));
+    if (r.status !== 200) throw new Error("删除失败 " + r.status + ": " + JSON.stringify(r.data));
+    const all = JSON.parse(getFile("data/search-all.json") || "[]");
+    if (all.some(e => e.title === "搜索同步的知识库文档")) throw new Error("search-all.json 仍含已删文档");
+  });
+
+  await test("草稿绝不进入 search-all.json", async () => {
+    await call("POST", "/api/admin/drafts", {
+      type: "article", id: "search-leak", title: "绝对不会被搜到的草稿",
+      body: "# 绝对不会被搜到的草稿\n\n秘密内容。",
+    });
+    const all = getFile("data/search-all.json") || "";
+    if (all.includes("绝对不会被搜到的草稿")) throw new Error("草稿泄露进搜索索引");
+    const idx = getFile("data/search-index.json") || "";
+    if (idx.includes("绝对不会被搜到的草稿")) throw new Error("草稿泄露进 search-index");
+  });
+
+  /* ============================================================
+     图片重新压缩后的缓存版本号（P2）
+     ============================================================ */
+
+  await test("重新压缩图片会更换 URL 版本号（绕开长缓存）", async () => {
+    const g = JSON.parse(getFile("data/gallery.json") || "[]");
+    if (!g.length) throw new Error("前置失败：相册为空");
+    const target = g[0];
+    const beforeUrl = target.url;
+    const beforeThumb = target.thumbUrl;
+    const req = new Request("http://localhost/api/admin/gallery/optimize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ file: target.file, data: "AAAA", mime: "image/jpeg", ext: "jpg" }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("压缩失败 " + res.status + ": " + JSON.stringify(data));
+    const after = JSON.parse(getFile("data/gallery.json")).find(x => x.file === target.file);
+    if (!/\?v=/.test(after.url)) throw new Error("URL 未加版本号: " + after.url);
+    if (after.url.split("?")[0] !== String(beforeUrl).split("?")[0]) throw new Error("文件路径不应改变: " + after.url);
+    if (beforeThumb && !/\?v=/.test(after.thumbUrl || "")) throw new Error("缩略图 URL 未加版本号: " + after.thumbUrl);
+    // 版本号必须变化，否则缓存拿不到新图
+    if (after.url === beforeUrl) throw new Error("版本号未变化");
+  });
+
+  await test("已带版本号的图片再压缩仍能正确命中文件", async () => {
+    const g = JSON.parse(getFile("data/gallery.json") || "[]");
+    const target = g[0];
+    if (!/\?v=/.test(target.url)) throw new Error("前置失败：URL 无版本号");
+    const req = new Request("http://localhost/api/admin/gallery/optimize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ file: target.file, data: "AAAA", mime: "image/jpeg", ext: "jpg" }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    if (res.status !== 200) throw new Error("二次压缩失败 " + res.status);
+    const after = JSON.parse(getFile("data/gallery.json")).find(x => x.file === target.file);
+    if (after.url.split("?")[0] !== String(target.url).split("?")[0]) throw new Error("路径被版本号污染: " + after.url);
+    if (after.url === target.url) throw new Error("版本号未递增");
   });
 
   // 结果
