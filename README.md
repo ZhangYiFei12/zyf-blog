@@ -555,14 +555,18 @@ node tools/md2html.mjs -w           # 监听模式，保存自动重新生成
 - `tools/check-integrity.mjs` —— 仓库完整性检查（孤儿图 / 缺失图 / 死链 / 体积不一致），有问题时退出码为 1
 - `tools/test-admin.mjs` —— 后台 API 自测（`node tools/test-admin.mjs`）
 - `tools/test-frontend.mjs` —— 前端回归测试（纯函数 + 生成产物 + 渲染断言，需先启动 dev-server）
+- `tools/rebuild-search-all.mjs` —— 从**远端仓库当前状态**重建 `data/search-all.json`
+  （后台增删改已自动同步；这个工具用于修复历史欠账，本地仓库落后时也能用，
+  加 `--dry` 只看结果不提交）
+- `tools/push-via-api.mjs` —— github.com git 协议不通时，用 `gh api` 手动构建 commit 推送
 
 ### 提交前自检
 
 ```bash
 node tools/dev-server.mjs &          # 前端测试需要
 node tools/check-integrity.mjs       # 资源完整性（死链/孤儿图）
-node tools/test-admin.mjs            # 后台 API（42 项）
-node tools/test-frontend.mjs         # 前端（39 项）
+node tools/test-admin.mjs            # 后台 API（61 项）
+node tools/test-frontend.mjs         # 前端（66 项）
 node tools/gen-pages.mjs             # 重建派生页面
 ```
 
