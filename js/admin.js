@@ -191,12 +191,15 @@
     if (snap === lastSavedSnapshot) { setAutosaveState("ok", "✓ 已保存"); return; }
     setAutosaveState("saving", "保存中…");
     api("/drafts", { method: "POST", body: payload })
-      .then(function () {
+      .then(function (data) {
         lastSavedSnapshot = snap;
         var t = new Date();
         var hh = String(t.getHours()).padStart(2, "0");
         var mm = String(t.getMinutes()).padStart(2, "0");
         setAutosaveState("ok", "✓ 已保存 " + hh + ":" + mm);
+        // 立即本地插入并重绘：KV 的 list() 有 10~30 秒最终一致性延迟，
+        // 等 loadDrafts() 的结果会让刚保存的草稿一时看不见
+        upsertDraftLocal(data, payload);
         loadDrafts();
       })
       .catch(function (err) {
@@ -212,15 +215,72 @@
 
   /* ---------- 草稿箱 ---------- */
 
+  /* KV 的 list() 是最终一致的：新写入的 key 可能要 10~30 秒才出现在 list 结果里
+     （单键 get 则是立即一致）。所以不能直接用服务端列表覆盖界面，
+     否则「刚自动保存的草稿」会在草稿箱里消失一会儿。
+     做法：本地维护一份权威视图，服务端列表只用来合并。 */
+  var draftsCache = [];      // 当前渲染用的草稿列表
+  var draftsKvBound = true;  // KV 是否已绑定
+  var draftsDeleted = {};    // key -> 时间戳，用于屏蔽 list() 的过期残留
+
+  function draftKeyOf(d) { return (d && d.type) + "|" + (d && d.id); }
+
+  function sortDraftsDesc(list) {
+    return list.slice().sort(function (a, b) {
+      return String(b.updatedAt || "").localeCompare(String(a.updatedAt || ""));
+    });
+  }
+
+  /* 本地插入 / 更新一份草稿，并立即重绘（不等服务端 list） */
+  function upsertDraftLocal(data, payload) {
+    var entry = {
+      type: "article", id: payload.id, slug: payload.slug || "",
+      title: payload.title || "（无标题草稿）", date: payload.date,
+      tags: payload.tags || [], basePublished: !!payload.basePublished,
+      updatedAt: (data && data.updatedAt) || new Date().toISOString(),
+    };
+    delete draftsDeleted[draftKeyOf(entry)];
+    var i = -1;
+    for (var k = 0; k < draftsCache.length; k++) {
+      if (draftKeyOf(draftsCache[k]) === draftKeyOf(entry)) { i = k; break; }
+    }
+    if (i >= 0) draftsCache[i] = entry; else draftsCache.unshift(entry);
+    draftsCache = sortDraftsDesc(draftsCache);
+    renderDrafts(draftsCache, draftsKvBound);
+  }
+
+  /* 本地移除，并记下时间戳以屏蔽还未同步的 list() 残留 */
+  function removeDraftLocal(type, id) {
+    draftsDeleted[type + "|" + id] = Date.now();
+    draftsCache = draftsCache.filter(function (d) { return draftKeyOf(d) !== type + "|" + id; });
+    renderDrafts(draftsCache, draftsKvBound);
+  }
+
   function loadDrafts() {
     if (!draftList) return;
     if (draftListLoading) draftListLoading.style.display = "block";
     api("/drafts")
       .then(function (data) {
-        renderDrafts(data.drafts || [], data.kvBound !== false);
+        draftsKvBound = data.kvBound !== false;
+        var now = Date.now();
+        var server = (data.drafts || []).filter(function (d) {
+          // 刚在本页删除的草稿：list() 可能还返回旧数据，60 秒内忽略
+          var ts = draftsDeleted[draftKeyOf(d)];
+          return !(ts && now - ts < 60000);
+        });
+        // 合并：服务端为准，但保留「本地已保存、服务端 list 还未同步」的
+        var seen = {};
+        server.forEach(function (d) { seen[draftKeyOf(d)] = 1; });
+        draftsCache.forEach(function (d) {
+          if (!seen[draftKeyOf(d)]) server.push(d);
+        });
+        draftsCache = sortDraftsDesc(server);
+        renderDrafts(draftsCache, draftsKvBound);
       })
       .catch(function (err) {
-        draftList.innerHTML = '<p style="font-size:11px;color:var(--danger);">草稿读取失败：' + escapeHtml(err.message) + "</p>";
+        if (draftList) {
+          draftList.innerHTML = '<p style="font-size:11px;color:var(--danger);">草稿读取失败：' + escapeHtml(err.message) + "</p>";
+        }
       })
       .finally(function () { if (draftListLoading) draftListLoading.style.display = "none"; });
   }
@@ -234,6 +294,7 @@
   }
 
   function renderDrafts(list, kvBound) {
+    if (!draftList) return;
     if (!kvBound) {
       draftList.innerHTML = '<p style="font-size:11px;color:var(--danger);">未绑定 DRAFTS_KV，草稿功能不可用。请在 Cloudflare Pages 项目设置里绑定 KV 命名空间。</p>';
       return;
@@ -274,7 +335,7 @@
         var q = del.split("|");
         if (!window.confirm("确定删除这份草稿？此操作不可撤销。")) return;
         api("/drafts/" + encodeURIComponent(q[0]) + "/" + encodeURIComponent(q[1]), { method: "DELETE" })
-          .then(function () { showToast("草稿已删除", "success"); loadDrafts(); })
+          .then(function () { showToast("草稿已删除", "success"); removeDraftLocal(q[0], q[1]); loadDrafts(); })
           .catch(function (err) { showToast(err.message, "error"); });
       }
     });
@@ -703,6 +764,7 @@
     btn.textContent = "提交中…";
     publishStatus.textContent = "";
     clearTimeout(autosaveTimer);
+    var draftIdAtSubmit = currentDraftId;   // 提交前的草稿 key（发布成功后要本地清掉）
 
     api("/articles", { method: "POST", body: payload })
       .then(function (data) {
@@ -713,6 +775,10 @@
           setAutosaveState("ok", "✓ 草稿已保存" + (editSlug.value ? "（线上仍是旧版）" : ""));
           publishStatus.textContent = "✔ " + data.message;
           showToast(data.message, "success");
+          // 乐观更新草稿箱（KV list() 有最终一致性延迟）
+          var dp = draftPayload("article");
+          dp.id = currentDraftId;
+          upsertDraftLocal(data, dp);
           loadDrafts();
           return;
         }
@@ -720,7 +786,10 @@
         publishStatus.textContent = "✔ " + data.message;
         setAutosaveState("ok", "✓ 已发布");
         showToast(data.message, "success");
+        if (draftIdAtSubmit) removeDraftLocal("article", draftIdAtSubmit);
         if (data.slug) {
+          // 提交成功后才真的删草稿（失败时后端会保留），本地也跟着清
+          removeDraftLocal("article", data.slug);
           editSlug.value = data.slug;
           currentDraftId = data.slug;
           updatePreviewBtnVisibility();

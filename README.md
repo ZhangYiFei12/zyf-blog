@@ -144,6 +144,21 @@ GFM 脚注、参考式链接 `[text][ref]`、缩进式代码块（4 空格）、
 > 绑定缺失时，后台「草稿箱」会直接提示需要绑定 `DRAFTS_KV`，
 > 存草稿接口返回 `KV_NOT_BOUND` 与可操作的错误说明，不会静默失败。
 
+#### 已实测的行为差异（重要）
+
+| 操作 | 一致性 |
+| --- | --- |
+| 单键 `get` | **立即一致**（写入后马上能读到） |
+| `list()` | **最终一致**，新写入的 key 实测约 **10~30 秒**后才出现在列表里 |
+
+后果：如果自动保存后直接用服务端列表重绘草稿箱，**刚保存的草稿会在界面上“消失”十几秒**。
+因此前端在 `js/admin.js` 里维护了一份本地权威视图（`draftsCache`）：
+保存成功后立即本地插入并重绘，服务端列表只用来**合并**（而非覆盖）；
+删除时记下时间戳（`draftsDeleted`），在 60 秒内屏蔽 `list()` 返回的过期残留，
+避免已删草稿被旧数据带回来。
+
+> 这也意味着：草稿箱列表偶尔比 KV 实际内容略滞后是正常现象，刷新页面即可。
+
 本地调试：把 KV 的 id 写进 `wrangler.toml` 后运行 `npx wrangler pages dev`；
 不想配本地 KV 也没关系，`node tools/test-admin.mjs` 内置了内存 KV mock，能完整跑通草稿逻辑。
 
@@ -566,7 +581,7 @@ node tools/md2html.mjs -w           # 监听模式，保存自动重新生成
 node tools/dev-server.mjs &          # 前端测试需要
 node tools/check-integrity.mjs       # 资源完整性（死链/孤儿图）
 node tools/test-admin.mjs            # 后台 API（61 项）
-node tools/test-frontend.mjs         # 前端（66 项）
+node tools/test-frontend.mjs         # 前端（68 项）
 node tools/gen-pages.mjs             # 重建派生页面
 ```
 

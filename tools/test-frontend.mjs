@@ -639,7 +639,32 @@ await test("维护：admin.js 资源版本已递增", () => {
   const html = rd("admin.html");
   const m = html.match(/admin\.js\?v=(\d+)/);
   assert(m, "未找到 admin.js 版本号");
-  assert(Number(m[1]) >= 20, "admin.js 变更后必须递增版本号，当前 v" + m[1]);
+  assert(Number(m[1]) >= 21, "admin.js 变更后必须递增版本号，当前 v" + m[1]);
+});
+
+await test("草稿箱兼容 KV list() 的最终一致性延迟", () => {
+  const js = rd("js/admin.js");
+  // 实测：KV 单键 get 立即一致，list() 新键约 10~30 秒后才出现。
+  // 若直接用服务端列表覆盖界面，刚自动保存的草稿会在草稿箱里“消失”一会。
+  assert(/draftsCache/.test(js), "缺本地权威视图 draftsCache");
+  assert(/function upsertDraftLocal/.test(js), "缺本地乐观插入");
+  assert(/function removeDraftLocal/.test(js), "缺本地乐观删除");
+  assert(/draftsDeleted/.test(js), "缺删除后的过期 list 屏蔽（否则已删草稿会被旧数据带回来）");
+  // 自动保存后必须立即本地插入，而不是只等 loadDrafts
+  const auto = js.slice(js.indexOf("function autosaveDraft"), js.indexOf("function autosaveDraft") + 1200);
+  assert(/upsertDraftLocal/.test(auto), "autosaveDraft 应在保存成功后立即本地插入");
+  // loadDrafts 应为合并语义而非直接覆盖
+  const load = js.slice(js.indexOf("function loadDrafts"), js.indexOf("function loadDrafts") + 1600);
+  assert(/seen\[draftKeyOf\(d\)\]/.test(load) || /!seen\[/.test(load), "loadDrafts 应为合并而非覆盖");
+});
+
+await test("后端草稿列表不依赖强一致（单键可读即算成功）", () => {
+  const api = rd("functions/api/admin.js");
+  assert(/async function listDrafts/.test(api), "缺 listDrafts");
+  assert(/list_complete/.test(api), "listDrafts 应分页遍历（未处理 list_complete 会漏草稿）");
+  // 单键读取必须存在，供前端在 list 未同步时也能恢复
+  assert(/async function getDraft/.test(api), "缺 getDraft");
+  assert(/rest\.length === 3 && rest\[0\] === "drafts"/.test(api), "缺单草稿读取路由");
 });
 
 await test("SW 对图片是缓存优先，因此必须靠 URL 版本号破缓存", () => {
