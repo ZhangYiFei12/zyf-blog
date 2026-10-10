@@ -91,12 +91,6 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://zyf2026.pages.dev/kb/%E7%89%A9%E8%B4%A8%E7%A9%BF%E8%86%9C%E5%B1%82%E6%95%B0%E7%9A%84%E8%AE%A1%E7%AE%97%E6%96%B9%E6%B3%95</loc>
-    <lastmod>2026-10-10</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  <url>
     <loc>https://zyf2026.pages.dev/kb/vivo%E6%89%8B%E6%9C%BA%E5%9E%8B%E5%8F%B7%E9%85%8D%E7%BD%AE%E5%A4%A7%E5%85%A8</loc>
     <lastmod>2026-10-10</lastmod>
     <changefreq>monthly</changefreq>
@@ -109,13 +103,19 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://zyf2026.pages.dev/kb/%E8%8D%A3%E8%80%80%E6%89%8B%E6%9C%BA%E5%9E%8B%E5%8F%B7%E9%85%8D%E7%BD%AE%E5%A4%A7%E5%85%A8</loc>
+    <loc>https://zyf2026.pages.dev/kb/%E5%B0%8F%E7%B1%B3%E6%89%8B%E6%9C%BA%E5%9E%8B%E5%8F%B7%E9%85%8D%E7%BD%AE%E5%A4%A7%E5%85%A8</loc>
     <lastmod>2026-10-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://zyf2026.pages.dev/kb/%E5%B0%8F%E7%B1%B3%E6%89%8B%E6%9C%BA%E5%9E%8B%E5%8F%B7%E9%85%8D%E7%BD%AE%E5%A4%A7%E5%85%A8</loc>
+    <loc>https://zyf2026.pages.dev/kb/%E7%89%A9%E8%B4%A8%E7%A9%BF%E8%86%9C%E5%B1%82%E6%95%B0%E7%9A%84%E8%AE%A1%E7%AE%97%E6%96%B9%E6%B3%95</loc>
+    <lastmod>2026-10-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://zyf2026.pages.dev/kb/%E8%8D%A3%E8%80%80%E6%89%8B%E6%9C%BA%E5%9E%8B%E5%8F%B7%E9%85%8D%E7%BD%AE%E5%A4%A7%E5%85%A8</loc>
     <lastmod>2026-10-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
