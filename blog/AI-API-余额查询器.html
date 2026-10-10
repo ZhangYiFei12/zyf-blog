@@ -6,7 +6,7 @@
   <title>AI API 余额查询器 | ZH</title>
   <meta name="description" content="AI API 余额查询器" />
   <link rel="canonical" href="https://zyf2026.pages.dev/blog/AI-API-余额查询器" />
-  <link rel="stylesheet" href="../css/style.css?v=27" />
+  <link rel="stylesheet" href="../css/style.css?v=30" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
   <link rel="manifest" href="../manifest.json" />
   <meta name="theme-color" content="#0a0e14" />
@@ -63,12 +63,12 @@
       </header>
 
       <div class="article-body">
-<h1 id="-ai-api-余额查询器">⚡ AI API 余额查询器<a class="h-anchor" href="#-ai-api-余额查询器" aria-label="本节链接">#</a></h1>
+<h1 id="-ai-api-余额查询器"><span class="h-text">⚡ AI API 余额查询器</span><a class="h-anchor" href="#-ai-api-余额查询器" aria-label="本节链接">#</a></h1>
 
 <p>一个本地运行的 <strong>Electron 桌面应用</strong>，用于查询主流 AI 大模型平台的 <strong>API 用量与剩余余额/额度</strong>。<br />
 支持多账号管理，API Key 使用 Windows 系统级加密（DPAPI / safeStorage）保存在本机，绝不上传。</p>
 
-<h2 id="-功能特点">✨ 功能特点<a class="h-anchor" href="#-功能特点" aria-label="本节链接">#</a></h2>
+<h2 id="-功能特点"><span class="h-text">✨ 功能特点</span><a class="h-anchor" href="#-功能特点" aria-label="本节链接">#</a></h2>
 
 <ul>
   <li>🖥️ <strong>桌面应用</strong>：独立窗口，双击即用（支持打包为安装包）</li>
@@ -124,15 +124,15 @@
   <li>⏱️ 查询带 30 秒超时保护，单个账号失败不影响其他账号</li>
 </ul>
 
-<h2 id="-快速开始">🚀 快速开始<a class="h-anchor" href="#-快速开始" aria-label="本节链接">#</a></h2>
+<h2 id="-快速开始"><span class="h-text">🚀 快速开始</span><a class="h-anchor" href="#-快速开始" aria-label="本节链接">#</a></h2>
 
-<h3 id="方式一：源码运行（开发模式）">方式一：源码运行（开发模式）<a class="h-anchor" href="#方式一：源码运行（开发模式）" aria-label="本节链接">#</a></h3>
+<h3 id="方式一：源码运行（开发模式）"><span class="h-text">方式一：源码运行（开发模式）</span><a class="h-anchor" href="#方式一：源码运行（开发模式）" aria-label="本节链接">#</a></h3>
 
 <pre><code class="language-bash"># 需要 Node.js 16+ 与 npm
 npm install          # 安装依赖（国内可加 --registry=https://registry.npmmirror.com）
 npm start            # 启动应用</code></pre>
 
-<h3 id="方式二：打包安装包">方式二：打包安装包<a class="h-anchor" href="#方式二：打包安装包" aria-label="本节链接">#</a></h3>
+<h3 id="方式二：打包安装包"><span class="h-text">方式二：打包安装包</span><a class="h-anchor" href="#方式二：打包安装包" aria-label="本节链接">#</a></h3>
 
 <pre><code class="language-bash">npm run pack         # 生成免安装目录 dist/win-unpacked/
 npm run dist         # 生成 NSIS 安装程序（dist/*.exe）</code></pre>
@@ -143,7 +143,7 @@ npm run dist         # 生成 NSIS 安装程序（dist/*.exe）</code></pre>
 $env:ELECTRON_BUILDER_BINARIES_MIRROR='https://npmmirror.com/mirrors/electron-builder-binaries/'
 npm run dist</code></pre>
 
-<h2 id="-各平台-key-获取方式">🔑 各平台 Key 获取方式<a class="h-anchor" href="#-各平台-key-获取方式" aria-label="本节链接">#</a></h2>
+<h2 id="-各平台-key-获取方式"><span class="h-text">🔑 各平台 Key 获取方式</span><a class="h-anchor" href="#-各平台-key-获取方式" aria-label="本节链接">#</a></h2>
 
 <div class="table-wrap">
 <table>
@@ -161,11 +161,11 @@ npm run dist</code></pre>
 </table>
 </div>
 
-<h2 id="-自定义平台">➕ 自定义平台<a class="h-anchor" href="#-自定义平台" aria-label="本节链接">#</a></h2>
+<h2 id="-自定义平台"><span class="h-text">➕ 自定义平台</span><a class="h-anchor" href="#-自定义平台" aria-label="本节链接">#</a></h2>
 
 <p>点击顶部「⚙️ 自定义平台」→「＋ 新增自定义平台」即可接入任意 API 服务：</p>
 
-<h3 id="模式一：openai-兼容（推荐）">模式一：OpenAI 兼容（推荐）<a class="h-anchor" href="#模式一：openai-兼容（推荐）" aria-label="本节链接">#</a></h3>
+<h3 id="模式一：openai-兼容（推荐）"><span class="h-text">模式一：OpenAI 兼容（推荐）</span><a class="h-anchor" href="#模式一：openai-兼容（推荐）" aria-label="本节链接">#</a></h3>
 
 <p>适用于 new-api、one-api、FastGPT 中转等一切实现了 OpenAI 计费接口（<code>/dashboard/billing/subscription</code> 与 <code>/usage</code>）的服务。<br />
 只需填写：</p>
@@ -176,7 +176,7 @@ npm run dist</code></pre>
   <li>添加账号时填写该服务的 API Key</li>
 </ul>
 
-<h3 id="模式二：完全自定义-rest">模式二：完全自定义 REST<a class="h-anchor" href="#模式二：完全自定义-rest" aria-label="本节链接">#</a></h3>
+<h3 id="模式二：完全自定义-rest"><span class="h-text">模式二：完全自定义 REST</span><a class="h-anchor" href="#模式二：完全自定义-rest" aria-label="本节链接">#</a></h3>
 
 <p>适用于有独立余额/用量查询接口的服务，可配置：</p>
 
@@ -200,12 +200,12 @@ npm run dist</code></pre>
 添加账号时填写的 Key 会按所选认证方式自动附加到请求头。<br />
 删除自定义平台时，其下所有账号会一并删除。</blockquote>
 
-<h2 id="-网页登录方式（查看官网余额用量）">🔐 网页登录方式（查看官网余额/用量）<a class="h-anchor" href="#-网页登录方式（查看官网余额用量）" aria-label="本节链接">#</a></h2>
+<h2 id="-网页登录方式（查看官网余额用量）"><span class="h-text">🔐 网页登录方式（查看官网余额/用量）</span><a class="h-anchor" href="#-网页登录方式（查看官网余额用量）" aria-label="本节链接">#</a></h2>
 
 <p>部分平台官方 API 不提供用量/余额接口（DeepSeek 用量、硅基流动、智谱等），<br />
 可通过「网页登录」方式接入：添加账号时选择接入方式为<strong>网页登录</strong>。</p>
 
-<h3 id="deepseek（支持自动登录）">DeepSeek（支持自动登录）<a class="h-anchor" href="#deepseek（支持自动登录）" aria-label="本节链接">#</a></h3>
+<h3 id="deepseek（支持自动登录）"><span class="h-text">DeepSeek（支持自动登录）</span><a class="h-anchor" href="#deepseek（支持自动登录）" aria-label="本节链接">#</a></h3>
 
 <ul>
   <li><strong>自动登录</strong>：填写官网邮箱 + 密码，应用调用官方登录接口获取会话，自动查询<strong>余额</strong>（get_user_summary）、<strong>本月用量</strong>（usage/amount）与<strong>本月消费</strong>（usage/cost）</li>
@@ -213,7 +213,7 @@ npm run dist</code></pre>
   <li>Cookie 兜底：粘贴 Cookie，应用自动尝试从中解析 userToken</li>
 </ul>
 
-<h3 id="其他平台（通用网页抓取）">其他平台（通用网页抓取）<a class="h-anchor" href="#其他平台（通用网页抓取）" aria-label="本节链接">#</a></h3>
+<h3 id="其他平台（通用网页抓取）"><span class="h-text">其他平台（通用网页抓取）</span><a class="h-anchor" href="#其他平台（通用网页抓取）" aria-label="本节链接">#</a></h3>
 
 <p>OpenAI / Anthropic / 阿里云百炼 / 智谱 / 硅基流动均因<strong>登录风控、二步验证或接口非公开</strong>无法自动登录。<br />
 页面提供「高级选项」：粘贴 Cookie/Token 后自行配置<strong>数据接口 URL + JSON 路径</strong>（在浏览器开发者工具 Network 面板抓取控制台接口）。<br />
@@ -222,7 +222,7 @@ npm run dist</code></pre>
 <blockquote>⚠️ 网页数据接口为各平台私有接口，可能随官方改版失效，失效时请以官网控制台为准。<br />
 网页登录凭证（邮箱/密码/Cookie/Token）与 API Key 一样使用系统加密存储，仅保存在本机。</blockquote>
 
-<h2 id="-悬浮小窗">🪟 悬浮小窗<a class="h-anchor" href="#-悬浮小窗" aria-label="本节链接">#</a></h2>
+<h2 id="-悬浮小窗"><span class="h-text">🪟 悬浮小窗</span><a class="h-anchor" href="#-悬浮小窗" aria-label="本节链接">#</a></h2>
 
 <p>顶栏「🪟 悬浮窗」按钮或设置中可开启。悬浮小窗始终置顶在屏幕最前方，显示所有账号的余额摘要：</p>
 
@@ -234,11 +234,11 @@ npm run dist</code></pre>
   <li>右键托盘图标也可显示/隐藏悬浮窗</li>
 </ul>
 
-<h2 id="⏱-实时更新（自动刷新）">⏱️ 实时更新（自动刷新）<a class="h-anchor" href="#⏱-实时更新（自动刷新）" aria-label="本节链接">#</a></h2>
+<h2 id="⏱-实时更新（自动刷新）"><span class="h-text">⏱️ 实时更新（自动刷新）</span><a class="h-anchor" href="#⏱-实时更新（自动刷新）" aria-label="本节链接">#</a></h2>
 
 <p>在设置中开启后，应用会按设定间隔（30 秒 / 1 分钟 / 5 分钟 / 10 分钟 / 30 分钟）自动查询所有账号余额，主窗口与悬浮窗同步更新数据。主窗口账号列表右上角会显示上次刷新时间。</p>
 
-<h2 id="-系统托盘">📥 系统托盘<a class="h-anchor" href="#-系统托盘" aria-label="本节链接">#</a></h2>
+<h2 id="-系统托盘"><span class="h-text">📥 系统托盘</span><a class="h-anchor" href="#-系统托盘" aria-label="本节链接">#</a></h2>
 
 <p>应用启动后会在系统托盘（右下角任务栏通知区域）显示图标。右键图标可：显示主窗口、显示/隐藏悬浮窗、立即刷新、退出。</p>
 
@@ -249,7 +249,7 @@ npm run dist</code></pre>
   <li><strong>关闭按钮 = 最小化到托盘</strong>：点窗口右上角 ✕ 时最小化到托盘而不退出（要退出请用托盘菜单的「退出」）</li>
 </ul>
 
-<h2 id="-外观与背景">🎨 外观与背景<a class="h-anchor" href="#-外观与背景" aria-label="本节链接">#</a></h2>
+<h2 id="-外观与背景"><span class="h-text">🎨 外观与背景</span><a class="h-anchor" href="#-外观与背景" aria-label="本节链接">#</a></h2>
 
 <p>顶栏「⚙️ 设置 → 背景」：</p>
 
@@ -259,12 +259,12 @@ npm run dist</code></pre>
   <li>设置保存在 <code>%APPDATA%\ai-api-balance-monitor\config.json</code> 的 <code>settings</code> 中，重启后保持</li>
 </ul>
 
-<h2 id="-充值">💰 充值<a class="h-anchor" href="#-充值" aria-label="本节链接">#</a></h2>
+<h2 id="-充值"><span class="h-text">💰 充值</span><a class="h-anchor" href="#-充值" aria-label="本节链接">#</a></h2>
 
 <p>每个账号卡片上的「💰 充值」按钮会打开系统浏览器跳转到该平台官网充值/计费页面<br />
 （DeepSeek 充值页、OpenAI 计费、Anthropic Billing、阿里云资金管理、智谱账户中心、硅基流动计费，均已在入口内置并验证可用）。</p>
 
-<h2 id="-数据存储位置">📁 数据存储位置<a class="h-anchor" href="#-数据存储位置" aria-label="本节链接">#</a></h2>
+<h2 id="-数据存储位置"><span class="h-text">📁 数据存储位置</span><a class="h-anchor" href="#-数据存储位置" aria-label="本节链接">#</a></h2>
 
 <p>账号与密钥保存在 Electron <code>userData</code> 目录下的 <code>config.json</code>：</p>
 
@@ -277,7 +277,7 @@ npm run dist</code></pre>
 
 <p>删除账号时会从配置文件中彻底移除。</p>
 
-<h2 id="-常见问题">❓ 常见问题<a class="h-anchor" href="#-常见问题" aria-label="本节链接">#</a></h2>
+<h2 id="-常见问题"><span class="h-text">❓ 常见问题</span><a class="h-anchor" href="#-常见问题" aria-label="本节链接">#</a></h2>
 
 <p><strong>查询显示 401 / Authentication Fails</strong><br />
 → API Key 无效或已过期，请到对应平台控制台检查。</p>
@@ -297,7 +297,7 @@ npm run dist</code></pre>
 <p><strong>首次启动提示"系统无加密能力"</strong><br />
 → Windows 上不会出现；如出现说明 safeStorage 不可用，密钥将以编码形式存储，请谨慎保管本机文件。</p>
 
-<h2 id="-技术架构">🏗️ 技术架构<a class="h-anchor" href="#-技术架构" aria-label="本节链接">#</a></h2>
+<h2 id="-技术架构"><span class="h-text">🏗️ 技术架构</span><a class="h-anchor" href="#-技术架构" aria-label="本节链接">#</a></h2>
 
 <pre><code>src/
 ├── main.js               # Electron 主进程：窗口 + IPC + 外部链接守卫
@@ -320,7 +320,7 @@ npm run dist</code></pre>
 <p><strong>安全设计</strong>：渲染进程与主进程完全隔离（<code>contextIsolation: true</code>、<code>nodeIntegration: false</code>），<br />
 所有外链强制交给系统浏览器打开；API Key 明文永不进入渲染进程。</p>
 
-<h2 id="-测试">📄 测试<a class="h-anchor" href="#-测试" aria-label="本节链接">#</a></h2>
+<h2 id="-测试"><span class="h-text">📄 测试</span><a class="h-anchor" href="#-测试" aria-label="本节链接">#</a></h2>
 
 <pre><code class="language-bash">node tools/smoke.js      # Provider 冒烟测试（平台注册/签名/接口错误处理）
 node tools/test-custom.js # 自定义平台单元测试（JSON 路径解析/配置构建/异常分支）
@@ -330,7 +330,7 @@ node tools/test-history.js # 历史记录模块测试（数值解析/存储/超�
 node_modules\.bin\electron.cmd tools\gui-check.js   # GUI 渲染诊断（含内置教程加载验证）
 node_modules\.bin\electron.cmd tools\e2e.js         # 端到端流程测试（独立临时配置目录）</code></pre>
 
-<h2 id="-免责声明">⚠️ 免责声明<a class="h-anchor" href="#-免责声明" aria-label="本节链接">#</a></h2>
+<h2 id="-免责声明"><span class="h-text">⚠️ 免责声明</span><a class="h-anchor" href="#-免责声明" aria-label="本节链接">#</a></h2>
 
 <p>本项目为个人工具，与上述各平台无官方关联。各平台接口可能随官方调整而变化，<br />
 查询结果请以各平台官网控制台数据为准。</p>
@@ -363,6 +363,6 @@ node_modules\.bin\electron.cmd tools\e2e.js         # 端到端流程测试（�
   </footer>
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
-  <script src="../js/main.js?v=23"></script>
+  <script src="../js/main.js?v=25"></script>
 </body>
 </html>

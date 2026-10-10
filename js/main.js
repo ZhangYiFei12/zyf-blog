@@ -227,6 +227,38 @@
     updateBackTop();
   }
 
+  /* ---- 表格：标记「可横向滚动」，给出左右边缘光影提示 ----
+     纯粹是锦上添花：没脚本时表格依旧可用（只是看不到光影）。
+     宽表（如知识库的 4 列考点表）在手机上必须横向滑动才看得全，
+     有提示才不至于让人以为内容被截断了。
+
+     实现注意：光影不能画在 .table-wrap 自身上 ——
+     inset box-shadow 属于背景层，会被不透明的表格单元格盖掉；
+     所以在外面包一层定位容器，伪元素画在滚动容器之外。 */
+  (function () {
+    var wraps = document.querySelectorAll(".article-body .table-wrap");
+    if (!wraps.length) return;
+
+    function sync(box, wrap) {
+      var scrollable = wrap.scrollWidth - wrap.clientWidth > 2;
+      box.classList.toggle("is-scrollable", scrollable);
+      box.classList.toggle("at-start", wrap.scrollLeft <= 2);
+      box.classList.toggle("at-end", wrap.scrollLeft + wrap.clientWidth >= wrap.scrollWidth - 2);
+    }
+
+    wraps.forEach(function (wrap) {
+      var box = document.createElement("div");
+      box.className = "table-scroll";
+      wrap.parentNode.insertBefore(box, wrap);
+      box.appendChild(wrap);
+      sync(box, wrap);
+      wrap.addEventListener("scroll", function () { sync(box, wrap); }, { passive: true });
+      window.addEventListener("resize", function () { sync(box, wrap); });
+      // 图片/字体加载完可能改变列宽，重算一次
+      window.addEventListener("load", function () { sync(box, wrap); });
+    });
+  })();
+
   /* ---- 复制代码按钮 ---- */
   function fallbackCopy(text) {
     var ta = document.createElement("textarea");

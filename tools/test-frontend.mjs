@@ -679,6 +679,89 @@ await test("SW 对图片是缓存优先，因此必须靠 URL 版本号破缓存
   assert(/target\.thumbUrl = versionedUrl\(/.test(api), "重新压缩后应给缩略图 URL 打版本号");
 });
 
+/* ============ H. 表格布局（知识库宽表 / 窄屏可用） ============ */
+console.log("");
+console.log("[H] 表格布局");
+
+await test("表格主题化样式齐备（深浅色两套）", () => {
+  const css = rd("css/style.css").replace(/\r\n/g, "\n");
+  // 专表专用变量：深色定义 + 浅色覆盖
+  for (const v of ["--table-head-bg", "--table-row-bg", "--table-row-alt", "--table-row-hover", "--table-edge"]) {
+    assert((css.match(new RegExp(v, "g")) || []).length >= 2, v + " 应同时有深色与浅色定义");
+  }
+  assert(/:root \{[^}]*--table-head-bg: #0e141f/.test(css), "缺深色表格变量");
+  assert(/\[data-theme="light"\] \{[^}]*--table-head-bg: #eef2f7/.test(css), "缺浅色表格变量");
+  // 底色必须不透明，否则粘滞列会透出背后滚动的内容
+  assert(!/--table-row-bg: rgba/.test(css), "行底色不能用半透明色（粘滞列会漏光）");
+});
+
+await test("宽表不再被压成一字一行（单元格有最小宽度）", () => {
+  const css = rd("css/style.css").replace(/\r\n/g, "\n");
+  // table-layout:auto 在窄容器里会把列压到 min-content，中文可任意断行
+  // → 会出现「库/仑/定/律」竖排。必须给单元格定下限。
+  assert(/\.article-body \.table-wrap th,\s*\n\.article-body \.table-wrap td \{\s*\n\s*min-width: 6\.5em/.test(css), "缺单元格最小宽度");
+  assert(/@media \(max-width: 640px\)[\s\S]{0,400}min-width: 5\.5em/.test(css), "窄屏应下调最小宽度");
+  assert(/td:first-child \{[\s\S]{0,200}min-width: 8em/.test(css), "首列作为行标识应给更宽的底");
+});
+
+await test("首列粘滞 + 可横向滚动", () => {
+  const css = rd("css/style.css").replace(/\r\n/g, "\n");
+  assert(/td:first-child \{[\s\S]{0,300}position: sticky;\s*\n\s*left: 0/.test(css), "首列应粘滞");
+  assert(/table \{[\s\S]{0,300}border-collapse: separate/.test(css), "必须用 separate（collapse 会让粘滞列边框错位）");
+  assert(/overflow-x: auto/.test(css), "外层应可横向滚动");
+});
+
+await test("滚动光影画在滚动容器之外（否则被单元格盖住）", () => {
+  const css = rd("css/style.css").replace(/\r\n/g, "\n");
+  // inset box-shadow 属背景层，会被不透明的表格单元格盖掉
+  assert(/\.table-scroll \{ position: relative/.test(css), "缺 .table-scroll 定位容器");
+  assert(/\.table-scroll\.is-scrollable::after \{[\s\S]{0,200}position: absolute/.test(css), "光影应用绝对定位伪元素");
+  assert(!/\.table-wrap\.is-scrollable\b/.test(css), "不应把光影画在 .table-wrap 上（会被盖住）");
+  const js = rd("js/main.js");
+  assert(/table-scroll/.test(js), "main.js 应负责包装容器");
+  assert(/at-start/.test(js) && /at-end/.test(js), "应跟踪滚动两端状态");
+});
+
+await test("打印时拍平表格（可横向滚动的内容在纸上会丢）", () => {
+  const css = rd("css/style.css");
+  const printBlock = css.slice(css.lastIndexOf("@media print"));
+  assert(/table-wrap \{[^}]*overflow: visible !important/.test(printBlock), "打印时必须取消滚动容器");
+  assert(/thead th \{[^}]*position: static !important/.test(printBlock), "打印时粘滞表头无意义");
+  assert(/border-collapse: collapse !important/.test(printBlock), "打印时恢复边框合并");
+});
+
+await test("标题渐变移到了 .h-text（否则锚点 # 永远可见）", () => {
+  // background-clip:text 会把锚点 # 的字形也裁进标题背景，
+  // 而背景属于标题不属于锚点 → 锚点的 opacity:0 失效
+  const css = rd("css/style.css").replace(/\r\n/g, "\n");
+  const h2 = (css.match(/\.article-body h2 \{[^}]*\}/) || [""])[0];
+  assert(h2 && !/background-clip: text/.test(h2), "h2 自身不应再带 background-clip:text");
+  assert(/\.article-body h2 > \.h-text \{[\s\S]{0,200}background-clip: text/.test(css), "渐变应移到 .h-text");
+  const core = rd("tools/md2html-core.mjs");
+  assert(/<span class="h-text">/.test(core), "渲染器应输出 .h-text 包裹层");
+  const page = rd("kb/人教版物理必修三_知识点与考点整理.html");
+  assert(/<h2 id="[^"]*"><span class="h-text">/.test(page), "产物应含 .h-text 结构");
+  assert((page.match(/class="h-text"/g) || []).length === (page.match(/class="h-anchor"/g) || []).length,
+    "h-text 与 h-anchor 数量应一致（每个标题各一个）");
+  // 打印白底规则要覆盖 .h-text，否则打印出来标题是空白
+  assert(/\.article-body h2 > \.h-text \{[\s\S]{0,260}-webkit-text-fill-color: #000/.test(css), "打印应把 .h-text 拍成黑字");
+});
+
+await test("知识库真实表格结构完好", () => {
+  const kb = readdirSync(join(ROOT, "kb")).filter(f => f.endsWith(".html"));
+  assert(kb.length > 0, "知识库下应有文档页");
+  let tables = 0;
+  for (const f of kb) {
+    const h = rd("kb/" + f);
+    const wraps = (h.match(/class="table-wrap"/g) || []).length;
+    tables += wraps;
+    // 每个 table-wrap 都应有配对的 thead/tbody
+    assert((h.match(/<table>/g) || []).length === wraps, f + " table 与 table-wrap 数量不一致");
+    assert((h.match(/<thead>/g) || []).length === wraps, f + " 缺 thead");
+  }
+  assert(tables >= 3, "知识库表格数异常：" + tables);
+});
+
 /* ---------- 结果 ---------- */
 console.log(`\n🎯 结果：${passed} 通过，${failed} 失败，共 ${passed + failed} 项`);
 if (failed > 0) process.exit(1);

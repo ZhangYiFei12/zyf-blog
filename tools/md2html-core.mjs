@@ -4,7 +4,7 @@
    ============================================================ */
 
 /* 静态资源版本：改 CSS/JS 后同步递增（资源走 immutable 缓存） */
-export const ASSET_VER = { css: "27", js: "23" };
+export const ASSET_VER = { css: "30", js: "25" };
 
 /* ---------- Front Matter 解析 ---------- */
 export function parseFrontMatter(raw) {
@@ -343,7 +343,11 @@ export function parseBody(md) {
   function headingHtml(level, rawText) {
     const text = String(rawText).trim();
     const id = uniqueId(headingSlug(text));
-    return `<h${level} id="${escapeAttr(id)}">${inline(text, { allowBreak: false })}`
+    // 标题文字包一层 .h-text：渐变色只加在这一层上。
+    // 若把 background-clip:text 加在 h1~h6 上，它的背景会被裁剪到包含
+    // 锚点 # 字形的所有文字，而背景属于标题不属于锚点，导致锚点的
+    // opacity:0 完全失效 —— # 会常年可见。
+    return `<h${level} id="${escapeAttr(id)}"><span class="h-text">${inline(text, { allowBreak: false })}</span>`
       + `<a class="h-anchor" href="#${escapeAttr(id)}" aria-label="本节链接">#</a></h${level}>`;
   }
 

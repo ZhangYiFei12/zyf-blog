@@ -6,7 +6,7 @@
   <title>课件整理工具 | ZH</title>
   <meta name="description" content="课件整理工具" />
   <link rel="canonical" href="https://zyf2026.pages.dev/blog/课件整理工具" />
-  <link rel="stylesheet" href="../css/style.css?v=27" />
+  <link rel="stylesheet" href="../css/style.css?v=30" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
   <link rel="manifest" href="../manifest.json" />
   <meta name="theme-color" content="#0a0e14" />
@@ -63,13 +63,13 @@
       </header>
 
       <div class="article-body">
-<h1 id="-课件整理助手">📚 课件整理助手<a class="h-anchor" href="#-课件整理助手" aria-label="本节链接">#</a></h1>
+<h1 id="-课件整理助手"><span class="h-text">📚 课件整理助手</span><a class="h-anchor" href="#-课件整理助手" aria-label="本节链接">#</a></h1>
 
 <p><strong>中文版</strong> | <a href="https://github.com/ZhangYiFei12/Courseware-Organization-Assistant/blob/main/README.en.md" target="_blank" rel="noopener noreferrer">English</a></p>
 
 <p>面向教师备课场景的 <strong>Windows 桌面课件管理软件</strong>。基于 <strong>Python 3.12 + PySide6 + SQLite FTS5</strong> 构建，支持全格式课件导入、全文检索、学科自动识别、标签分类、一键归档等完整工作流。</p>
 
-<h2 id="-功能一览">✨ 功能一览<a class="h-anchor" href="#-功能一览" aria-label="本节链接">#</a></h2>
+<h2 id="-功能一览"><span class="h-text">✨ 功能一览</span><a class="h-anchor" href="#-功能一览" aria-label="本节链接">#</a></h2>
 
 <div class="table-wrap">
 <table>
@@ -95,13 +95,13 @@
 </table>
 </div>
 
-<h2 id="-快速开始">🚀 快速开始<a class="h-anchor" href="#-快速开始" aria-label="本节链接">#</a></h2>
+<h2 id="-快速开始"><span class="h-text">🚀 快速开始</span><a class="h-anchor" href="#-快速开始" aria-label="本节链接">#</a></h2>
 
-<h3 id="直接使用（免安装）">直接使用（免安装）<a class="h-anchor" href="#直接使用（免安装）" aria-label="本节链接">#</a></h3>
+<h3 id="直接使用（免安装）"><span class="h-text">直接使用（免安装）</span><a class="h-anchor" href="#直接使用（免安装）" aria-label="本节链接">#</a></h3>
 
 <p>从 <a href="https://github.com/ZhangYiFei12/Courseware-Organization-Assistant/releases" target="_blank" rel="noopener noreferrer">Releases</a> 下载便携版（单文件 exe）或安装版，解压/安装后即可运行。</p>
 
-<h3 id="从源码运行">从源码运行<a class="h-anchor" href="#从源码运行" aria-label="本节链接">#</a></h3>
+<h3 id="从源码运行"><span class="h-text">从源码运行</span><a class="h-anchor" href="#从源码运行" aria-label="本节链接">#</a></h3>
 
 <pre><code class="language-bash"># 1. 安装依赖（Python 3.10+）
 pip install PySide6 python-pptx python-docx PyMuPDF Pillow pystray watchdog imageio-ffmpeg
@@ -109,12 +109,12 @@ pip install PySide6 python-pptx python-docx PyMuPDF Pillow pystray watchdog imag
 # 2. 运行
 python app.py</code></pre>
 
-<h2 id="-测试">🧪 测试<a class="h-anchor" href="#-测试" aria-label="本节链接">#</a></h2>
+<h2 id="-测试"><span class="h-text">🧪 测试</span><a class="h-anchor" href="#-测试" aria-label="本节链接">#</a></h2>
 
 <pre><code class="language-bash">python tests/smoke.py      # 核心链路冒烟测试
 python tests/ui_smoke.py   # UI 构建冒烟测试</code></pre>
 
-<h2 id="-打包发布">📦 打包发布<a class="h-anchor" href="#-打包发布" aria-label="本节链接">#</a></h2>
+<h2 id="-打包发布"><span class="h-text">📦 打包发布</span><a class="h-anchor" href="#-打包发布" aria-label="本节链接">#</a></h2>
 
 <pre><code class="language-bash"># 1. 打包单文件 exe（产物: dist\课件整理助手.exe）
 pip install pyinstaller
@@ -123,7 +123,7 @@ pyinstaller build.spec --noconfirm --clean
 # 2. 生成安装版（需安装 Inno Setup 6）
 ISCC.exe installer.iss    # 产物: 发布\课件整理助手安装版.exe</code></pre>
 
-<h2 id="-项目结构">📂 项目结构<a class="h-anchor" href="#-项目结构" aria-label="本节链接">#</a></h2>
+<h2 id="-项目结构"><span class="h-text">📂 项目结构</span><a class="h-anchor" href="#-项目结构" aria-label="本节链接">#</a></h2>
 
 <pre><code>courseware-manager/
 ├── app.py               # 程序入口
@@ -154,7 +154,7 @@ ISCC.exe installer.iss    # 产物: 发布\课件整理助手安装版.exe</code
 ├── preview/             # 界面预览截图
 └── release/             # 预编译发布物（便携版 + 安装版）</code></pre>
 
-<h2 id="-说明">📝 说明<a class="h-anchor" href="#-说明" aria-label="本节链接">#</a></h2>
+<h2 id="-说明"><span class="h-text">📝 说明</span><a class="h-anchor" href="#-说明" aria-label="本节链接">#</a></h2>
 
 <ul>
   <li>索引模式不会移动你的原文件；只有执行「归档」时才把文件移动到课件库目录。</li>
@@ -163,7 +163,7 @@ ISCC.exe installer.iss    # 产物: 发布\课件整理助手安装版.exe</code
   <li>用户数据保存在 <code>%APPDATA%\课件整理助手2\</code>，卸载安装版时会询问是否保留。</li>
 </ul>
 
-<h2 id="-许可证">📄 许可证<a class="h-anchor" href="#-许可证" aria-label="本节链接">#</a></h2>
+<h2 id="-许可证"><span class="h-text">📄 许可证</span><a class="h-anchor" href="#-许可证" aria-label="本节链接">#</a></h2>
 
 <p><a href="https://github.com/ZhangYiFei12/Courseware-Organization-Assistant/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a></p>
       </div>
@@ -195,6 +195,6 @@ ISCC.exe installer.iss    # 产物: 发布\课件整理助手安装版.exe</code
   </footer>
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
-  <script src="../js/main.js?v=23"></script>
+  <script src="../js/main.js?v=25"></script>
 </body>
 </html>

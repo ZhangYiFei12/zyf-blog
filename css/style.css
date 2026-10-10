@@ -1084,13 +1084,19 @@ body::after {
 
 .article-body h2 {
   font-size: 21px;
+  margin: 36px 0 16px;
+  font-weight: 800;
+  display: inline-block;
+}
+
+/* 渐变色只加在 .h-text 上（不能加在 h2 上）：
+   background-clip:text 会把锚点 # 的字形也裁进背景里，
+   而背景属于 h2 不属于锚点 → 锚点的 opacity:0 会失效，# 常年可见。 */
+.article-body h2 > .h-text {
   background: var(--grad-cyan-purple);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  margin: 36px 0 16px;
-  font-weight: 800;
-  display: inline-block;
 }
 
 .article-body h3 {
@@ -1240,17 +1246,153 @@ body::after {
 
 .article-body .h-anchor:hover { color: var(--accent); }
 
-/* 表格：窄屏可横向滚动，不撑破排版 */
+/* ============================================================
+   表格：深浅色主题 + 宽表横向滚动 + 长表易读
+   ------------------------------------------------------------
+   之前表格完全没有样式（浏览器默认），深色主题下几乎是白底黑字，
+   而且 4 列的长表在手机上必定顶死。这里一次性补齐：
+     · 主题化底色 / 分隔线 / 表头 / 斑马纹 / 悬停
+     · 首列粘滞：横向滚动时「考点」这类行标识始终可见
+     · 分隔线用 border 而非依赖 collapse，避免粘滞列边框错位
+     · 底色一律不透明，否则粘滞列会透出背后滚动的内容
+   属专表专用变量，就近定义，不动文件顶部的主题块。
+   ============================================================ */
+:root {
+  --table-head-bg: #0e141f;
+  --table-row-bg: #111826;
+  --table-row-alt: #151d2b;
+  --table-row-hover: #18222f;
+  --table-edge: rgba(34, 211, 238, 0.35);
+}
+
+[data-theme="light"] {
+  --table-head-bg: #eef2f7;
+  --table-row-bg: #ffffff;
+  --table-row-alt: #f7fafc;
+  --table-row-hover: #eef6f9;
+  --table-edge: rgba(14, 116, 144, 0.28);
+}
+
+/* 外层：卡片式容器，窄屏横向滚动 */
 .article-body .table-wrap {
-  margin: 20px 0;
+  margin: 22px 0;
   overflow-x: auto;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
 
 .article-body .table-wrap table {
   margin: 0;
   min-width: 100%;
+  /* 不能用 collapse：那会让粘滞列的边框随滚动而错位 */
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+/* 表头 */
+.article-body .table-wrap thead th {
+  padding: 11px 14px;
+  background: var(--table-head-bg);
+  color: var(--text);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 2px solid var(--accent-dim);
+}
+
+/* 单元格：多行内容顶部对齐，长表逐行阅读不错位 */
+.article-body .table-wrap tbody td {
+  padding: 10px 14px;
+  background: var(--table-row-bg);
+  color: var(--text);
+  vertical-align: top;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: break-word;
+}
+
+/* 最低可读宽度（关键）：
+   table-layout:auto 在窄容器里会把列压到 min-content ——
+   中文可以任意断行，于是列被压成“一个汉字宽”，出现「库/仑/定/律」
+   这种竖排。给单元格定一个下限后，表格改成横向溢出，
+   由 .table-wrap 提供横向滚动，配合首列粘滞就能正常读了。 */
+.article-body .table-wrap th,
+.article-body .table-wrap td {
+  min-width: 6.5em;
+}
+
+/* 最后一行不要多余的下分隔线（外框已有一根） */
+.article-body .table-wrap tbody tr:last-child td { border-bottom: none; }
+
+/* 斑马纹 + 悬停：提升长表逐行阅读的准确性 */
+.article-body .table-wrap tbody tr:nth-child(even) td { background: var(--table-row-alt); }
+.article-body .table-wrap tbody tr:hover td { background: var(--table-row-hover); }
+
+/* 首列粘滞：宽表横向滚动时行标识不丢失 */
+.article-body .table-wrap th:first-child,
+.article-body .table-wrap td:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  /* 首列是行标识（考点/序号/参数名），给宽一点让它尽量一行放下 */
+  min-width: 8em;
+  /* 用 inset 阴影画右侧分隔线：border 在粘滞元素上表现不一致 */
+  box-shadow: inset -1px 0 0 var(--border);
+}
+
+.article-body .table-wrap thead th:first-child { z-index: 3; }
+
+/* 可横向滚动时的边缘光影提示（main.js 会包一层 .table-scroll 并加类）
+   光影画在滚动容器之外的定位容器上：
+   inset box-shadow 属于背景层，直接画在 .table-wrap 上会被表格单元格盖住。 */
+.article-body .table-scroll { position: relative; }
+
+.article-body .table-scroll.is-scrollable::before,
+.article-body .table-scroll.is-scrollable::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  width: 22px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  z-index: 2;
+}
+
+.article-body .table-scroll.is-scrollable::before {
+  left: 1px;
+  border-radius: var(--radius) 0 0 var(--radius);
+  background: linear-gradient(to right, var(--table-edge), transparent);
+}
+
+.article-body .table-scroll.is-scrollable::after {
+  right: 1px;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  background: linear-gradient(to left, var(--table-edge), transparent);
+}
+
+.article-body .table-scroll.is-scrollable:not(.at-start)::before { opacity: 1; }
+.article-body .table-scroll.is-scrollable:not(.at-end)::after { opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .article-body .table-scroll.is-scrollable::before,
+  .article-body .table-scroll.is-scrollable::after { transition-duration: 0.01s !important; }
+}
+
+/* 窄屏：收紧内边距与字号，让 4 列表格少滚一点 */
+@media (max-width: 640px) {
+  .article-body .table-wrap table { font-size: 13px; line-height: 1.65; }
+  .article-body .table-wrap thead th { padding: 9px 11px; font-size: 12px; }
+  .article-body .table-wrap tbody td { padding: 9px 11px; }
+  /* 字号小了，下限也跟着调，避免过度横向滚动 */
+  .article-body .table-wrap th,
+  .article-body .table-wrap td { min-width: 5.5em; }
 }
 
 /* 居中 / 对齐块（Markdown 里的 <div align="center">） */
@@ -2202,6 +2344,13 @@ mark {
   .article-meta, .article-meta span { color: #444 !important; font-size: 9.5pt; }
 
   .article-body h2, .article-body h3 { color: #000 !important; background: none !important; -webkit-text-fill-color: #000 !important; }
+  .article-body h2 > .h-text {
+    background: none !important;
+    -webkit-background-clip: border-box !important;
+    background-clip: border-box !important;
+    -webkit-text-fill-color: #000 !important;
+    color: #000 !important;
+  }
   .article-body a { color: #000 !important; text-decoration: underline; }
 
   /* 标题锚点是纯交互元素，纸质版没有意义 */
@@ -2233,7 +2382,28 @@ mark {
   }
   .article-body blockquote::before { display: none !important; }
   .article-body img { max-width: 100% !important; box-shadow: none !important; border: 1px solid #ddd; }
-  .article-body table { border-collapse: collapse; }
+
+  /* 表格：纸质版要能看到完整表格 —— 去掉滚动容器与粘滞列，
+     并把屏幕上的深色底纹全部拍平为白底黑字 */
+  .article-body .table-wrap {
+    overflow: visible !important;
+    border: 1px solid #999 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  .article-body table { border-collapse: collapse !important; }
+  .article-body .table-wrap thead th {
+    position: static !important;
+    background: #eceff2 !important;
+    color: #000 !important;
+    border-bottom: 1px solid #999 !important;
+  }
+  .article-body .table-wrap tbody td {
+    position: static !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+  .article-body .table-wrap tbody tr:nth-child(even) td { background: #f7f7f7 !important; }
   .article-body th, .article-body td { border: 1px solid #999 !important; }
 
   /* 分页控制 */

@@ -6,7 +6,7 @@
   <title>MirrorSync 双向同步工具 | ZH</title>
   <meta name="description" content="MirrorSync 双向同步工具" />
   <link rel="canonical" href="https://zyf2026.pages.dev/blog/MirrorSync-双向同步工具" />
-  <link rel="stylesheet" href="../css/style.css?v=27" />
+  <link rel="stylesheet" href="../css/style.css?v=30" />
   <link rel="icon" type="image/png" href="../images/avatar.png" />
   <link rel="manifest" href="../manifest.json" />
   <meta name="theme-color" content="#0a0e14" />
@@ -64,7 +64,7 @@
 
       <div class="article-body">
 <div class="md-align-center">
-<h1 id="-mirrorsync-双向同步工具">🔄 MirrorSync 双向同步工具<a class="h-anchor" href="#-mirrorsync-双向同步工具" aria-label="本节链接">#</a></h1>
+<h1 id="-mirrorsync-双向同步工具"><span class="h-text">🔄 MirrorSync 双向同步工具</span><a class="h-anchor" href="#-mirrorsync-双向同步工具" aria-label="本节链接">#</a></h1>
 
 <p><strong>基于 .NET 6 (WPF) 的 Windows 双向文件同步软件</strong></p>
 
@@ -79,7 +79,7 @@
 
 <hr />
 
-<h2 id="-功能特性">✨ 功能特性<a class="h-anchor" href="#-功能特性" aria-label="本节链接">#</a></h2>
+<h2 id="-功能特性"><span class="h-text">✨ 功能特性</span><a class="h-anchor" href="#-功能特性" aria-label="本节链接">#</a></h2>
 
 <div class="table-wrap">
 <table>
@@ -104,9 +104,9 @@
 
 <hr />
 
-<h2 id="-快速开始">🚀 快速开始<a class="h-anchor" href="#-快速开始" aria-label="本节链接">#</a></h2>
+<h2 id="-快速开始"><span class="h-text">🚀 快速开始</span><a class="h-anchor" href="#-快速开始" aria-label="本节链接">#</a></h2>
 
-<h3 id="方式一：图形界面（日常使用）">方式一：图形界面（日常使用）<a class="h-anchor" href="#方式一：图形界面（日常使用）" aria-label="本节链接">#</a></h3>
+<h3 id="方式一：图形界面（日常使用）"><span class="h-text">方式一：图形界面（日常使用）</span><a class="h-anchor" href="#方式一：图形界面（日常使用）" aria-label="本节链接">#</a></h3>
 
 <ol>
   <li>从 <a href="https://github.com/ZhangYiFei12/MirrorSync/releases" target="_blank" rel="noopener noreferrer">Releases</a> 下载安装包并安装（自包含，无需安装 .NET）</li>
@@ -117,7 +117,7 @@
   <li>关闭窗口默认最小化到<strong>系统托盘</strong>，双击托盘图标恢复</li>
 </ol>
 
-<h3 id="方式二：命令行（自动化批量）">方式二：命令行（自动化/批量）<a class="h-anchor" href="#方式二：命令行（自动化批量）" aria-label="本节链接">#</a></h3>
+<h3 id="方式二：命令行（自动化批量）"><span class="h-text">方式二：命令行（自动化/批量）</span><a class="h-anchor" href="#方式二：命令行（自动化批量）" aria-label="本节链接">#</a></h3>
 
 <pre><code class="language-bash">MirrorSync.exe --sync-once --path-a "D:\A" --path-b "D:\B" \
   --delete auto --conflict newest --result result.json</code></pre>
@@ -141,7 +141,7 @@
 
 <hr />
 
-<h2 id="-从源码构建">🛠️ 从源码构建<a class="h-anchor" href="#-从源码构建" aria-label="本节链接">#</a></h2>
+<h2 id="-从源码构建"><span class="h-text">🛠️ 从源码构建</span><a class="h-anchor" href="#-从源码构建" aria-label="本节链接">#</a></h2>
 
 <p>环境要求：<strong>.NET SDK 6.0+</strong>（Windows）</p>
 
@@ -159,7 +159,7 @@ dotnet publish MirrorSync.csproj -c Release -r win-x64 --self-contained \
 
 <hr />
 
-<h2 id="-项目结构">📁 项目结构<a class="h-anchor" href="#-项目结构" aria-label="本节链接">#</a></h2>
+<h2 id="-项目结构"><span class="h-text">📁 项目结构</span><a class="h-anchor" href="#-项目结构" aria-label="本节链接">#</a></h2>
 
 <pre><code>MirrorSync/
 ├── App.xaml(.cs)              # 启动入口 + 命令行 headless 模式
@@ -181,7 +181,7 @@ dotnet publish MirrorSync.csproj -c Release -r win-x64 --self-contained \
 
 <hr />
 
-<h2 id="-数据存放位置">📍 数据存放位置<a class="h-anchor" href="#-数据存放位置" aria-label="本节链接">#</a></h2>
+<h2 id="-数据存放位置"><span class="h-text">📍 数据存放位置</span><a class="h-anchor" href="#-数据存放位置" aria-label="本节链接">#</a></h2>
 
 <div class="table-wrap">
 <table>
@@ -198,7 +198,7 @@ dotnet publish MirrorSync.csproj -c Release -r win-x64 --self-contained \
 
 <hr />
 
-<h2 id="-安全设计">🔒 安全设计<a class="h-anchor" href="#-安全设计" aria-label="本节链接">#</a></h2>
+<h2 id="-安全设计"><span class="h-text">🔒 安全设计</span><a class="h-anchor" href="#-安全设计" aria-label="本节链接">#</a></h2>
 
 <ul>
   <li>拒绝 A、B 为同一路径或互为子目录（防循环同步）</li>
@@ -209,7 +209,7 @@ dotnet publish MirrorSync.csproj -c Release -r win-x64 --self-contained \
 
 <hr />
 
-<h2 id="-许可证">📄 许可证<a class="h-anchor" href="#-许可证" aria-label="本节链接">#</a></h2>
+<h2 id="-许可证"><span class="h-text">📄 许可证</span><a class="h-anchor" href="#-许可证" aria-label="本节链接">#</a></h2>
 
 <p>本项目基于 <a href="https://github.com/ZhangYiFei12/MirrorSync/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">GPL-3.0</a> 许可证开源。</p>
 
@@ -243,6 +243,6 @@ dotnet publish MirrorSync.csproj -c Release -r win-x64 --self-contained \
   </footer>
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
-  <script src="../js/main.js?v=23"></script>
+  <script src="../js/main.js?v=25"></script>
 </body>
 </html>
