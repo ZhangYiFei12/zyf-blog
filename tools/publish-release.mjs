@@ -17,7 +17,7 @@
    - 删除：可在网站后台「📦 下载」页操作（同步删 Release 资产）
    ============================================================ */
 
-import { readFileSync, statSync } from "fs";
+import { readFileSync, writeFileSync, statSync } from "fs";
 import { basename, resolve } from "path";
 import { execSync } from "child_process";
 import { fileURLToPath } from "url";
@@ -150,6 +150,7 @@ async function main() {
   // 移除同名旧记录
   list = list.filter(f => !(f.name === assetObj.name && f.store === "release"));
   list.unshift(entry);
+  writeFileSync(dlPath, JSON.stringify(list, null, 2) + "\n", "utf8");
 
   console.log("   📝 登记到 data/downloads.json 并推送...");
   sh(`git add data/downloads.json && git commit -m ${JSON.stringify(`📦 发布下载文件：${name} (${assetObj.name})`)} && git push origin main`, { cwd: ROOT });
