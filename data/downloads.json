@@ -1,16 +1,16 @@
 [
   {
-    "id": "rel-mvdcmrdl",
-    "name": "file-mvdcmrdl.exe",
+    "id": "rel-md-020",
+    "name": "Markdown.Setup.0.1.0.exe",
     "store": "release",
-    "url": "https://github.com/ZhangYiFei12/zyf-blog/releases/download/v0.1.0/file-mvdcmrdl.exe",
+    "url": "https://github.com/ZhangYiFei12/zyf-blog/releases/download/v0.2.0/Markdown.Setup.0.1.0.exe",
     "filename": "Markdown编辑器 安装版",
-    "size": 85325406,
-    "version": "0.1.0",
-    "desc": "Markdown 编辑器 Windows 安装版 v0.1.0",
+    "size": 85325366,
+    "version": "0.2.0",
+    "desc": "Markdown 编辑器 Windows 安装版 v0.2.0",
     "category": "软件",
-    "date": "2026-10-18",
-    "release": "v0.1.0",
-    "assetId": "652514304"
+    "date": "2026-10-22",
+    "release": "v0.2.0",
+    "assetId": "664656568"
   }
 ]
