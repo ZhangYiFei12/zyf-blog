@@ -33,6 +33,10 @@
 /downloads.html
   Cache-Control: public, max-age=0, must-revalidate
 
+# 音频库（可在后台同名覆盖，故不长期缓存）
+/audio/*
+  Cache-Control: public, max-age=0, must-revalidate
+
 # 知识库
 /kb.html
   Cache-Control: public, max-age=0, must-revalidate

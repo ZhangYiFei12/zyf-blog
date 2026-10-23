@@ -251,9 +251,20 @@ function mockServer(req, res) {
       const filePath = path.replace(`/repos/${process.env.GITHUB_REPO}/contents/`, "");
       try {
         const decodedPath = decodeURIComponent(filePath);
-        const content = getFile(decodedPath);
-        if (content !== null) {
-          respondRaw(200, content);
+        const raw = getFile(decodedPath);
+        if (raw !== null) {
+          // 与真实 GitHub 一致：JSON 模式返回 base64 content
+          const accept = req.headers["accept"] || "";
+          if (accept.includes("application/vnd.github.raw")) {
+            respondRaw(200, raw);
+          } else {
+            respond(200, {
+              name: decodedPath.split("/").pop(),
+              path: decodedPath,
+              content: Buffer.from(raw, "utf8").toString("base64"),
+              encoding: "base64",
+            });
+          }
         } else {
           respond(404, { message: "Not Found" });
         }
@@ -511,6 +522,92 @@ mockServer_.listen(mockPort, async () => {
     if (getFile("files/test-tool.zip") !== null) throw new Error("仓库文件未删除");
     const dl = JSON.parse(getFile("data/downloads.json"));
     if (dl.length !== 0) throw new Error("downloads.json 应已清空");
+  });
+
+  // 11b. 音频库（上传 / 文件夹 / 列表 / 移动 / 删除）
+  setFile("data/audio.json", "[]");
+
+  await test("上传音频并记录到 audio.json（含文件夹）", async () => {
+    const b64 = Buffer.from("fake-mp3-data-1234567890").toString("base64");
+    const req = new Request("http://localhost/api/admin/audio/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ name: "song.mp3", folder: "音乐", title: "测试歌曲", desc: "一个测试", duration: 125, data: b64 }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + " " + JSON.stringify(data));
+    if (!data.ok || !data.id) throw new Error("未返回 ok/id");
+    if (getFile("audio/音乐/song.mp3") !== b64) throw new Error("音频未写入 audio/音乐/");
+    const arr = JSON.parse(getFile("data/audio.json"));
+    if (!arr.length || arr[0].folder !== "音乐" || arr[0].ext !== "mp3") throw new Error("audio.json 记录不正确: " + JSON.stringify(arr[0]));
+    if (!arr[0].url.includes("audio/")) throw new Error("URL 不正确: " + arr[0].url);
+  });
+
+  await test("音频格式 / 空文件校验", async () => {
+    let req = new Request("http://localhost/api/admin/audio/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ name: "bad.txt", data: Buffer.from("x").toString("base64") }),
+    });
+    let res = await onRequest({ request: req, env: ENV, params: {} });
+    if (res.status !== 400) throw new Error("不支持格式应返回 400，实际 " + res.status);
+    req = new Request("http://localhost/api/admin/audio/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ name: "empty.mp3", data: "" }),
+    });
+    res = await onRequest({ request: req, env: ENV, params: {} });
+    if (res.status !== 400) throw new Error("空文件应返回 400，实际 " + res.status);
+  });
+
+  await test("列出音频与文件夹", async () => {
+    const req = new Request("http://localhost/api/admin/audio", { headers: { Authorization: "Bearer " + token } });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200");
+    if (data.files.length !== 1) throw new Error("期望 1 个音频");
+    if (!data.folders.includes("音乐")) throw new Error("文件夹列表缺失");
+  });
+
+  await test("移动音频到新文件夹", async () => {
+    const arr = JSON.parse(getFile("data/audio.json"));
+    const id = arr[0].id;
+    const req = new Request("http://localhost/api/admin/audio/meta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ id, folder: "播客" }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + " " + JSON.stringify(data));
+    if (getFile("audio/播客/song.mp3") === null) throw new Error("新路径文件不存在");
+    if (getFile("audio/音乐/song.mp3") !== null) throw new Error("旧路径文件应已删除");
+    const after = JSON.parse(getFile("data/audio.json"));
+    if (after[0].folder !== "播客") throw new Error("文件夹未更新");
+    if (!decodeURIComponent(after[0].url).includes("播客")) throw new Error("URL 未更新: " + after[0].url);
+  });
+
+  await test("删除音频（文件 + 记录）", async () => {
+    const arr = JSON.parse(getFile("data/audio.json"));
+    const id = arr[0].id;
+    const req = new Request("http://localhost/api/admin/audio", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ id }),
+    });
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    const data = await res.json();
+    if (res.status !== 200) throw new Error("期望 200 但得到 " + res.status + " " + JSON.stringify(data));
+    if (getFile("audio/播客/song.mp3") !== null) throw new Error("音频文件未删除");
+    const after = JSON.parse(getFile("data/audio.json"));
+    if (after.length !== 0) throw new Error("audio.json 应已清空");
+  });
+
+  await test("音频接口未授权 → 401", async () => {
+    const req = new Request("http://localhost/api/admin/audio");
+    const res = await onRequest({ request: req, env: ENV, params: {} });
+    if (res.status !== 401) throw new Error("期望 401，实际 " + res.status);
   });
 
   // 12. 相册上传与大小信息

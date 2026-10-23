@@ -75,6 +75,7 @@ for (const f of tagFiles) writeFile(`tags/${f}`, ghRaw(`tags/${f}`));
 /* 4) 数据与 SEO 文件 */
 for (const f of ["data/posts.json", "data/kb.json", "data/search-all.json", "data/search-index.json",
                  "data/gallery.json", "data/links.json", "data/projects.json", "data/downloads.json",
+                 "data/audio.json",
                  "sitemap.xml", "feed.xml", "manifest.json"]) {
   try { writeFile(f, ghRaw(f)); } catch (e) { /* 远端不存在则跳过 */ }
 }
@@ -101,6 +102,18 @@ try {
     writeFile(rel, ghRawBuf(rel), true);
   }
 } catch (e) { /* gallery.json 不可用时跳过 */ }
+
+/* 6b) 音频文件：按 audio.json 补齐本地缺失的（二进制） */
+try {
+  const aud = JSON.parse(fs.readFileSync(path.join(ROOT, "data/audio.json"), "utf8"));
+  for (const a of (Array.isArray(aud) ? aud : [])) {
+    if (!a || !a.name) continue;
+    const rel = "audio/" + (a.folder ? a.folder + "/" : "") + a.name;
+    if (fs.existsSync(path.join(ROOT, rel))) { same++; continue; }
+    if (CHECK) { console.log("  ≠ " + rel + "（本地缺失）"); written++; continue; }
+    writeFile(rel, ghRawBuf(rel), true);
+  }
+} catch (e) { /* audio.json 不可用时跳过 */ }
 
 /* 7) 清理本地已被远端删除的文件 */
 function prune(dir, remoteList, ext) {

@@ -91,6 +91,7 @@
   var tabProjects = $("tabProjects");
   var tabGallery = $("tabGallery");
   var tabDownloads = $("tabDownloads");
+  var tabAudio = $("tabAudio");
   var tabLinks = $("tabLinks");
   var tabKb = $("tabKb");
   var tabSite = $("tabSite");
@@ -98,6 +99,7 @@
   var viewProjects = $("viewProjects");
   var viewGallery = $("viewGallery");
   var viewDownloads = $("viewDownloads");
+  var viewAudio = $("viewAudio");
   var viewLinks = $("viewLinks");
   var viewKb = $("viewKb");
   var viewSite = $("viewSite");
@@ -113,6 +115,13 @@
   var downloadsFileInput = $("downloadsFileInput");
   var downloadsCount = $("downloadsCount");
   var downloadsCache = [];
+  var audioGrid = $("audioGrid");
+  var audioLoading = $("audioLoading");
+  var audioUploadBtn = $("audioUploadBtn");
+  var audioFileInput = $("audioFileInput");
+  var audioFolderInput = $("audioFolderInput");
+  var audioCount = $("audioCount");
+  var audioCache = [];
   var projectList = $("projectList");
   var projectListLoading = $("projectListLoading");
   var saveProjectBtn = $("saveProjectBtn");
@@ -1070,6 +1079,7 @@
     tabProjects.className = "tab" + (name === "projects" ? " active" : "");
     tabGallery.className = "tab" + (name === "gallery" ? " active" : "");
     tabDownloads.className = "tab" + (name === "downloads" ? " active" : "");
+    tabAudio.className = "tab" + (name === "audio" ? " active" : "");
     tabLinks.className = "tab" + (name === "links" ? " active" : "");
     tabKb.className = "tab" + (name === "kb" ? " active" : "");
     tabSite.className = "tab" + (name === "site" ? " active" : "");
@@ -1077,12 +1087,14 @@
     viewProjects.style.display = name === "projects" ? "block" : "none";
     viewGallery.style.display = name === "gallery" ? "block" : "none";
     viewDownloads.style.display = name === "downloads" ? "block" : "none";
+    viewAudio.style.display = name === "audio" ? "block" : "none";
     viewLinks.style.display = name === "links" ? "block" : "none";
     viewKb.style.display = name === "kb" ? "block" : "none";
     viewSite.style.display = name === "site" ? "block" : "none";
     if (name === "projects") loadProjects();
     if (name === "gallery") loadGallery();
     if (name === "downloads") loadDownloads();
+    if (name === "audio") loadAudio();
     if (name === "links") loadLinks();
     if (name === "kb") loadKb();
     if (name === "site") { loadSite(); loadDeploy(); }
@@ -1092,6 +1104,7 @@
   tabProjects.addEventListener("click", function () { switchTab("projects"); });
   tabGallery.addEventListener("click", function () { switchTab("gallery"); });
   tabDownloads.addEventListener("click", function () { switchTab("downloads"); });
+  tabAudio.addEventListener("click", function () { switchTab("audio"); });
   tabLinks.addEventListener("click", function () { switchTab("links"); });
   tabKb.addEventListener("click", function () { switchTab("kb"); });
   tabSite.addEventListener("click", function () { switchTab("site"); });
@@ -1697,6 +1710,217 @@
   }
 
   galleryUploadBtn.addEventListener("click", function () { galleryFileInput.click(); });
+
+  /* ---------- 🎵 音频管理（仓库 audio/ · 支持文件夹） ---------- */
+
+  function audioFormatSize(n) { return fmtBytes(n); }
+
+  function audioFormatTime(sec) {
+    sec = Math.max(0, Math.round(Number(sec) || 0));
+    var m = Math.floor(sec / 60), s = sec % 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function loadAudio() {
+    audioGrid.innerHTML = "";
+    audioLoading.style.display = "block";
+    api("/audio")
+      .then(function (data) {
+        audioLoading.style.display = "none";
+        audioCache = data.files || [];
+        renderAudioFolders(data.folders || []);
+        renderAudioList();
+      })
+      .catch(function (err) {
+        audioLoading.style.display = "none";
+        audioGrid.innerHTML = '<div class="empty-state" style="color:var(--danger);">加载失败：' + escapeHtml(err.message) + "</div>";
+      });
+  }
+
+  function renderAudioFolders(folders) {
+    var dl = $("audioFolderList");
+    if (!dl) return;
+    var names = {};
+    folders.forEach(function (f) { if (f) names[f] = 1; });
+    audioCache.forEach(function (a) { if (a.folder) names[a.folder] = 1; });
+    dl.innerHTML = Object.keys(names).map(function (n) {
+      return '<option value="' + escapeAttr(n) + '"></option>';
+    }).join("");
+  }
+
+  function renderAudioList() {
+    var total = audioCache.reduce(function (n, a) { return n + (Number(a.size) || 0); }, 0);
+    audioCount.textContent = audioCache.length ? "共 " + audioCache.length + " 个 · " + audioFormatSize(total) : "";
+    if (!audioCache.length) {
+      audioGrid.innerHTML = '<div class="empty-state">还没有音频文件<br/>点击上方「上传音频」添加，可先填「文件夹」归类 🎵</div>';
+      return;
+    }
+    // 按文件夹分组（根目录排在最后）
+    var groups = {};
+    audioCache.forEach(function (a) {
+      var key = a.folder || "";
+      (groups[key] = groups[key] || []).push(a);
+    });
+    var order = Object.keys(groups).filter(Boolean).sort(function (a, b) { return a.localeCompare(b, "zh-CN"); });
+    if (groups[""]) order.push("");
+
+    audioGrid.innerHTML = "";
+    order.forEach(function (folder) {
+      var wrap = document.createElement("div");
+      wrap.className = "audio-admin-group";
+      var title = folder ? folder : "未分类（根目录）";
+      wrap.innerHTML = '<div class="audio-admin-folder">📁 ' + escapeHtml(title) +
+        ' <em>' + groups[folder].length + '</em></div>';
+      groups[folder].forEach(function (a) {
+        var item = document.createElement("div");
+        item.className = "audio-admin-item";
+        item.innerHTML =
+          '<div class="audio-admin-info">' +
+            '<div class="audio-admin-title">' + escapeHtml(a.title || a.name) + '</div>' +
+            '<div class="audio-admin-meta">' +
+              '<span class="tag">' + escapeHtml((a.ext || "").toUpperCase() || "AUDIO") + '</span> ' +
+              audioFormatSize(a.size) + ' · ' + escapeHtml(a.date || "") +
+              (a.desc ? ' · ' + escapeHtml(a.desc) : '') +
+            '</div>' +
+          '</div>' +
+          '<audio controls preload="none" src="' + escapeAttr(a.url) + '"></audio>' +
+          '<div class="audio-admin-actions">' +
+            '<button class="btn btn-outline btn-sm" data-action="move" data-id="' + escapeAttr(a.id) + '">📁 改文件夹</button>' +
+            '<button class="btn btn-danger btn-sm" data-action="delaudio" data-id="' + escapeAttr(a.id) + '" data-name="' + escapeAttr(a.title || a.name) + '">删除</button>' +
+          '</div>';
+        wrap.appendChild(item);
+      });
+      audioGrid.appendChild(wrap);
+    });
+  }
+
+  audioGrid.addEventListener("click", function (e) {
+    var moveBtn = e.target.closest("button[data-action='move']");
+    if (moveBtn) {
+      var id = moveBtn.getAttribute("data-id");
+      var cur = "";
+      audioCache.forEach(function (a) { if (a.id === id) cur = a.folder || ""; });
+      var next = window.prompt("移动到文件夹（留空 = 根目录）：", cur);
+      if (next === null) return;
+      moveBtn.disabled = true;
+      api("/audio/meta", { method: "POST", body: { id: id, folder: next.trim() } })
+        .then(function (data) { showToast(data.message || "已更新", "success"); loadAudio(); })
+        .catch(function (err) { showToast(err.message || "移动失败", "error"); moveBtn.disabled = false; });
+      return;
+    }
+
+    var btn = e.target.closest("button[data-action='delaudio']");
+    if (!btn) return;
+    var aid = btn.getAttribute("data-id");
+    var aname = btn.getAttribute("data-name");
+    if (!aid) return;
+    if (pendingDeleteId === "au:" + aid) {
+      resetDeleteConfirm();
+      btn.disabled = true;
+      api("/audio", { method: "DELETE", body: { id: aid } })
+        .then(function (data) { showToast(data.message || "已删除", "success"); loadAudio(); })
+        .catch(function (err) { showToast(err.message, "error"); btn.disabled = false; });
+      return;
+    }
+    resetDeleteConfirm();
+    pendingDeleteId = "au:" + aid;
+    pendingDeleteBtn = btn;
+    btn.textContent = "⚠ 再点一次确认";
+    btn.classList.add("btn-confirming");
+    pendingDeleteTimer = setTimeout(resetDeleteConfirm, 4000);
+  });
+
+  audioUploadBtn.addEventListener("click", function () { audioFileInput.click(); });
+
+  function audioResetBtn() {
+    audioUploadBtn.disabled = false;
+    audioUploadBtn.textContent = "📤 上传音频（可多选）";
+    audioFileInput.value = "";
+  }
+
+  /* 读取音频时长（本地文件，用于列表展示） */
+  function probeDuration(file) {
+    return new Promise(function (resolve) {
+      try {
+        var url = URL.createObjectURL(file);
+        var au = document.createElement("audio");
+        var done = false;
+        var finish = function (v) {
+          if (done) return;
+          done = true;
+          URL.revokeObjectURL(url);
+          resolve(v || 0);
+        };
+        au.preload = "metadata";
+        au.onloadedmetadata = function () {
+          var d = au.duration;
+          finish(isFinite(d) ? Math.round(d) : 0);
+        };
+        au.onerror = function () { finish(0); };
+        setTimeout(function () { finish(0); }, 4000);
+        au.src = url;
+      } catch (e) { resolve(0); }
+    });
+  }
+
+  audioFileInput.addEventListener("change", function () {
+    var files = Array.prototype.slice.call(audioFileInput.files || []);
+    if (!files.length) return;
+    var folder = (audioFolderInput.value || "").trim();
+    var MAX = 50 * 1024 * 1024;
+    var valid = files.filter(function (f) {
+      if (f.size > MAX) {
+        showToast("「" + f.name + "」超过 50MB，已跳过", "error", 6000);
+        return false;
+      }
+      return true;
+    });
+    if (!valid.length) { audioResetBtn(); return; }
+
+    audioUploadBtn.disabled = true;
+    var i = 0;
+    var failed = 0;
+
+    function next() {
+      if (i >= valid.length) {
+        audioResetBtn();
+        showToast("音频上传完成" + (failed ? "（" + failed + " 个失败）" : ""), failed ? "error" : "success");
+        loadAudio();
+        return;
+      }
+      var f = valid[i++];
+      audioUploadBtn.textContent = "⏳ 上传中 " + i + "/" + valid.length + "…";
+      probeDuration(f).then(function (duration) {
+        return new Promise(function (resolve, reject) {
+          var fr = new FileReader();
+          fr.onload = function () { resolve(String(fr.result).split(",")[1] || ""); };
+          fr.onerror = function () { reject(new Error("读取文件失败")); };
+          fr.readAsDataURL(f);
+        }).then(function (b64) {
+          return api("/audio/upload", {
+            method: "POST",
+            body: {
+              name: f.name,
+              folder: folder,
+              title: f.name.replace(/\.[^.]+$/, ""),
+              desc: "",
+              duration: duration,
+              size: f.size,
+              data: b64,
+            },
+          });
+        });
+      }).then(function () {
+        next();
+      }).catch(function (err) {
+        failed++;
+        showToast("「" + f.name + "」：" + (err.message || "上传失败"), "error", 6000);
+        next();
+      });
+    }
+    next();
+  });
+
 
   galleryFileInput.addEventListener("change", function () {
     var files = Array.prototype.slice.call(galleryFileInput.files || []);
@@ -2358,7 +2582,7 @@
         var c = data.counts || {};
         $("backupStatus").textContent = "✔ 已导出：文章 " + (c.articles || 0) + " · 项目 " + (c.projects || 0)
           + " · 相册 " + (c.gallery || 0) + " · 下载 " + (c.downloads || 0)
-          + " · 关联 " + (c.links || 0) + " · 知识库 " + (c.kb || 0);
+          + " · 关联 " + (c.links || 0) + " · 知识库 " + (c.kb || 0) + " · 音频 " + (c.audio || 0);
         showToast("备份已下载", "success");
       })
       .catch(function (err) { showToast(err.message || "导出失败", "error"); })

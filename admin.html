@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>后台 | ZH</title>
   <meta name="robots" content="noindex, nofollow" />
-  <link rel="stylesheet" href="css/style.css?v=30" />
+  <link rel="stylesheet" href="css/style.css?v=31" />
   <link rel="icon" type="image/png" href="images/avatar.png" />
   <script>try{if(localStorage.getItem("zyf-theme")==="light")document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
   <style>
@@ -279,6 +279,7 @@
         <button class="tab" id="tabProjects">🛠️ 项目</button>
         <button class="tab" id="tabGallery">🖼️ 相册</button>
         <button class="tab" id="tabDownloads">📦 下载</button>
+        <button class="tab" id="tabAudio">🎵 音频</button>
         <button class="tab" id="tabLinks">🔗 关联</button>
         <button class="tab" id="tabKb">📚 知识库</button>
         <button class="tab" id="tabSite">⚙️ 站点</button>
@@ -746,6 +747,24 @@
           <div id="downloadsLoading" class="loading">加载中</div>
         </div>
       </div>
+
+      <div id="viewAudio" style="display:none;">
+        <div class="article-list" style="max-width:1100px;">
+          <h3>🎵 音频管理</h3>
+          <p style="font-size:11px;color:var(--text-dim);margin:-4px 0 10px;">
+            音频存仓库 <code>audio/</code> 目录，单文件 ≤50MB；可选「文件夹」归类（留空 = 根目录）。支持 mp3 / wav / ogg / m4a / aac / flac / opus / weba / webm。
+          </p>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+            <button class="btn btn-outline btn-sm" id="audioUploadBtn">📤 上传音频（可多选）</button>
+            <input type="file" id="audioFileInput" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac,.opus,.weba,.webm" multiple style="display:none;" />
+            <input type="text" id="audioFolderInput" class="field" list="audioFolderList" placeholder="文件夹（可选）" style="max-width:200px;" />
+            <datalist id="audioFolderList"></datalist>
+            <span id="audioCount" style="font-size:11px;color:var(--text-dim);"></span>
+          </div>
+          <div id="audioGrid" style="margin-top:10px;"></div>
+          <div id="audioLoading" class="loading">加载中</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -845,7 +864,7 @@
     </div>
   </div>
 
-  <script src="js/admin.js?v=21"></script>
+  <script src="js/admin.js?v=22"></script>
   <script>
     (function () {
       function cur() { return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark"; }

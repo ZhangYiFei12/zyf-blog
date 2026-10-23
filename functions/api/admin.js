@@ -157,6 +157,16 @@ async function getFile(env, path) {
   return await res.text();
 }
 
+/* 读取仓库文件的 base64 内容（用于二进制文件搬运，如音频移动文件夹） */
+async function getFileBase64(env, path) {
+  const res = await gh(env, `/repos/${repo(env)}/contents/${enc(path)}?ref=${branch(env)}`, {
+    headers: { Accept: "application/vnd.github+json" },
+  });
+  const data = await res.json();
+  if (!data || !data.content) throw new Error("文件内容为空");
+  return String(data.content).replace(/\s+/g, "");
+}
+
 /* 读取 blog/posts/ 下全部文章（含 front matter） */
 async function getAllPosts(env) {
   const res = await gh(env, `/repos/${repo(env)}/contents/blog/posts?ref=${branch(env)}`);
@@ -638,6 +648,59 @@ function normFileMeta(input) {
   if (input.release) f.release = String(input.release).trim();
   if (input.assetId !== undefined && input.assetId !== null) f.assetId = String(input.assetId).trim();
   return f;
+}
+
+/* ---------------- 音频文件（音频库） ----------------
+ * 文件统一存仓库 audio/ 目录，元数据存 data/audio.json。
+ * 支持「文件夹」：folder 为一级分类目录名（可留空 = 根目录）。
+ * 单文件 ≤50MB（base64 后约 ×4/3，需低于 Cloudflare 请求体上限）。
+ * 路径规则：audio/<folder>/<filename>
+ */
+
+/* 音频扩展名白名单 */
+const AUDIO_EXTS = new Set(["mp3", "wav", "ogg", "oga", "m4a", "aac", "flac", "opus", "weba", "webm"]);
+
+/* 目录名 / 文件名净化：保留中文、字母数字、._- 与空格，去掉路径穿越 */
+function audioSanitize(name) {
+  return String(name || "")
+    .replace(/[\\/\0]/g, "-")
+    .replace(/\.\./g, "")
+    .trim();
+}
+
+async function getAudioList(env) {
+  try {
+    const raw = await getFile(env, "data/audio.json");
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function normAudioMeta(input) {
+  const name = audioSanitize(input && (input.name || input.filename));
+  const folder = audioSanitize(input && input.folder);
+  const extMatch = name.match(/\.([^.]+)$/);
+  const ext = extMatch ? extMatch[1].toLowerCase() : "";
+  return {
+    id: String((input && input.id) || "").trim() || `au-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    name,
+    folder,
+    title: String((input && input.title) || "").trim() || name.replace(/\.[^.]+$/, ""),
+    ext,
+    size: Number(input && input.size) || 0,
+    duration: Number(input && input.duration) || 0,
+    desc: String((input && input.desc) || "").trim(),
+    url: String((input && input.url) || "").trim(),
+    date: String((input && input.date) || new Date().toISOString().slice(0, 10)),
+  };
+}
+
+/* audio 文件在仓库中的相对路径 */
+function audioPath(folder, name) {
+  const f = audioSanitize(folder);
+  return f ? `audio/${f}/${audioSanitize(name)}` : `audio/${audioSanitize(name)}`;
 }
 
 /* ---------------- 主处理器 ---------------- */
@@ -1411,9 +1474,9 @@ export async function onRequest(context) {
 
   // ---- GET /api/admin/backup（导出全部内容为 JSON 备份）----
   if (method === "GET" && rest.length === 1 && rest[0] === "backup") {
-    const [posts, projects, gallery, downloads, links, kbDocs, site] = await Promise.all([
+    const [posts, projects, gallery, downloads, links, kbDocs, site, audioList] = await Promise.all([
       getAllPosts(env), getProjects(env), getGallery(env),
-      getDownloads(env), getLinks(env), getAllKbDocs(env), getSite(env),
+      getDownloads(env), getLinks(env), getAllKbDocs(env), getSite(env), getAudioList(env),
     ]);
     // 文章与知识库带上 .md 原文，便于完整恢复
     const articles = [];
@@ -1433,9 +1496,9 @@ export async function onRequest(context) {
       site,
       counts: {
         articles: articles.length, projects: projects.length, gallery: gallery.length,
-        downloads: downloads.length, links: links.length, kb: kb.length,
+        downloads: downloads.length, links: links.length, kb: kb.length, audio: audioList.length,
       },
-      articles, projects, gallery, downloads, links, kb,
+      articles, projects, gallery, downloads, links, kb, audio: audioList,
     });
   }
 
@@ -1479,6 +1542,110 @@ export async function onRequest(context) {
       { path: "data/links.json", content: JSON.stringify(remaining, null, 2) + "\n" },
     ]);
     return json({ ok: true, id, commitSha, message: "已删除并提交，等待自动部署" });
+  }
+
+  // ---- GET /api/admin/audio（音频列表 + 文件夹）----
+  if (method === "GET" && rest.length === 1 && rest[0] === "audio") {
+    const files = await getAudioList(env);
+    const folders = [];
+    files.forEach(f => { if (f.folder && !folders.includes(f.folder)) folders.push(f.folder); });
+    return json({ files, folders });
+  }
+
+  // ---- POST /api/admin/audio/upload（上传音频，存仓库 audio/<folder>/）----
+  if (method === "POST" && rest.length === 2 && rest[0] === "audio" && rest[1] === "upload") {
+    const input = await request.json().catch(() => null);
+    const name = audioSanitize(input && input.name);
+    const b64 = input && input.data ? String(input.data) : "";
+    if (!name) return json({ error: "缺少文件名" }, 400);
+    if (!b64) return json({ error: "文件内容为空" }, 400);
+    const ext = (name.match(/\.([^.]+)$/) || [])[1] || "";
+    if (!AUDIO_EXTS.has(ext.toLowerCase())) {
+      return json({ error: `不支持的音频格式 .${ext}（支持：${[...AUDIO_EXTS].join(" / ")}）` }, 400);
+    }
+    const srcBytes = b64Bytes(b64);
+    const MAX = 50 * 1024 * 1024; // base64 体积膨胀，50MB 源文件约 67MB 请求体
+    if (srcBytes > MAX) {
+      return json({ error: `音频超过 50MB（${(srcBytes / 1048576).toFixed(1)}MB），请压缩后再上传` }, 400);
+    }
+
+    const folder = audioSanitize(input && input.folder);
+    const id = String((input && input.id) || "").trim() || `au-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const entry = normAudioMeta({
+      id, name, folder,
+      title: input.title, desc: input.desc, duration: input.duration,
+      size: srcBytes,
+      url: "/" + audioPath(folder, name).split("/").map(encodeURIComponent).join("/"),
+    });
+
+    const files = await getAudioList(env);
+    // 同一路径（folder + name）视为覆盖：移除旧记录
+    const old = files.filter(f => f.folder === folder && f.name === name);
+    const remaining = files.filter(f => !(f.folder === folder && f.name === name));
+    remaining.unshift(entry);
+
+    const changes = [];
+    // 同名路径直接覆盖（URL 不变）；旧记录若指向不同路径则删除旧文件
+    changes.push({ path: audioPath(folder, name), content: b64, encoding: "base64" });
+    for (const o of old) {
+      const p = audioPath(o.folder, o.name);
+      if (p !== audioPath(folder, name)) changes.push({ path: p, delete: true });
+    }
+    changes.push({ path: "data/audio.json", content: JSON.stringify(remaining, null, 2) + "\n" });
+
+    const commitSha = await commitFiles(env, `🎵 后台上传音频：${entry.title}${folder ? `（${folder}）` : ""}`, changes);
+    return json({ ok: true, id: entry.id, url: entry.url, commitSha, folders: [...new Set([...files.map(f => f.folder).filter(Boolean), folder].filter(Boolean))], message: "音频已提交，部署后即可播放（约 1 分钟）" });
+  }
+
+  // ---- POST /api/admin/audio/meta（修改音频元数据 / 移动文件夹）----
+  if (method === "POST" && rest.length === 2 && rest[0] === "audio" && rest[1] === "meta") {
+    const input = await request.json().catch(() => null);
+    const id = String((input && input.id) || "").trim();
+    if (!id) return json({ error: "缺少音频 ID" }, 400);
+    const files = await getAudioList(env);
+    const idx = files.findIndex(f => f.id === id);
+    if (idx < 0) return json({ error: "音频不存在" }, 404);
+
+    const old = files[idx];
+    const folder = input.folder !== undefined ? audioSanitize(input.folder) : old.folder;
+    const title = input.title !== undefined ? String(input.title).trim() : old.title;
+    const desc = input.desc !== undefined ? String(input.desc).trim() : old.desc;
+    const unchangedPath = folder === old.folder;
+
+    const entry = { ...old, folder, title: title || old.name.replace(/\.[^.]+$/, ""), desc };
+    if (!unchangedPath) entry.url = "/" + audioPath(folder, old.name).split("/").map(encodeURIComponent).join("/");
+    files[idx] = entry;
+
+    const changes = [];
+    if (!unchangedPath) {
+      // 移动：复制内容到新路径，删除旧文件
+      let b64 = "";
+      try { b64 = await getFileBase64(env, audioPath(old.folder, old.name)); } catch (e) { b64 = ""; }
+      if (!b64) return json({ error: "读取原音频文件失败，无法移动到新文件夹" }, 502);
+      changes.push({ path: audioPath(folder, old.name), content: b64, encoding: "base64" });
+      changes.push({ path: audioPath(old.folder, old.name), delete: true });
+    }
+    changes.push({ path: "data/audio.json", content: JSON.stringify(files, null, 2) + "\n" });
+    const commitSha = await commitFiles(env, `🎵 后台更新音频：${entry.title}`, changes);
+    return json({ ok: true, id, commitSha, file: entry, message: "已更新" });
+  }
+
+  // ---- DELETE /api/admin/audio（删除音频文件 + 记录）----
+  if (method === "DELETE" && rest.length === 1 && rest[0] === "audio") {
+    const input = await request.json().catch(() => null);
+    const id = String((input && input.id) || "").trim();
+    if (!id) return json({ error: "缺少音频 ID" }, 400);
+    const files = await getAudioList(env);
+    const target = files.find(f => f.id === id);
+    if (!target) return json({ error: "音频不存在" }, 404);
+
+    const remaining = files.filter(f => f.id !== id);
+    const changes = [
+      { path: audioPath(target.folder, target.name), delete: true },
+      { path: "data/audio.json", content: JSON.stringify(remaining, null, 2) + "\n" },
+    ];
+    const commitSha = await commitFiles(env, `🎵 后台删除音频：${target.title || target.name}`, changes);
+    return json({ ok: true, id, commitSha, message: "音频已删除" });
   }
 
   // ---- GET /api/admin/files（列出下载文件）----

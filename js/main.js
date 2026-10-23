@@ -568,6 +568,130 @@
     kbApply();
   }
 
+  /* ---- 知识库音频区（kb.html 下方）：文件夹分组 + 在线播放 ---- */
+  var audioRoot = document.getElementById("kbAudio");
+  if (audioRoot) {
+    var audioListEl = document.getElementById("kbAudioList");
+    var audioStatsEl = document.getElementById("kbAudioStats");
+    var audioSearchEl = document.getElementById("kbAudioSearch");
+    var audioFiles = [];
+    var audioQuery = "";
+
+    function aEsc(s) {
+      return String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+    function aSize(n) {
+      n = Number(n) || 0;
+      if (n >= 1073741824) return (n / 1073741824).toFixed(2) + " GB";
+      if (n >= 1048576) return (n / 1048576).toFixed(1) + " MB";
+      if (n >= 1024) return (n / 1024).toFixed(0) + " KB";
+      return n + " B";
+    }
+    function aTime(sec) {
+      sec = Math.max(0, Math.round(Number(sec) || 0));
+      if (!sec) return "";
+      var m = Math.floor(sec / 60), s = sec % 60;
+      return m + ":" + (s < 10 ? "0" : "") + s;
+    }
+
+    function aRender() {
+      var q = audioQuery;
+      var list = audioFiles.filter(function (a) {
+        if (!q) return true;
+        return (String(a.title || "") + " " + String(a.name || "") + " " +
+          String(a.folder || "") + " " + String(a.desc || "")).toLowerCase().indexOf(q) !== -1;
+      });
+
+      if (audioStatsEl) {
+        audioStatsEl.textContent = audioFiles.length
+          ? (q ? "匹配 " + list.length + " / " + audioFiles.length + " 个" : audioFiles.length + " 个音频")
+          : "";
+      }
+
+      if (!audioFiles.length) {
+        audioListEl.innerHTML = '<div class="audio-empty">🎵 还没有音频，后台上传后会显示在这里</div>';
+        return;
+      }
+      if (!list.length) {
+        audioListEl.innerHTML = '<div class="audio-empty">没有找到匹配的音频</div>';
+        return;
+      }
+
+      // 按文件夹分组
+      var groups = {};
+      list.forEach(function (a) {
+        var key = a.folder || "";
+        (groups[key] = groups[key] || []).push(a);
+      });
+      var order = Object.keys(groups).filter(Boolean).sort(function (a, b) { return a.localeCompare(b, "zh-CN"); });
+      if (groups[""]) order.push("");
+
+      var html = "";
+      order.forEach(function (folder) {
+        var items = groups[folder];
+        var title = folder ? folder : "未分类";
+        html += '<div class="audio-folder">' +
+          '<div class="audio-folder-head">' +
+            '<span class="audio-folder-icon">' + (folder ? "📁" : "🎵") + '</span>' +
+            '<span class="audio-folder-name">' + aEsc(title) + '</span>' +
+            '<span class="audio-folder-count">' + items.length + '</span>' +
+          '</div><div class="audio-items">';
+        items.forEach(function (a) {
+          var meta = [];
+          if (a.duration) meta.push(aTime(a.duration));
+          meta.push(aSize(a.size));
+          if (a.date) meta.push(String(a.date).replace(/T.*$/, ""));
+          html += '<div class="audio-item" data-search="' + aEsc((a.title || "") + " " + (a.desc || "")) + '">' +
+            '<div class="audio-item-head">' +
+              '<span class="audio-item-icon">' + (a.ext ? aEsc(String(a.ext).toUpperCase()) : "AUDIO") + '</span>' +
+              '<div class="audio-item-text">' +
+                '<div class="audio-item-title">' + aEsc(a.title || a.name) + '</div>' +
+                (a.desc ? '<div class="audio-item-desc">' + aEsc(a.desc) + '</div>' : '') +
+                '<div class="audio-item-meta">' + meta.map(aEsc).join(" · ") + '</div>' +
+              '</div>' +
+            '</div>' +
+            '<audio class="audio-player" controls preload="none" src="' + aEsc(a.url) + '"></audio>' +
+          '</div>';
+        });
+        html += '</div></div>';
+      });
+      audioListEl.innerHTML = html;
+    }
+
+    // 同一时间只保留一个播放（避免多个音频同时响）；只绑定一次
+    if (audioListEl) {
+      audioListEl.addEventListener("play", function (e) {
+        if (e.target && e.target.tagName === "AUDIO") {
+          Array.prototype.forEach.call(audioListEl.querySelectorAll("audio"), function (au) {
+            if (au !== e.target) au.pause();
+          });
+        }
+      }, true);
+    }
+
+    fetch("data/audio.json", { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (arr) {
+        audioFiles = Array.isArray(arr) ? arr.filter(function (a) { return a && a.url; }) : [];
+        aRender();
+      })
+      .catch(function () {
+        audioFiles = [];
+        aRender();
+      });
+
+    if (audioSearchEl) {
+      var aTimer = null;
+      audioSearchEl.addEventListener("input", function () {
+        clearTimeout(aTimer);
+        var v = audioSearchEl.value.trim().toLowerCase();
+        aTimer = setTimeout(function () { audioQuery = v; aRender(); }, 200);
+      });
+    }
+  }
+
   /* ---- 分享按钮（文章页 / 知识库页） ---- */
   var shareRow = document.querySelector(".share-row");
   if (shareRow) {
