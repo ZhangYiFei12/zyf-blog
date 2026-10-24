@@ -174,6 +174,11 @@ const blobStore = {}; // sha -> content
 let blobCounter = 0;
 /* 暂存的 tree（到 refs PATCH 才真正落盘，模拟真实 GitHub 行为） */
 let pendingTree = [];
+const commitParents = {}; // commitSha -> parentSha
+const commitTrees = {};   // commitSha -> treeSha
+const treeStore = {};     // treeSha  -> tree entries
+const snapshots = {};     // commitSha -> 文件快照
+let treeCount = 0;
 
 function mockServer(req, res) {
   const url = new URL(req.url, "http://localhost:18999");
@@ -196,27 +201,44 @@ function mockServer(req, res) {
       blobStore[sha] = json && json.content !== undefined ? json.content : "";
       respond(201, { sha });
     } else if (path === `/repos/${process.env.GITHUB_REPO}/git/trees` && method === "POST") {
-      treeSha = "newtree_" + Date.now();
+      treeSha = "newtree_" + (++treeCount);
       /* 保真：创建 tree 不会移动分支，也不应该改动文件。
          真实 GitHub 只有在 PATCH refs/heads/main 时才真正提交，
          所以这里先暂存，到 refs PATCH 阶段才落地 ——
-         否则「commit 失败」的用例会因为文件已被提前写入而失真。 */
-      pendingTree = (json && json.tree) ? json.tree.slice() : [];
+         否则「commit 失败」的用例会因为文件已被提前写入而失真。
+         并发场景下每个 tree 各存一份，不能用单一全局变量。 */
+      treeStore[treeSha] = (json && json.tree) ? json.tree.slice() : [];
       respond(201, { sha: treeSha });
     } else if (path === `/repos/${process.env.GITHUB_REPO}/git/commits` && method === "POST") {
       if (mockState.failCommit > 0) {
         respond(500, { message: "simulated commit failure" });
         return;
       }
-      headCommitSha = "commit_" + (++commitCount);
-      respond(201, { sha: headCommitSha });
+      const newCommitSha = "commit_" + (++commitCount);
+      // 记录该提交的父提交与 tree，供 refs PATCH 做非快进校验与落盘
+      commitParents[newCommitSha] = json && json.parents ? json.parents[0] : null;
+      commitTrees[newCommitSha] = json && json.tree;
+      // 注意：不在这里推进分支。真实 GitHub 只有 refs PATCH 才移动分支
+      respond(201, { sha: newCommitSha });
     } else if (path === `/repos/${process.env.GITHUB_REPO}/git/refs/heads/main` && method === "PATCH") {
-      // 到这一步才算真正提交：把暂存的 tree 落盘
-      for (const t of pendingTree) {
+      // 真实 GitHub 的非快进保护：目标提交的父提交不是当前 head 时拒绝（422）
+      const newSha = json && json.sha;
+      const parent = commitParents[newSha];
+      if (json && json.force !== true && parent && parent !== headCommitSha) {
+        respond(422, { message: "Update is not a fast forward" });
+        return;
+      }
+      // 到这一步才算真正提交：把该 commit 对应 tree 的内容落盘
+      const entries = treeStore[commitTrees[newSha]] || [];
+      for (const t of entries) {
         if (t.sha === null) deleteFile(t.path);
         else if (blobStore[t.sha] !== undefined) setFile(t.path, blobStore[t.sha]);
       }
-      pendingTree = [];
+      // 分支只在这里前移，并快照当前文件（供 ?ref=<sha> 读取历史版本）
+      if (newSha) {
+        headCommitSha = newSha;
+        snapshots[headCommitSha] = { ...files };
+      }
       respond(200, { object: { sha: headCommitSha } });
     } else if (path.startsWith(`/repos/${process.env.GITHUB_REPO}/git/trees/`) && method === "GET") {
       // 模拟目录树：/git/trees/main:images/uploads
@@ -251,7 +273,10 @@ function mockServer(req, res) {
       const filePath = path.replace(`/repos/${process.env.GITHUB_REPO}/contents/`, "");
       try {
         const decodedPath = decodeURIComponent(filePath);
-        const raw = getFile(decodedPath);
+        // ?ref=<commitSha> 读取历史快照（与真实 GitHub 一致）
+        const ref = url.searchParams.get("ref") || "main";
+        const view = (ref !== "main" && snapshots[ref]) ? snapshots[ref] : files;
+        const raw = Object.prototype.hasOwnProperty.call(view, decodedPath) ? view[decodedPath] : null;
         if (raw !== null) {
           // 与真实 GitHub 一致：JSON 模式返回 base64 content
           const accept = req.headers["accept"] || "";
@@ -608,6 +633,34 @@ mockServer_.listen(mockPort, async () => {
     const req = new Request("http://localhost/api/admin/audio");
     const res = await onRequest({ request: req, env: ENV, params: {} });
     if (res.status !== 401) throw new Error("期望 401，实际 " + res.status);
+  });
+
+  await test("并发删除不会让已删音频复活（原子提交）", async () => {
+    setFile("data/audio.json", "[]");
+    const names = ["c1.mp3", "c2.mp3", "c3.mp3", "c4.mp3"];
+    // 先串行上传 4 个，拿到 id
+    const ids = [];
+    for (const n of names) {
+      const r = await call("POST", "/api/admin/audio/upload", {
+        name: n, folder: "并发", title: n, data: Buffer.from("data-" + n).toString("base64"),
+      });
+      if (r.status !== 200) throw new Error("上传失败 " + n + ": " + JSON.stringify(r.data));
+      ids.push(r.data.id);
+    }
+    if (JSON.parse(getFile("data/audio.json")).length !== 4) throw new Error("上传后应有 4 条记录");
+
+    // 并发删除全部 4 个
+    const results = await Promise.all(ids.map(id => call("DELETE", "/api/admin/audio", { id })));
+    const bad = results.filter(r => r.status !== 200);
+    if (bad.length) throw new Error("并发删除有失败：" + JSON.stringify(bad.map(b => b.data)));
+
+    const after = JSON.parse(getFile("data/audio.json"));
+    if (after.length !== 0) {
+      throw new Error("并发删除后仍有 " + after.length + " 条复活记录：" + after.map(a => a.name).join(", "));
+    }
+    for (const n of names) {
+      if (getFile("audio/并发/" + n) !== null) throw new Error("文件未删除：" + n);
+    }
   });
 
   // 12. 相册上传与大小信息

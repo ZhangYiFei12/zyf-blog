@@ -159,7 +159,12 @@ async function getFile(env, path) {
 
 /* 读取仓库文件的 base64 内容（用于二进制文件搬运，如音频移动文件夹） */
 async function getFileBase64(env, path) {
-  const res = await gh(env, `/repos/${repo(env)}/contents/${enc(path)}?ref=${branch(env)}`, {
+  return await getFileBase64At(env, path, branch(env));
+}
+
+/* 读指定提交（sha）的 base64 内容 */
+async function getFileBase64At(env, path, ref) {
+  const res = await gh(env, `/repos/${repo(env)}/contents/${enc(path)}?ref=${ref}`, {
     headers: { Accept: "application/vnd.github+json" },
   });
   const data = await res.json();
@@ -183,8 +188,78 @@ async function getAllPosts(env) {
   return posts;
 }
 
+/* 读取指定提交（sha）里的文件原文。
+ * 用于「先读后写」场景：必须和随后提交用的 base 保持一致，
+ * 否则并发请求会读到旧内容再写回，把别人刚删的记录复活。 */
+async function getFileAt(env, path, refSha) {
+  const res = await gh(env, `/repos/${repo(env)}/contents/${enc(path)}?ref=${refSha}`, {
+    headers: { Accept: "application/vnd.github.raw" },
+  });
+  return await res.text();
+}
+
+/* 原子提交：把「读取当前内容 → 计算变更 → 提交」放在同一个 base 上，
+ * 若期间分支被别的请求推进，则整体重试（重读后再算），
+ * 从而避免并发上传/删除互相覆盖（后写者用陈旧列表把已删记录写回去）。
+ *
+ * buildChanges(headSha) 返回 changes 数组；返回 null / 空数组表示无需提交。
+ */
+async function commitFilesAtomic(env, message, buildChanges, attempts = 4) {
+  let lastErr = null;
+  for (let i = 0; i < attempts; i++) {
+    const head = await (await gh(env, `/repos/${repo(env)}/git/ref/heads/${branch(env)}`)).json();
+    const headSha = head.object.sha;
+    const changes = await buildChanges(headSha);
+    if (!changes || !changes.length) return { sha: headSha, skipped: true };
+
+    const commitInfo = await (await gh(env, `/repos/${repo(env)}/git/commits/${headSha}`)).json();
+    const baseTree = commitInfo.tree.sha;
+
+    const tree = [];
+    for (const c of changes) {
+      if (c.delete) {
+        tree.push({ path: c.path, mode: "100644", type: "blob", sha: null });
+      } else {
+        const blob = await (await gh(env, `/repos/${repo(env)}/git/blobs`, {
+          method: "POST",
+          body: { content: c.content, encoding: c.encoding || "utf-8" },
+        })).json();
+        tree.push({ path: c.path, mode: "100644", type: "blob", sha: blob.sha });
+      }
+    }
+
+    const newTree = await (await gh(env, `/repos/${repo(env)}/git/trees`, {
+      method: "POST",
+      body: { base_tree: baseTree, tree },
+    })).json();
+
+    const newCommit = await (await gh(env, `/repos/${repo(env)}/git/commits`, {
+      method: "POST",
+      body: { message, tree: newTree.sha, parents: [headSha] },
+    })).json();
+
+    try {
+      await gh(env, `/repos/${repo(env)}/git/refs/heads/${branch(env)}`, {
+        method: "PATCH",
+        body: { sha: newCommit.sha, force: false },
+      });
+      return { sha: newCommit.sha, skipped: false };
+    } catch (e) {
+      // 分支已被推进（非快进）→ 重读后重试；其他错误也重试有限次数
+      lastErr = e;
+      if (i < attempts - 1) await new Promise(r => setTimeout(r, 120 + i * 180));
+    }
+  }
+  throw lastErr || new Error("提交失败");
+}
+
 /* 一次性原子提交多个文件 */
 async function commitFiles(env, message, changes) {
+  return (await commitFilesAtomic(env, message, async () => changes)).sha;
+}
+
+/* 旧实现（保留仅作参考，勿使用）：先读后写，有并发覆盖风险 */
+async function commitFilesLegacy(env, message, changes) {
   const head = await (await gh(env, `/repos/${repo(env)}/git/ref/heads/${branch(env)}`)).json();
   const headSha = head.object.sha;
   const commitInfo = await (await gh(env, `/repos/${repo(env)}/git/commits/${headSha}`)).json();
@@ -671,6 +746,17 @@ function audioSanitize(name) {
 async function getAudioList(env) {
   try {
     const raw = await getFile(env, "data/audio.json");
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/* 读指定提交（sha）的音频列表：原子提交时必须用它做 base */
+async function getAudioListAt(env, refSha) {
+  try {
+    const raw = await getFileAt(env, "data/audio.json", refSha);
     const arr = JSON.parse(raw);
     return Array.isArray(arr) ? arr : [];
   } catch (e) {
@@ -1578,23 +1664,28 @@ export async function onRequest(context) {
       url: "/" + audioPath(folder, name).split("/").map(encodeURIComponent).join("/"),
     });
 
-    const files = await getAudioList(env);
-    // 同一路径（folder + name）视为覆盖：移除旧记录
-    const old = files.filter(f => f.folder === folder && f.name === name);
-    const remaining = files.filter(f => !(f.folder === folder && f.name === name));
-    remaining.unshift(entry);
+    // 基于最新 head 重新读取 audio.json 再计算（原子提交，避免并发覆盖）
+    let foldersOut = [];
+    const result = await commitFilesAtomic(env, `🎵 后台上传音频：${entry.title}${folder ? `（${folder}）` : ""}`, async (headSha) => {
+      const files = await getAudioListAt(env, headSha);
+      // 同一路径（folder + name）视为覆盖：移除旧记录
+      const old = files.filter(f => f.folder === folder && f.name === name);
+      const remaining = files.filter(f => !(f.folder === folder && f.name === name));
+      remaining.unshift(entry);
+      foldersOut = [...new Set([...remaining.map(f => f.folder).filter(Boolean), folder].filter(Boolean))];
 
-    const changes = [];
-    // 同名路径直接覆盖（URL 不变）；旧记录若指向不同路径则删除旧文件
-    changes.push({ path: audioPath(folder, name), content: b64, encoding: "base64" });
-    for (const o of old) {
-      const p = audioPath(o.folder, o.name);
-      if (p !== audioPath(folder, name)) changes.push({ path: p, delete: true });
-    }
-    changes.push({ path: "data/audio.json", content: JSON.stringify(remaining, null, 2) + "\n" });
+      const changes = [];
+      // 同名路径直接覆盖（URL 不变）；旧记录若指向不同路径则删除旧文件
+      changes.push({ path: audioPath(folder, name), content: b64, encoding: "base64" });
+      for (const o of old) {
+        const p = audioPath(o.folder, o.name);
+        if (p !== audioPath(folder, name)) changes.push({ path: p, delete: true });
+      }
+      changes.push({ path: "data/audio.json", content: JSON.stringify(remaining, null, 2) + "\n" });
+      return changes;
+    });
 
-    const commitSha = await commitFiles(env, `🎵 后台上传音频：${entry.title}${folder ? `（${folder}）` : ""}`, changes);
-    return json({ ok: true, id: entry.id, url: entry.url, commitSha, folders: [...new Set([...files.map(f => f.folder).filter(Boolean), folder].filter(Boolean))], message: "音频已提交，部署后即可播放（约 1 分钟）" });
+    return json({ ok: true, id: entry.id, url: entry.url, commitSha: result.sha, folders: foldersOut, message: "音频已提交，部署后即可播放（约 1 分钟）" });
   }
 
   // ---- POST /api/admin/audio/meta（修改音频元数据 / 移动文件夹）----
@@ -1602,32 +1693,40 @@ export async function onRequest(context) {
     const input = await request.json().catch(() => null);
     const id = String((input && input.id) || "").trim();
     if (!id) return json({ error: "缺少音频 ID" }, 400);
-    const files = await getAudioList(env);
-    const idx = files.findIndex(f => f.id === id);
-    if (idx < 0) return json({ error: "音频不存在" }, 404);
 
-    const old = files[idx];
-    const folder = input.folder !== undefined ? audioSanitize(input.folder) : old.folder;
-    const title = input.title !== undefined ? String(input.title).trim() : old.title;
-    const desc = input.desc !== undefined ? String(input.desc).trim() : old.desc;
-    const unchangedPath = folder === old.folder;
+    let updated = null, notFound = false, moveFailed = false;
+    const result = await commitFilesAtomic(env, `🎵 后台更新音频`, async (headSha) => {
+      const files = await getAudioListAt(env, headSha);
+      const idx = files.findIndex(f => f.id === id);
+      if (idx < 0) { notFound = true; return null; }
 
-    const entry = { ...old, folder, title: title || old.name.replace(/\.[^.]+$/, ""), desc };
-    if (!unchangedPath) entry.url = "/" + audioPath(folder, old.name).split("/").map(encodeURIComponent).join("/");
-    files[idx] = entry;
+      const old = files[idx];
+      const folder = input.folder !== undefined ? audioSanitize(input.folder) : old.folder;
+      const title = input.title !== undefined ? String(input.title).trim() : old.title;
+      const desc = input.desc !== undefined ? String(input.desc).trim() : old.desc;
+      const unchangedPath = folder === old.folder;
 
-    const changes = [];
-    if (!unchangedPath) {
-      // 移动：复制内容到新路径，删除旧文件
-      let b64 = "";
-      try { b64 = await getFileBase64(env, audioPath(old.folder, old.name)); } catch (e) { b64 = ""; }
-      if (!b64) return json({ error: "读取原音频文件失败，无法移动到新文件夹" }, 502);
-      changes.push({ path: audioPath(folder, old.name), content: b64, encoding: "base64" });
-      changes.push({ path: audioPath(old.folder, old.name), delete: true });
-    }
-    changes.push({ path: "data/audio.json", content: JSON.stringify(files, null, 2) + "\n" });
-    const commitSha = await commitFiles(env, `🎵 后台更新音频：${entry.title}`, changes);
-    return json({ ok: true, id, commitSha, file: entry, message: "已更新" });
+      const entry = { ...old, folder, title: title || old.name.replace(/\.[^.]+$/, ""), desc };
+      if (!unchangedPath) entry.url = "/" + audioPath(folder, old.name).split("/").map(encodeURIComponent).join("/");
+      files[idx] = entry;
+      updated = entry;
+
+      const changes = [];
+      if (!unchangedPath) {
+        // 移动：复制内容到新路径，删除旧文件
+        let b64 = "";
+        try { b64 = await getFileBase64At(env, audioPath(old.folder, old.name), headSha); } catch (e) { b64 = ""; }
+        if (!b64) { moveFailed = true; return null; }
+        changes.push({ path: audioPath(folder, old.name), content: b64, encoding: "base64" });
+        changes.push({ path: audioPath(old.folder, old.name), delete: true });
+      }
+      changes.push({ path: "data/audio.json", content: JSON.stringify(files, null, 2) + "\n" });
+      return changes;
+    });
+
+    if (notFound) return json({ error: "音频不存在" }, 404);
+    if (moveFailed) return json({ error: "读取原音频文件失败，无法移动到新文件夹" }, 502);
+    return json({ ok: true, id, commitSha: result.sha, file: updated, message: "已更新" });
   }
 
   // ---- DELETE /api/admin/audio（删除音频文件 + 记录）----
@@ -1635,17 +1734,24 @@ export async function onRequest(context) {
     const input = await request.json().catch(() => null);
     const id = String((input && input.id) || "").trim();
     if (!id) return json({ error: "缺少音频 ID" }, 400);
-    const files = await getAudioList(env);
-    const target = files.find(f => f.id === id);
-    if (!target) return json({ error: "音频不存在" }, 404);
 
-    const remaining = files.filter(f => f.id !== id);
-    const changes = [
-      { path: audioPath(target.folder, target.name), delete: true },
-      { path: "data/audio.json", content: JSON.stringify(remaining, null, 2) + "\n" },
-    ];
-    const commitSha = await commitFiles(env, `🎵 后台删除音频：${target.title || target.name}`, changes);
-    return json({ ok: true, id, commitSha, message: "音频已删除" });
+    let title = "", notFound = false;
+    const result = await commitFilesAtomic(env, `🎵 后台删除音频`, async (headSha) => {
+      const files = await getAudioListAt(env, headSha);
+      const target = files.find(f => f.id === id);
+      if (!target) { notFound = true; return null; }
+      title = target.title || target.name;
+
+      const remaining = files.filter(f => f.id !== id);
+      return [
+        { path: audioPath(target.folder, target.name), delete: true },
+        { path: "data/audio.json", content: JSON.stringify(remaining, null, 2) + "\n" },
+      ];
+    });
+
+    if (notFound) return json({ error: "音频不存在" }, 404);
+    // 提交信息里带标题：无法在 buildChanges 里拼消息，故默认消息已在上面；返回给前端提示
+    return json({ ok: true, id, commitSha: result.sha, message: `音频「${title}」已删除` });
   }
 
   // ---- GET /api/admin/files（列出下载文件）----
