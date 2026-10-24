@@ -3463,6 +3463,29 @@ html.js-anim .post-item:not(.stagger-in) {
 }
 .audio-toolbar .search-box { margin: 0; }
 
+.audio-toolbar-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+
+.audio-toggle-all {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.audio-toggle-all:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-glow);
+}
+
+.audio-toggle-all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 .audio-stats {
   margin-left: auto;
   font-size: 12px;
@@ -3481,14 +3504,51 @@ html.js-anim .post-item:not(.stagger-in) {
 
 .audio-folder { position: relative; }
 
+/* 文件夹标题 = 可点击的折叠开关 */
 .audio-folder-head {
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
   margin-bottom: 12px;
-  padding-bottom: 8px;
+  padding: 8px 10px 8px 6px;
+  border: none;
   border-bottom: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
+
+.audio-folder-head:hover {
+  background: var(--accent-glow);
+  border-bottom-color: var(--accent);
+}
+
+.audio-folder-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.audio-folder-chevron {
+  flex: 0 0 auto;
+  width: 14px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--accent);
+  transition: transform 0.22s ease;
+}
+
+.audio-folder.collapsed .audio-folder-chevron { transform: rotate(-90deg); }
+
+.audio-folder-head .audio-folder-count { margin-left: auto; }
+
+/* 折叠：收起内容 + 去掉标题下边距 */
+.audio-folder.collapsed .audio-folder-head { margin-bottom: 0; }
+.audio-folder.collapsed .audio-items { display: none; }
 
 .audio-folder-icon { font-size: 15px; }
 
@@ -3635,11 +3695,14 @@ html.js-anim .post-item:not(.stagger-in) {
 @media (max-width: 640px) {
   .audio-items { grid-template-columns: 1fr; }
   .audio-stats { margin-left: 0; }
+  .audio-toolbar-actions { width: 100%; }
+  .audio-toggle-all { flex: 1 1 auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .audio-item, .audio-item::before, .audio-item-icon, .audio-item-title { transition-duration: 0.01s !important; }
   .audio-item:hover { transform: none; }
+  .audio-folder-chevron { transition-duration: 0.01s !important; }
 }
 
 /* ============================================================

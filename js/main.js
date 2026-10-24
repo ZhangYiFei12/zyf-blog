@@ -574,8 +574,29 @@
     var audioListEl = document.getElementById("kbAudioList");
     var audioStatsEl = document.getElementById("kbAudioStats");
     var audioSearchEl = document.getElementById("kbAudioSearch");
+    var audioExpandAllEl = document.getElementById("kbAudioExpandAll");
+    var audioCollapseAllEl = document.getElementById("kbAudioCollapseAll");
     var audioFiles = [];
     var audioQuery = "";
+
+    /* 折叠状态持久化（localStorage）：记录被折叠的文件夹 key */
+    var AUDIO_COLLAPSE_KEY = "zyf-audio-collapsed";
+    var ROOT_KEY = "__root__";
+    var collapsedFolders = (function () {
+      try {
+        var a = JSON.parse(localStorage.getItem(AUDIO_COLLAPSE_KEY) || "[]");
+        return new Set(Array.isArray(a) ? a : []);
+      } catch (e) { return new Set(); }
+    })();
+    function saveCollapsed() {
+      try { localStorage.setItem(AUDIO_COLLAPSE_KEY, JSON.stringify(Array.from(collapsedFolders))); } catch (e) {}
+    }
+    function folderKey(folder) { return folder || ROOT_KEY; }
+    function audioFolderKeys() {
+      var seen = {};
+      audioFiles.forEach(function (a) { seen[folderKey(a.folder)] = 1; });
+      return Object.keys(seen);
+    }
 
     function aEsc(s) {
       return String(s == null ? "" : s)
@@ -629,15 +650,22 @@
       if (groups[""]) order.push("");
 
       var html = "";
-      order.forEach(function (folder) {
+      order.forEach(function (folder, idx) {
         var items = groups[folder];
         var title = folder ? folder : "未分类";
-        html += '<div class="audio-folder">' +
-          '<div class="audio-folder-head">' +
+        var key = folderKey(folder);
+        var bodyId = "audio-folder-body-" + idx;
+        // 搜索时强制展开，方便直接看到匹配项；清空搜索后恢复用户自己的折叠状态
+        var isCollapsed = !q && collapsedFolders.has(key);
+        html += '<div class="audio-folder' + (isCollapsed ? " collapsed" : "") + '">' +
+          '<button type="button" class="audio-folder-head" data-audio-folder="' + aEsc(key) + '"' +
+            ' aria-expanded="' + (isCollapsed ? "false" : "true") + '" aria-controls="' + bodyId + '">' +
+            '<span class="audio-folder-chevron" aria-hidden="true">▾</span>' +
             '<span class="audio-folder-icon">' + (folder ? "📁" : "🎵") + '</span>' +
             '<span class="audio-folder-name">' + aEsc(title) + '</span>' +
             '<span class="audio-folder-count">' + items.length + '</span>' +
-          '</div><div class="audio-items">';
+          '</button>' +
+          '<div class="audio-items" id="' + bodyId + '">';
         items.forEach(function (a) {
           var meta = [];
           if (a.duration) meta.push(aTime(a.duration));
@@ -669,6 +697,34 @@
           });
         }
       }, true);
+
+      // 文件夹折叠 / 展开（事件委托，重渲染后依然有效）
+      audioListEl.addEventListener("click", function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest("[data-audio-folder]") : null;
+        if (!btn) return;
+        var wrap = btn.closest(".audio-folder");
+        if (!wrap) return;
+        var key = btn.getAttribute("data-audio-folder");
+        var collapsed = wrap.classList.toggle("collapsed");
+        btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        if (collapsed) collapsedFolders.add(key); else collapsedFolders.delete(key);
+        saveCollapsed();
+      });
+    }
+
+    if (audioExpandAllEl) {
+      audioExpandAllEl.addEventListener("click", function () {
+        collapsedFolders.clear();
+        saveCollapsed();
+        aRender();
+      });
+    }
+    if (audioCollapseAllEl) {
+      audioCollapseAllEl.addEventListener("click", function () {
+        audioFolderKeys().forEach(function (k) { collapsedFolders.add(k); });
+        saveCollapsed();
+        aRender();
+      });
     }
 
     fetch("data/audio.json", { cache: "no-store" })

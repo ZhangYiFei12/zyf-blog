@@ -4,7 +4,7 @@
    ============================================================ */
 
 /* 静态资源版本：改 CSS/JS 后同步递增（资源走 immutable 缓存） */
-export const ASSET_VER = { css: "31", js: "26" };
+export const ASSET_VER = { css: "32", js: "27" };
 
 /* ---------- Front Matter 解析 ---------- */
 export function parseFrontMatter(raw) {

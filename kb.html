@@ -6,7 +6,7 @@
   <title>知识库 | ZH</title>
   <meta name="description" content="ZH 的知识库：技术文档、学习笔记与资料归档" />
   <link rel="canonical" href="https://zyf2026.pages.dev/kb.html" />
-  <link rel="stylesheet" href="css/style.css?v=31" />
+  <link rel="stylesheet" href="css/style.css?v=32" />
   <link rel="icon" type="image/png" href="images/avatar.png" />
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#0a0e14" />
@@ -176,6 +176,10 @@
         <div class="search-box" style="flex:1;min-width:220px;">
           <input type="search" id="kbAudioSearch" placeholder="🔍 搜索音频标题 / 文件夹 / 简介…" autocomplete="off" />
         </div>
+        <div class="audio-toolbar-actions">
+          <button type="button" class="audio-toggle-all" id="kbAudioExpandAll" title="展开全部文件夹">⊞ 展开全部</button>
+          <button type="button" class="audio-toggle-all" id="kbAudioCollapseAll" title="折叠全部文件夹">⊟ 折叠全部</button>
+        </div>
       </div>
       <div id="kbAudioList" class="audio-list">
         <div class="audio-empty">🎵 加载中…</div>
@@ -192,6 +196,6 @@
   </footer>
 
   <button class="back-top" id="backTop" aria-label="返回顶部" title="返回顶部">↑</button>
-  <script src="js/main.js?v=26"></script>
+  <script src="js/main.js?v=27"></script>
 </body>
 </html>

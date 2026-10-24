@@ -30,3 +30,6 @@ dist/
 # 浏览器调试临时 profile
 .edgeprof/
 __t_*.html
+
+# 音频库文件由后台上传维护（repository 中已跟踪，本地副本仅用于预览，不重复提交）
+/audio/
