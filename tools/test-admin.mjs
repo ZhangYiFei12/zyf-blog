@@ -1366,6 +1366,37 @@ mockServer_.listen(mockPort, async () => {
     if (after.url === target.url) throw new Error("版本号未递增");
   });
 
+  await test("并发发布两篇文章：聚合文件均包含两篇（原子重建）", async () => {
+    const mk = (n) => ({
+      title: "并发文章" + n, date: "2026-10-2" + n, excerpt: "并发摘要" + n,
+      tags: ["并发"], body: "# 并发文章" + n + "\n\n正文" + n,
+    });
+    const rs = await Promise.all([
+      call("POST", "/api/admin/articles", mk(1)),
+      call("POST", "/api/admin/articles", mk(2)),
+    ]);
+    for (const r of rs) {
+      if (r.status !== 200) throw new Error("发布失败: " + JSON.stringify(r.data));
+    }
+    // posts.json / blog.html / search-all.json 里两篇都必须在，否则说明后提交者用旧快照覆盖了聚合文件
+    const postsIdx = JSON.parse(getFile("data/posts.json"));
+    for (const n of [1, 2]) {
+      if (!postsIdx.some(p => p.slug === "并发文章" + n)) throw new Error("posts.json 缺少 并发文章" + n);
+      if (!getFile("blog.html").includes("并发文章" + n)) throw new Error("blog.html 缺少 并发文章" + n);
+      // 最新文章位只放日期最新一篇（并发文章2 日期 2026-10-22 最新），能证明列表是重建的即可
+      if (!getFile("index.html").includes("并发文章2")) throw new Error("index.html 最新文章缺失");
+      const sa = JSON.parse(getFile("data/search-all.json"));
+      if (!sa.some(e => e.url.includes(encodeURIComponent("并发文章" + n)))) throw new Error("search-all.json 缺少 并发文章" + n);
+    }
+    // 清理：删除两篇并发文章
+    for (const n of [1, 2]) {
+      const r = await call("DELETE", "/api/admin/articles/并发文章" + n);
+      if (r.status !== 200) throw new Error("清理失败: " + JSON.stringify(r.data));
+    }
+    const after = JSON.parse(getFile("data/posts.json"));
+    if (after.some(p => p.slug.startsWith("并发文章"))) throw new Error("清理后仍残留并发文章");
+  });
+
   // 结果
   console.log(`\n🎯 结果：${passed} 通过，${failed} 失败，共 ${passed + failed} 项`);
   mockServer_.close();

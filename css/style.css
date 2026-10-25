@@ -42,6 +42,8 @@
   --mono: ui-monospace, "JetBrains Mono", "Fira Code", "Cascadia Code",
     Consolas, "Courier New", monospace;
   --maxw: 1120px;
+  --nav-h: 58px; /* 导航栏高度：下拉定位、锚点偏移统一引用 */
+  --scroll-margin: calc(var(--nav-h) + 26px);
   --radius: 12px;
   --radius-sm: 8px;
   --navbar-bg: rgba(10, 14, 20, 0.72);
@@ -297,7 +299,7 @@ body::after {
   max-width: var(--maxw);
   margin: 0 auto;
   padding: 0 20px;
-  height: 58px;
+  height: var(--nav-h);
   display: flex;
   align-items: center;
   gap: 14px;
@@ -439,7 +441,7 @@ body::after {
   .nav-links {
     display: none;
     position: absolute;
-    top: 58px;
+    top: var(--nav-h);
     left: 0;
     right: 0;
     background: var(--bg-soft);
@@ -2800,7 +2802,7 @@ pre code.hljs {
    ============================================================ */
 .article-body h2[id],
 .article-body h3[id] {
-  scroll-margin-top: 84px;
+  scroll-margin-top: var(--scroll-margin);
 }
 
 .toc {
@@ -3112,7 +3114,7 @@ html.js-anim .post-item:not(.stagger-in) {
    相册（首页 + 独立页 gallery.html，数据来自 data/gallery.json）
    ============================================================ */
 #gallerySection {
-  scroll-margin-top: 84px; /* 抵消 sticky 导航栏，锚点滚动不被遮挡 */
+  scroll-margin-top: var(--scroll-margin); /* 抵消 sticky 导航栏，锚点滚动不被遮挡 */
 }
 
 .gallery-grid {

@@ -296,9 +296,13 @@
     });
   });
 
-  /* ---- HTML 转义辅助 ---- */
+  /* ---- HTML 转义辅助 ----
+   * 与 tools/md2html-core.mjs 的 escapeAttr 保持一致：
+   * < > & " ' 五个字符全部转义，防止标题/摘要里的字面 < 被当成标签注入。 */
   function esc(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
   }
 
   /* ---- 搜索命中高亮（先转义再包裹 <mark>，避免 XSS） ---- */
@@ -329,7 +333,10 @@
     return (s > 0 ? "…" : "") + src.slice(s, e) + (e < src.length ? "…" : "");
   }
 
-  /* ---- 文章目录 TOC（文章页） ---- */
+  /* ---- 文章目录 TOC（文章页） ----
+   * 服务端渲染（md2html-core 的 headingSlug）已为标题生成 id，
+   * 正文里手写的锚点链接指向的就是这些 id —— 客户端直接沿用，
+   * 只对没有 id 的标题（老页面/手写 HTML）补算，避免覆盖后锚点失效。 */
   var articleBody = document.querySelector(".article-body");
   if (articleBody) {
     var headings = articleBody.querySelectorAll("h2, h3");
@@ -337,11 +344,15 @@
     var usedIds = {};
     headings.forEach(function (h) {
       var text = h.textContent.trim();
-      var base = text.replace(/[^\w\u4e00-\u9fa5]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() || "section";
-      var id = base, n = 1;
-      while (usedIds[id]) { n++; id = base + "-" + n; }
-      usedIds[id] = true;
-      h.id = id;
+      var id = h.id;
+      if (!id) {
+        var base = text.replace(/[^\w\u4e00-\u9fa5]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() || "section";
+        var n = 1;
+        id = base;
+        while (usedIds[id]) { n++; id = base + "-" + n; }
+        usedIds[id] = true;
+        h.id = id;
+      }
       tocItems.push({ id: id, text: text, level: h.tagName === "H2" ? 2 : 3 });
     });
     if (tocItems.length >= 2) {
@@ -410,7 +421,7 @@
     });
 
     // 加载搜索索引（data/search-index.json，含标题/标签/正文纯文本）
-    fetch("data/search-index.json", { cache: "no-store" })
+    fetch("data/search-index.json")
       .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("no index")); })
       .then(function (idx) { searchIndex = idx; })
       .catch(function () { searchIndex = null; });
@@ -501,7 +512,7 @@
     var kbQuery = "";
     var kbIndex = null;
 
-    fetch("data/kb.json", { cache: "no-store" })
+    fetch("data/kb.json")
       .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("no data")); })
       .then(function (idx) { kbIndex = Array.isArray(idx) ? idx : null; })
       .catch(function () { kbIndex = null; });
@@ -599,9 +610,7 @@
     }
 
     function aEsc(s) {
-      return String(s == null ? "" : s)
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+      return esc(s); // 统一走全局 esc（&<>"' 全转义），避免两套实现漂移
     }
     function aSize(n) {
       n = Number(n) || 0;
@@ -727,7 +736,7 @@
       });
     }
 
-    fetch("data/audio.json", { cache: "no-store" })
+    fetch("data/audio.json")
       .then(function (r) { return r.ok ? r.json() : []; })
       .then(function (arr) {
         audioFiles = Array.isArray(arr) ? arr.filter(function (a) { return a && a.url; }) : [];
@@ -777,7 +786,7 @@
     var inSub = /\/(blog|kb)\//.test(window.location.pathname);
     var idxUrl = inSub ? "../data/search-index.json" : "data/search-index.json";
     var curSlug = decodeURIComponent(window.location.pathname.split("/").pop().replace(/\.html$/i, ""));
-    fetch(idxUrl, { cache: "no-store" })
+    fetch(idxUrl)
       .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("no index")); })
       .then(function (list) {
         if (!Array.isArray(list)) return;
@@ -815,7 +824,7 @@
   var postNav = document.getElementById("postNav");
   if (postNav) {
     var current = decodeURIComponent(window.location.pathname.split("/").pop().replace(/\.html$/i, ""));
-    fetch("../data/posts.json", { cache: "no-store" })
+    fetch("../data/posts.json")
       .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("fetch failed")); })
       .then(function (posts) {
         if (!Array.isArray(posts) || !posts.length) return;
@@ -827,6 +836,14 @@
         if (newer) html += '<a class="prev" href="' + esc(newer.slug) + '"><span class="pn-label">← 上一篇</span><span class="pn-title">' + esc(newer.title) + '</span></a>';
         if (older) html += '<a class="next" href="' + esc(older.slug) + '"><span class="pn-label">下一篇 →</span><span class="pn-title">' + esc(older.title) + '</span></a>';
         postNav.innerHTML = html;
+        /* 预取上一篇 / 下一篇页面，加速站内跳转 */
+        [newer, older].forEach(function (p) {
+          if (!p || !p.slug) return;
+          var l = document.createElement("link");
+          l.rel = "prefetch";
+          l.href = p.slug;
+          document.head.appendChild(l);
+        });
       })
       .catch(function () {});
   }
@@ -1158,7 +1175,7 @@
       galleryGridEl.innerHTML = '<div class="gallery-empty">📷 相册还没内容，去后台上传吧 →</div>';
     };
 
-    fetch("data/gallery.json", { cache: "no-store" })
+    fetch("data/gallery.json")
       .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("no gallery")); })
       .then(function (list) {
         if (!Array.isArray(list)) { renderEmpty(); return; }
@@ -1190,7 +1207,7 @@
   }
 
   /* ---- 站点设置：社交链接 + giscus 评论（data/site.json） ---- */
-  var sitePromise = fetch("data/site.json", { cache: "no-store" })
+  var sitePromise = fetch("data/site.json")
     .then(function (r) { return r.ok ? r.json() : null; })
     .catch(function () { return null; });
 
@@ -1260,7 +1277,7 @@
     var faviconOf = function (u) {
       return "https://www.google.com/s2/favicons?domain=" + encodeURIComponent(hostOf(u)) + "&sz=64";
     };
-    fetch("data/links.json", { cache: "no-store" })
+    fetch("data/links.json")
       .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("no links")); })
       .then(function (list) {
         if (!Array.isArray(list)) return;
@@ -1409,7 +1426,7 @@
       }
     });
 
-    fetch("data/search-all.json", { cache: "no-store" })
+    fetch("data/search-all.json")
       .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("no index")); })
       .then(function (list) {
         srIndex = Array.isArray(list) ? list : [];
@@ -1556,22 +1573,24 @@
     });
   }
 
-  /* ---- 3D 卡片倾斜 ---- */
-  document.querySelectorAll(".card.tilt").forEach(function (card) {
-    card.addEventListener("mousemove", function (e) {
-      var rect = card.getBoundingClientRect();
-      var cx = rect.left + rect.width / 2;
-      var cy = rect.top + rect.height / 2;
-      var x = (e.clientX - cx) / (rect.width / 2);
-      var y = (e.clientY - cy) / (rect.height / 2);
-      card.style.transform = "rotateX(" + (-y * 8) + "deg) rotateY(" + (x * 8) + "deg) translateY(-4px)";
-      card.style.setProperty("--mx", (e.clientX - rect.left) / rect.width * 100 + "%");
-      card.style.setProperty("--my", (e.clientY - rect.top) / rect.height * 100 + "%");
+  /* ---- 3D 卡片倾斜（仅精确指针设备；触屏关闭，避免 hover 抖动与文字模糊） ---- */
+  if (!window.matchMedia || window.matchMedia("(pointer: fine)").matches) {
+    document.querySelectorAll(".card.tilt").forEach(function (card) {
+      card.addEventListener("mousemove", function (e) {
+        var rect = card.getBoundingClientRect();
+        var cx = rect.left + rect.width / 2;
+        var cy = rect.top + rect.height / 2;
+        var x = (e.clientX - cx) / (rect.width / 2);
+        var y = (e.clientY - cy) / (rect.height / 2);
+        card.style.transform = "rotateX(" + (-y * 8) + "deg) rotateY(" + (x * 8) + "deg) translateY(-4px)";
+        card.style.setProperty("--mx", (e.clientX - rect.left) / rect.width * 100 + "%");
+        card.style.setProperty("--my", (e.clientY - rect.top) / rect.height * 100 + "%");
+      });
+      card.addEventListener("mouseleave", function () {
+        card.style.transform = "";
+      });
     });
-    card.addEventListener("mouseleave", function () {
-      card.style.transform = "";
-    });
-  });
+  }
 
   /* ---- 点击涟漪 ---- */
   document.addEventListener("click", function (e) {

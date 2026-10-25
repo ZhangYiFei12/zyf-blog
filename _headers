@@ -1,4 +1,13 @@
-# 静态资源长期缓存
+# 全站安全响应头
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://giscus.app 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://giscus.app https://api.github.com; frame-src https://giscus.app; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+
+# 静态资源长期缓存（带 ?v= 版本号，内容不可变）
 /css/*
   Cache-Control: public, max-age=31536000, immutable
 /js/*
@@ -6,9 +15,10 @@
 /images/*
   Cache-Control: public, max-age=31536000, immutable
 
-# 站点数据与 SEO 文件不缓存（发布文章后需即时更新）
+# 站点数据：短缓存 + 必须重新验证（后台发布后 CDN 边缘最长 5 分钟内更新；
+# 页面数据请求不再带 no-store，减少文章页每次 2~3 个来回的重新校验）
 /data/*
-  Cache-Control: public, max-age=0, must-revalidate
+  Cache-Control: public, max-age=300, must-revalidate
 
 /sitemap.xml
   Cache-Control: public, max-age=0, must-revalidate
@@ -29,20 +39,12 @@
 /tags/*
   Cache-Control: public, max-age=0, must-revalidate
 
-# 下载页
-/downloads.html
-  Cache-Control: public, max-age=0, must-revalidate
-
 # 音频库（可在后台同名覆盖，故不长期缓存）
 /audio/*
   Cache-Control: public, max-age=0, must-revalidate
 
-# 知识库
-/kb.html
-  Cache-Control: public, max-age=0, must-revalidate
-
-# 归档页
-/archive.html
+# 下载文件（后台可覆盖同名文件）
+/files/*
   Cache-Control: public, max-age=0, must-revalidate
 
 # Service Worker 绝不长期缓存（否则无法更新）

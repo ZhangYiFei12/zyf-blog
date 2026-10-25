@@ -4,11 +4,11 @@
    ============================================================ */
 
 /* 静态资源版本：改 CSS/JS 后同步递增（资源走 immutable 缓存） */
-export const ASSET_VER = { css: "32", js: "27" };
+export const ASSET_VER = { css: "33", js: "28" };
 
 /* ---------- Front Matter 解析 ---------- */
 export function parseFrontMatter(raw) {
-  const meta = { title: "", date: "", excerpt: "", tags: [], published: true, category: "" };
+  const meta = { title: "", date: "", excerpt: "", tags: [], published: true, category: "", cover: "" };
   // 统一行尾（CRLF/CR → LF），否则正则的 $ 无法匹配行尾的 \r
   raw = String(raw == null ? "" : raw).replace(/\r\n?/g, "\n");
   if (raw.startsWith("---")) {
@@ -653,6 +653,28 @@ function jsonLdScript(obj) {
   return `  <script type="application/ld+json">${json}</script>`;
 }
 
+/* ---------- 社交分享图（og:image / JSON-LD image） ----------
+ * 优先级：front matter 的 cover 字段 → 正文第一张非徽章图片 → 站点头像。
+ * shields.io / badgen.net 徽章（文章开头常见）不适合做分享缩略图，跳过。
+ * 相对路径（../images/... 、/images/...）补全为站点绝对 URL。
+ */
+export function firstCoverImage(bodyHtml, site) {
+  const re = /<img[^>]*\ssrc="([^"]+)"/gi;
+  let m;
+  while ((m = re.exec(String(bodyHtml || "")))) {
+    const src = m[1];
+    if (/shields\.io|badgen\.net/i.test(src)) continue;
+    if (/^https?:\/\//i.test(src)) return src;
+    return `${site}/${String(src).replace(/^(\.\.\/|\.\/|\/)+/, "")}`;
+  }
+  return "";
+}
+
+/* 统一解析分享图：meta.cover 优先，正文首图次之，最后回退头像 */
+function resolveCover(meta, bodyHtml, SITE) {
+  return String(meta.cover || "").trim() || firstCoverImage(bodyHtml, SITE) || `${SITE}/images/avatar.png`;
+}
+
 function buildArticleJsonLd(meta, opts) {
   const SITE = opts.site || "https://zyf2026.pages.dev";
   const url = opts.url;
@@ -671,7 +693,7 @@ function buildArticleJsonLd(meta, opts) {
       logo: { "@type": "ImageObject", url: SITE + "/images/avatar.png" },
     },
     mainEntityOfPage: { "@type": "WebPage", "@id": url },
-    image: SITE + "/images/avatar.png",
+    image: opts.cover || SITE + "/images/avatar.png",
     inLanguage: "zh-CN",
     url,
   };
@@ -699,8 +721,9 @@ export function buildPage(meta, bodyHtml, opts = {}) {
   const SITE = "https://zyf2026.pages.dev";
   const pageUrl = slug ? `${SITE}/blog/${slug}` : SITE + "/";
   const articleHtml = buildArticlePreview(meta, bodyHtml);
+  const cover = resolveCover(meta, bodyHtml, SITE);
   const jsonLd = [
-    buildArticleJsonLd(meta, { url: pageUrl, site: SITE }),
+    buildArticleJsonLd(meta, { url: pageUrl, site: SITE, cover }),
     buildBreadcrumbJsonLd(SITE, [
       { name: "首页", url: SITE + "/" },
       { name: "博客", url: SITE + "/blog.html" },
@@ -725,7 +748,7 @@ export function buildPage(meta, bodyHtml, opts = {}) {
   <meta property="og:title" content="${escapeAttr(meta.title)}" />
   <meta property="og:description" content="${escapeAttr(excerpt)}" />
   <meta property="og:url" content="${escapeAttr(pageUrl)}" />
-  <meta property="og:image" content="${SITE}/images/avatar.png" />
+  <meta property="og:image" content="${escapeAttr(cover)}" />
   <meta property="og:site_name" content="ZH 博客" />
   <meta name="twitter:card" content="summary" />
 ${jsonLd}
@@ -823,17 +846,17 @@ export function listItemSnippet(meta, slug) {
   const date = meta.date || new Date().toISOString().slice(0, 10);
   const excerpt = meta.excerpt || meta.title;
   const tags = meta.tags && meta.tags.length ? meta.tags : ["随笔"];
-  const tagStr = tags.map(t => `            <span class="tag">${t}</span>`).join("\n");
+  const tagStr = tags.map(t => `            <span class="tag">${escapeHtml(t)}</span>`).join("\n");
   const dataTags = escapeAttr(tags.join(" "));
   return `      <a class="post-item" href="blog/${slug}" data-tags="${dataTags}">
         <div class="post-left">
-          <span class="post-title">${meta.title}</span>
-          <span class="post-excerpt">${excerpt}</span>
+          <span class="post-title">${escapeHtml(meta.title)}</span>
+          <span class="post-excerpt">${escapeHtml(excerpt)}</span>
           <div class="post-tags">
 ${tagStr}
           </div>
         </div>
-        <span class="post-date">${date}</span>
+        <span class="post-date">${escapeHtml(date)}</span>
       </a>`;
 }
 
@@ -981,7 +1004,7 @@ export function buildSearchIndex(posts) {
       date: p.meta.date || "",
       tags: p.meta.tags || [],
       // 搜索文本含摘要 + 正文，避免摘要里的关键词搜不到
-      text: [p.meta.excerpt || "", stripHtml(p.bodyHtml)].filter(Boolean).join(" ").slice(0, 800),
+      text: [p.meta.excerpt || "", stripHtml(p.bodyHtml)].filter(Boolean).join(" ").slice(0, 4000),
     }));
   return JSON.stringify(list) + "\n";
 }
@@ -1009,8 +1032,9 @@ export function buildKbPage(meta, bodyHtml, opts = {}) {
   const tags = Array.isArray(meta.tags) && meta.tags.length ? meta.tags : [];
   const date = meta.date || new Date().toISOString().slice(0, 10);
   const mins = readingMinutes(bodyHtml);
+  const cover = resolveCover(meta, bodyHtml, SITE);
   const jsonLd = [
-    buildArticleJsonLd(meta, { url: pageUrl, site: SITE }),
+    buildArticleJsonLd(meta, { url: pageUrl, site: SITE, cover }),
     buildBreadcrumbJsonLd(SITE, [
       { name: "首页", url: SITE + "/" },
       { name: "知识库", url: SITE + "/kb.html" },
@@ -1035,7 +1059,7 @@ export function buildKbPage(meta, bodyHtml, opts = {}) {
   <meta property="og:title" content="${escapeAttr(meta.title)}" />
   <meta property="og:description" content="${escapeAttr(excerpt)}" />
   <meta property="og:url" content="${escapeAttr(pageUrl)}" />
-  <meta property="og:image" content="${SITE}/images/avatar.png" />
+  <meta property="og:image" content="${escapeAttr(cover)}" />
   <meta property="og:site_name" content="ZH 知识库" />
   <meta name="twitter:card" content="summary" />
 ${jsonLd}
@@ -1138,7 +1162,7 @@ export function buildKbIndex(docs) {
         date: d.meta.date || "",
         tags: d.meta.tags || [],
         // 搜索文本含标题/简介/正文，避免简介里的关键词搜不到
-        text: [desc, stripHtml(d.bodyHtml)].filter(Boolean).join(" ").slice(0, 1500),
+        text: [desc, stripHtml(d.bodyHtml)].filter(Boolean).join(" ").slice(0, 4000),
       };
     })
     .sort((a, b) => String(b.date).localeCompare(String(a.date)));
@@ -1455,7 +1479,7 @@ export function buildSearchAll(posts, kbDocs) {
       date: p.meta.date || "",
       tags: p.meta.tags || [],
       category: "",
-      text: [p.meta.excerpt || "", stripHtml(p.bodyHtml)].filter(Boolean).join(" ").slice(0, 2000),
+      text: [p.meta.excerpt || "", stripHtml(p.bodyHtml)].filter(Boolean).join(" ").slice(0, 4000),
     });
   }
   for (const d of (Array.isArray(kbDocs) ? kbDocs : []).slice().sort(byDate)) {
@@ -1467,7 +1491,7 @@ export function buildSearchAll(posts, kbDocs) {
       date: d.meta.date || "",
       tags: d.meta.tags || [],
       category: d.meta.category || "未分类",
-      text: [d.meta.excerpt || d.meta.desc || "", stripHtml(d.bodyHtml)].filter(Boolean).join(" ").slice(0, 2000),
+      text: [d.meta.excerpt || d.meta.desc || "", stripHtml(d.bodyHtml)].filter(Boolean).join(" ").slice(0, 4000),
     });
   }
   return JSON.stringify(out, null, 2) + "\n";

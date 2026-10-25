@@ -68,6 +68,8 @@ function json(data, status = 200) {
 }
 
 function safeEqual(a, b) {
+  // 长度不等直接返回：双方均为服务端已知的定长值（密码/签名长度不外泄给调用方），
+  // 等长路径才是真正的常数时间比较。
   if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -441,11 +443,33 @@ function buildKbMarkdown(meta, body) {
 }
 
 /* 根据 posts 重生成 blog.html 列表 + index.html 最新文章，返回变更 */
-/* ---------------- 认证（简单内存限流，尽力而为） ---------------- */
-const loginAttempts = new Map(); // ip -> {count, resetAt}
+/* ---------------- 认证限流 ----------------
+ * 登录限流状态保存在 KV（DRAFTS_KV）里：Pages Functions 每个请求可能落在
+ * 不同隔离实例上，纯内存计数对分布式爆破形同虚设；KV 是全局共享存储。
+ * KV 未绑定或读写异常时退回进程内存 Map（单实例尽力而为，不比原来差）。
+ */
+const loginAttempts = new Map(); // 内存兜底：ip -> {count, resetAt}
 
-function rateLimited(ip) {
+async function rateLimited(env, ip) {
   const now = Date.now();
+  const key = `loginrl:${ip}`;
+  if (kvReady(env)) {
+    try {
+      let count = 1;
+      const raw = await env.DRAFTS_KV.get(key);
+      if (raw) {
+        const rec = JSON.parse(raw);
+        if (rec && now <= rec.resetAt) {
+          count = rec.count + 1;
+          if (count > LOGIN_MAX) return true; // 已超限：直接拒绝（窗口内）
+        }
+      }
+      await env.DRAFTS_KV.put(key, JSON.stringify({ count, resetAt: now + LOGIN_WINDOW }), {
+        expirationTtl: Math.ceil(LOGIN_WINDOW / 1000) + 60,
+      });
+      return false;
+    } catch (e) { /* KV 异常 → 走内存兜底 */ }
+  }
   const rec = loginAttempts.get(ip);
   if (!rec || now > rec.resetAt) {
     loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW });
@@ -500,15 +524,16 @@ async function getAllKbDocs(env) {
 
 /* 生成标签页 + 归档页的变更集（发布/删除文章后调用，保持派生页面同步）
  * 旧的标签页若已不存在则删除，避免留下空页与死链。
+ * refSha：原子提交时传入 head sha，保证「列目录」与后续提交基于同一 base。
  */
-async function buildTagAndArchiveChanges(env, posts) {
+async function buildTagAndArchiveChanges(env, posts, refSha) {
   const changes = [];
   const tags = collectTags(posts);
   const wanted = new Set(tags.map(t => t.name));
 
   // 删除已不再出现的旧标签页
   try {
-    const res = await gh(env, `/repos/${repo(env)}/contents/tags?ref=${branch(env)}`);
+    const res = await gh(env, `/repos/${repo(env)}/contents/tags?ref=${refSha || branch(env)}`);
     const files = await res.json();
     for (const f of (Array.isArray(files) ? files : [])) {
       if (!f.name || !f.name.endsWith(".html")) continue;
@@ -810,7 +835,7 @@ export async function onRequest(context) {
       return json({ error: "后台未配置：请在 Cloudflare Pages 设置 ADMIN_PASS / SESSION_SECRET / GITHUB_TOKEN 环境变量" }, 500);
     }
     const ip = request.headers.get("CF-Connecting-IP") || "unknown";
-    if (rateLimited(ip)) {
+    if (await rateLimited(env, ip)) {
       return json({ error: "尝试次数过多，请稍后再试" }, 429);
     }
     const body = await request.json().catch(() => null);
@@ -818,7 +843,8 @@ export async function onRequest(context) {
     if (typeof pass !== "string" || !safeEqual(pass, env.ADMIN_PASS)) {
       return json({ error: "密码错误" }, 401);
     }
-    const token = await signToken(env.SESSION_SECRET, { sub: "admin", exp: Date.now() + TOKEN_TTL });
+    const nowMs = Date.now();
+    const token = await signToken(env.SESSION_SECRET, { sub: "admin", iat: nowMs, exp: nowMs + TOKEN_TTL });
     return json({ token, expiresIn: TOKEN_TTL });
   }
 
@@ -831,6 +857,23 @@ export async function onRequest(context) {
   }
   if (!configured(env)) {
     return json({ error: "后台未配置：请在 Cloudflare Pages 设置 ADMIN_PASS / SESSION_SECRET / GITHUB_TOKEN 环境变量" }, 500);
+  }
+
+  /* ---- 写操作同源校验（CSRF 纵深，2.6） ----
+   * Bearer 令牌已阻断常规跨站伪造（fetch/表单无法跨域设置该头）；
+   * 这里再校验 Origin：浏览器发出的跨域请求必然携带且与本站不同源 → 拒绝。
+   * 非浏览器客户端（脚本 / CI / curl）通常不带 Origin 头，照常放行。 */
+  if (method !== "GET" && method !== "HEAD") {
+    const origin = request.headers.get("Origin");
+    if (origin) {
+      try {
+        if (new URL(origin).host !== new URL(request.url).host) {
+          return json({ error: "跨域写操作被拒绝" }, 403);
+        }
+      } catch (e) {
+        return json({ error: "Origin 无效" }, 403);
+      }
+    }
   }
 
   // ---- POST /api/admin/preview ----
@@ -932,61 +975,56 @@ export async function onRequest(context) {
       });
     }
 
-    // 组装 Markdown
+    // 组装 Markdown 与文章页（每篇文章路径唯一，不依赖快照）
     const mdContent = buildMarkdown({ title, date, excerpt, tags, body: input.body, published: !isDraft });
-
-    // 渲染文章页
     const meta = { title, date, excerpt, tags, published: !isDraft };
     const bodyHtml = parseBody(String(input.body));
     const pageHtml = buildPage(meta, bodyHtml, { slug });
-
-    // 构造最新文章列表（含本篇文章）
-    const updatedPosts = posts.filter(p => p.slug !== slug);
-    updatedPosts.push({ slug, meta, bodyHtml });
-    updatedPosts.sort((a, b) => String(b.meta.date || "").localeCompare(String(a.meta.date || "")));
-
-    // 筛选已发布文章（草稿不入公开列表）
-    const publishedPosts = updatedPosts.filter(p => p.meta.published !== false);
-
-    const blogList = publishedPosts.map(p => listItemSnippet(p.meta, p.slug)).join("\n\n");
-    const latest = publishedPosts[0] ? listItemSnippet(publishedPosts[0].meta, publishedPosts[0].slug) : "";
-
-    // 读取并更新 blog.html / index.html
-    let blogHtml = await getFile(env, "blog.html");
-    let indexHtml = await getFile(env, "index.html");
-    blogHtml = replaceBetween(blogHtml, "<!-- BLOG-LIST-START -->", "<!-- BLOG-LIST-END -->", blogList);
-    indexHtml = replaceBetween(indexHtml, "<!-- LATEST-START -->", "<!-- LATEST-END -->", latest);
-
-    // KB 文档只取一次（下面搜索索引与 sitemap 都要用）
-    const kbDocs = await getAllKbDocs(env);
-
-    const commitChanges = [
-      { path: `blog/posts/${slug}.md`, content: mdContent },
-      { path: `blog/${slug}.html`, content: pageHtml },
-      { path: "data/posts.json", content: buildPostsIndex(publishedPosts) },
-      { path: "feed.xml", content: buildRss(publishedPosts) },
-      // 搜索索引只收已发布文章，草稿绝不入内
-      { path: "data/search-index.json", content: buildSearchIndex(publishedPosts) },
-      searchAllChange(publishedPosts, kbDocs),
-    ];
-    // 派生页面：标签页 + 归档页 + sitemap（均只基于已发布文章）
-    const tagInfo = await buildTagAndArchiveChanges(env, publishedPosts);
-    commitChanges.push(...tagInfo.changes);
-    commitChanges.push({
-      path: "sitemap.xml",
-      content: buildSitemap(publishedPosts, undefined, kbDocs, tagInfo.tags),
-    });
-    if (publishedPosts.length) {
-      commitChanges.push(
-        { path: "blog.html", content: blogHtml },
-        { path: "index.html", content: indexHtml },
-      );
-    }
-
     const isEdit = !!input.slug;
+
+    /* 原子提交：聚合文件（blog.html / index.html / posts.json / 标签页 / sitemap 等）
+     * 全部在 buildChanges 内基于最新 head 重新计算。
+     * 若并发发布导致分支被推进而重试，聚合内容会基于重读后的最新文章列表重建，
+     * 不会用旧快照覆盖聚合列表（否则某篇文章会从列表/首页/sitemap 里"消失"）。 */
     let commitSha;
     try {
-      commitSha = await commitFiles(env, `📝 ${isEdit ? "后台编辑" : "后台发布"}：${title}`, commitChanges);
+      const result = await commitFilesAtomic(env, `📝 ${isEdit ? "后台编辑" : "后台发布"}：${title}`, async (headSha) => {
+        const curPosts = await getAllPosts(env);
+        const updatedPosts = curPosts.filter(p => p.slug !== slug);
+        updatedPosts.push({ slug, meta, bodyHtml });
+        updatedPosts.sort((a, b) => String(b.meta.date || "").localeCompare(String(a.meta.date || "")));
+        const publishedPosts = updatedPosts.filter(p => p.meta.published !== false);
+
+        // 列表页外壳也读 headSha 版本，保证整次提交基于同一 base
+        let blogHtml = await getFileAt(env, "blog.html", headSha);
+        let indexHtml = await getFileAt(env, "index.html", headSha);
+        blogHtml = replaceBetween(blogHtml, "<!-- BLOG-LIST-START -->", "<!-- BLOG-LIST-END -->",
+          publishedPosts.map(p => listItemSnippet(p.meta, p.slug)).join("\n\n"));
+        indexHtml = replaceBetween(indexHtml, "<!-- LATEST-START -->", "<!-- LATEST-END -->",
+          publishedPosts[0] ? listItemSnippet(publishedPosts[0].meta, publishedPosts[0].slug) : "");
+
+        const kbDocs = await getAllKbDocs(env);
+        const tagInfo = await buildTagAndArchiveChanges(env, publishedPosts, headSha);
+        const changes = [
+          { path: `blog/posts/${slug}.md`, content: mdContent },
+          { path: `blog/${slug}.html`, content: pageHtml },
+          { path: "data/posts.json", content: buildPostsIndex(publishedPosts) },
+          { path: "feed.xml", content: buildRss(publishedPosts) },
+          // 搜索索引只收已发布文章，草稿绝不入内
+          { path: "data/search-index.json", content: buildSearchIndex(publishedPosts) },
+          searchAllChange(publishedPosts, kbDocs),
+          ...tagInfo.changes,
+          { path: "sitemap.xml", content: buildSitemap(publishedPosts, undefined, kbDocs, tagInfo.tags) },
+        ];
+        if (publishedPosts.length) {
+          changes.push(
+            { path: "blog.html", content: blogHtml },
+            { path: "index.html", content: indexHtml },
+          );
+        }
+        return changes;
+      });
+      commitSha = result.sha;
     } catch (e) {
       // 发布失败：不删草稿，把内容先留在私有 KV，避免用户白写一遍
       let kept = false;
@@ -1023,30 +1061,36 @@ export async function onRequest(context) {
     const target = posts.find(p => p.slug === slug);
     if (!target) return json({ error: "文章不存在" }, 404);
 
-    const remaining = posts.filter(p => p.slug !== slug);
-    const publishedRemaining = onlyPublished(remaining);
-    const blogList = publishedRemaining.map(p => listItemSnippet(p.meta, p.slug)).join("\n\n");
-    const latest = publishedRemaining[0] ? listItemSnippet(publishedRemaining[0].meta, publishedRemaining[0].slug) : "";
+    // 聚合文件基于最新 head 重建（见上方发布接口注释），避免并发覆盖列表
+    const result = await commitFilesAtomic(env, `🗑️ 后台删除：${target.meta.title}`, async (headSha) => {
+      const curPosts = await getAllPosts(env);
+      if (!curPosts.some(p => p.slug === slug)) return []; // 已被并发删除，无需提交
+      const remaining = curPosts.filter(p => p.slug !== slug);
+      const publishedRemaining = onlyPublished(remaining);
 
-    let blogHtml = await getFile(env, "blog.html");
-    let indexHtml = await getFile(env, "index.html");
-    blogHtml = replaceBetween(blogHtml, "<!-- BLOG-LIST-START -->", "<!-- BLOG-LIST-END -->", blogList);
-    indexHtml = replaceBetween(indexHtml, "<!-- LATEST-START -->", "<!-- LATEST-END -->", latest);
+      let blogHtml = await getFileAt(env, "blog.html", headSha);
+      let indexHtml = await getFileAt(env, "index.html", headSha);
+      blogHtml = replaceBetween(blogHtml, "<!-- BLOG-LIST-START -->", "<!-- BLOG-LIST-END -->",
+        publishedRemaining.map(p => listItemSnippet(p.meta, p.slug)).join("\n\n"));
+      indexHtml = replaceBetween(indexHtml, "<!-- LATEST-START -->", "<!-- LATEST-END -->",
+        publishedRemaining[0] ? listItemSnippet(publishedRemaining[0].meta, publishedRemaining[0].slug) : "");
 
-    const delTagInfo = await buildTagAndArchiveChanges(env, publishedRemaining);
-    const kbDocs = await getAllKbDocs(env);
-    const commitSha = await commitFiles(env, `🗑️ 后台删除：${target.meta.title}`, [
-      { path: `blog/posts/${slug}.md`, delete: true },
-      { path: `blog/${slug}.html`, delete: true },
-      { path: "blog.html", content: blogHtml },
-      { path: "index.html", content: indexHtml },
-      { path: "data/posts.json", content: buildPostsIndex(remaining) },
-      { path: "feed.xml", content: buildRss(publishedRemaining) },
-      { path: "data/search-index.json", content: buildSearchIndex(publishedRemaining) },
-      searchAllChange(publishedRemaining, kbDocs),
-      ...delTagInfo.changes,
-      { path: "sitemap.xml", content: buildSitemap(publishedRemaining, undefined, kbDocs, delTagInfo.tags) },
-    ]);
+      const delTagInfo = await buildTagAndArchiveChanges(env, publishedRemaining, headSha);
+      const kbDocs = await getAllKbDocs(env);
+      return [
+        { path: `blog/posts/${slug}.md`, delete: true },
+        { path: `blog/${slug}.html`, delete: true },
+        { path: "blog.html", content: blogHtml },
+        { path: "index.html", content: indexHtml },
+        { path: "data/posts.json", content: buildPostsIndex(remaining) },
+        { path: "feed.xml", content: buildRss(publishedRemaining) },
+        { path: "data/search-index.json", content: buildSearchIndex(publishedRemaining) },
+        searchAllChange(publishedRemaining, kbDocs),
+        ...delTagInfo.changes,
+        { path: "sitemap.xml", content: buildSitemap(publishedRemaining, undefined, kbDocs, delTagInfo.tags) },
+      ];
+    });
+    const commitSha = result.sha;
 
     // 文章已不存在，对应的草稿也一并清掉
     await delDraft(env, "article", slug);
@@ -1391,78 +1435,90 @@ export async function onRequest(context) {
 
     if (!items.length) return json({ error: "没有可导入的文档" }, 400);
 
+    const isEdit = !!input.slug;
+    const label = batch ? "导入知识库文档" : `${isEdit ? "编辑" : "新建"}知识库文档`;
     const errors = [];
     const added = [];
-    const changes = [];
-    const docs = await getAllKbDocs(env);
-    // 逐条处理，slug 冲突时自动加后缀
-    const usedSlugs = new Set(docs.map(d => d.slug));
 
-    for (const it of items) {
-      if (!it.content || !it.content.trim()) { errors.push(it.filename + "：内容为空"); continue; }
-      const { meta, body } = parseFrontMatter(it.content);
-      if (!meta.title) errors.push((it.filename || "未命名") + "：缺少标题（请在 front matter 写 title）");
-      if (!meta.title) continue;
-      if (!meta.date) meta.date = new Date().toISOString().slice(0, 10);
-      if (!meta.category) meta.category = "未分类";
+    /* 原子提交：文档列表、kb.html、kb.json、sitemap、全站搜索索引
+     * 全部在 buildChanges 内基于最新 head 重算（并发导入不互相覆盖）。 */
+    let commitSha;
+    try {
+      const result = await commitFilesAtomic(env, `📚 后台${label}`, async (headSha) => {
+        const docs = await getAllKbDocs(env);
+        const changes = [];
+        // 逐条处理，slug 冲突时自动加后缀
+        const usedSlugs = new Set(docs.map(d => d.slug));
 
-      let slug = it.oldSlug || slugify(it.filename || meta.title) || slugify(meta.title);
-      if (!slug) slug = `kb-${Date.now().toString(36)}`;
-      // 编辑自身不动；新建冲突则加序号
-      if (it.oldSlug) {
-        usedSlugs.delete(slug);
-      } else {
-        let base = slug, n = 2;
-        while (usedSlugs.has(slug)) slug = `${base}-${n++}`;
-      }
-      usedSlugs.add(slug);
+        for (const it of items) {
+          if (!it.content || !it.content.trim()) { errors.push(it.filename + "：内容为空"); continue; }
+          const { meta, body } = parseFrontMatter(it.content);
+          if (!meta.title) errors.push((it.filename || "未命名") + "：缺少标题（请在 front matter 写 title）");
+          if (!meta.title) continue;
+          if (!meta.date) meta.date = new Date().toISOString().slice(0, 10);
+          if (!meta.category) meta.category = "未分类";
 
-      const mdText = buildKbMarkdown(meta, body);
-      const bodyHtml = parseBody(body);
-      const pageHtml = buildKbPage(meta, bodyHtml, { slug });
+          let slug = it.oldSlug || slugify(it.filename || meta.title) || slugify(meta.title);
+          if (!slug) slug = `kb-${Date.now().toString(36)}`;
+          // 编辑自身不动；新建冲突则加序号
+          if (it.oldSlug) {
+            usedSlugs.delete(slug);
+          } else {
+            let base = slug, n = 2;
+            while (usedSlugs.has(slug)) slug = `${base}-${n++}`;
+          }
+          usedSlugs.add(slug);
 
-      changes.push({ path: `docs/kb/${slug}.md`, content: mdText });
-      changes.push({ path: `kb/${slug}.html`, content: pageHtml });
-      // 重命名：删掉旧文件
-      if (it.oldSlug && it.oldSlug !== slug) {
-        changes.push({ path: `docs/kb/${it.oldSlug}.md`, delete: true });
-        changes.push({ path: `kb/${it.oldSlug}.html`, delete: true });
-      }
-      added.push({ slug, title: meta.title, category: meta.category });
+          const mdText = buildKbMarkdown(meta, body);
+          const bodyHtml = parseBody(body);
+          const pageHtml = buildKbPage(meta, bodyHtml, { slug });
+
+          changes.push({ path: `docs/kb/${slug}.md`, content: mdText });
+          changes.push({ path: `kb/${slug}.html`, content: pageHtml });
+          // 重命名：删掉旧文件
+          if (it.oldSlug && it.oldSlug !== slug) {
+            changes.push({ path: `docs/kb/${it.oldSlug}.md`, delete: true });
+            changes.push({ path: `kb/${it.oldSlug}.html`, delete: true });
+          }
+          added.push({ slug, title: meta.title, category: meta.category });
+        }
+
+        if (!added.length) return null;
+
+        // 重新汇总知识库索引（含本次变更）
+        const finalDocs = docs.filter(d => !changes.some(c => c.path === `docs/kb/${d.name}` && c.delete));
+        for (const a of added) {
+          const idx = finalDocs.findIndex(d => d.slug === a.slug);
+          const mdContent = changes.find(c => c.path === `docs/kb/${a.slug}.md`);
+          const { meta, body } = parseFrontMatter(mdContent.content);
+          const entry = { slug: a.slug, name: `${a.slug}.md`, meta, bodyHtml: parseBody(body) };
+          if (idx >= 0) finalDocs[idx] = entry; else finalDocs.push(entry);
+        }
+        finalDocs.sort((a, b) => String(b.meta.date || "").localeCompare(String(a.meta.date || "")));
+
+        const kbHtml = await getFileAt(env, "kb.html", headSha);
+        const newKbHtml = replaceBetween(
+          replaceBetween(kbHtml, "<!-- KB-FILTER-START -->", "<!-- KB-FILTER-END -->", renderKbFilter(finalDocs)),
+          "<!-- KB-LIST-START -->", "<!-- KB-LIST-END -->", renderKbList(finalDocs)
+        );
+
+        changes.push({ path: "kb.html", content: newKbHtml });
+        changes.push({ path: "data/kb.json", content: buildKbIndex(finalDocs) });
+        // 同步 sitemap（否则新增的知识库文档不进站点地图）
+        const postsForSitemap = onlyPublished(await getAllPosts(env));
+        changes.push({ path: "sitemap.xml", content: buildSitemap(postsForSitemap, undefined, finalDocs, collectTags(postsForSitemap)) });
+        // 同步全站搜索索引（否则独立搜索页看不到新增/修改的文档）
+        changes.push(searchAllChange(postsForSitemap, finalDocs));
+        return changes;
+      });
+      commitSha = result.sha;
+    } catch (e) {
+      return json({ error: `知识库保存失败：${String(e.message || e)}`, code: "COMMIT_FAILED" }, 502);
     }
 
     if (!added.length) {
       return json({ error: errors.length ? errors.join("；") : "没有有效文档" }, 400);
     }
-
-    // 重新汇总知识库索引（含本次变更）
-    const finalDocs = docs.filter(d => !changes.some(c => c.path === `docs/kb/${d.name}` && c.delete));
-    for (const a of added) {
-      const idx = finalDocs.findIndex(d => d.slug === a.slug);
-      const mdContent = changes.find(c => c.path === `docs/kb/${a.slug}.md`);
-      const { meta, body } = parseFrontMatter(mdContent.content);
-      const entry = { slug: a.slug, name: `${a.slug}.md`, meta, bodyHtml: parseBody(body) };
-      if (idx >= 0) finalDocs[idx] = entry; else finalDocs.push(entry);
-    }
-    finalDocs.sort((a, b) => String(b.meta.date || "").localeCompare(String(a.meta.date || "")));
-
-    const kbHtml = await getFile(env, "kb.html");
-    const newKbHtml = replaceBetween(
-      replaceBetween(kbHtml, "<!-- KB-FILTER-START -->", "<!-- KB-FILTER-END -->", renderKbFilter(finalDocs)),
-      "<!-- KB-LIST-START -->", "<!-- KB-LIST-END -->", renderKbList(finalDocs)
-    );
-
-    changes.push({ path: "kb.html", content: newKbHtml });
-    changes.push({ path: "data/kb.json", content: buildKbIndex(finalDocs) });
-    // 同步 sitemap（否则新增的知识库文档不进站点地图）
-    const postsForSitemap = onlyPublished(await getAllPosts(env));
-    changes.push({ path: "sitemap.xml", content: buildSitemap(postsForSitemap, undefined, finalDocs, collectTags(postsForSitemap)) });
-    // 同步全站搜索索引（否则独立搜索页看不到新增/修改的文档）
-    changes.push(searchAllChange(postsForSitemap, finalDocs));
-
-    const isEdit = !!input.slug;
-    const label = batch ? `导入 ${added.length} 篇知识库文档` : `${isEdit ? "编辑" : "新建"}知识库文档：${added[0].title}`;
-    const commitSha = await commitFiles(env, `📚 后台${label}`, changes);
 
     return json({
       ok: true,
@@ -1481,25 +1537,33 @@ export async function onRequest(context) {
     const docs = await getAllKbDocs(env);
     const target = docs.find(d => d.slug === slug);
     if (!target) return json({ error: "文档不存在" }, 404);
-    const remaining = docs.filter(d => d.slug !== slug);
 
-    const kbHtml = await getFile(env, "kb.html");
-    const newKbHtml = replaceBetween(
-      replaceBetween(kbHtml, "<!-- KB-FILTER-START -->", "<!-- KB-FILTER-END -->", renderKbFilter(remaining)),
-      "<!-- KB-LIST-START -->", "<!-- KB-LIST-END -->", renderKbList(remaining)
-    );
+    // 聚合文件基于最新 head 重建（见上方知识库新建接口注释）
+    const result = await commitFilesAtomic(env, `🗑️ 后台删除知识库文档：${target.meta.title}`, async (headSha) => {
+      const curDocs = await getAllKbDocs(env);
+      const curTarget = curDocs.find(d => d.slug === slug);
+      if (!curTarget) return []; // 已被并发删除，无需提交
+      const remaining = curDocs.filter(d => d.slug !== slug);
 
-    const kbPostsForIndex = onlyPublished(await getAllPosts(env));
-    const commitSha = await commitFiles(env, `🗑️ 后台删除知识库文档：${target.meta.title}`, [
-      { path: `docs/kb/${target.name}`, delete: true },
-      { path: `kb/${slug}.html`, delete: true },
-      { path: "kb.html", content: newKbHtml },
-      { path: "data/kb.json", content: buildKbIndex(remaining) },
-      // 同步 sitemap（否则已删除的文档会留下死链）
-      { path: "sitemap.xml", content: buildSitemap(kbPostsForIndex, undefined, remaining, collectTags(kbPostsForIndex)) },
-      // 同步全站搜索索引（否则搜索页仍会返回已删除的文档）
-      searchAllChange(kbPostsForIndex, remaining),
-    ]);
+      const kbHtml = await getFileAt(env, "kb.html", headSha);
+      const newKbHtml = replaceBetween(
+        replaceBetween(kbHtml, "<!-- KB-FILTER-START -->", "<!-- KB-FILTER-END -->", renderKbFilter(remaining)),
+        "<!-- KB-LIST-START -->", "<!-- KB-LIST-END -->", renderKbList(remaining)
+      );
+
+      const kbPostsForIndex = onlyPublished(await getAllPosts(env));
+      return [
+        { path: `docs/kb/${curTarget.name}`, delete: true },
+        { path: `kb/${slug}.html`, delete: true },
+        { path: "kb.html", content: newKbHtml },
+        { path: "data/kb.json", content: buildKbIndex(remaining) },
+        // 同步 sitemap（否则已删除的文档会留下死链）
+        { path: "sitemap.xml", content: buildSitemap(kbPostsForIndex, undefined, remaining, collectTags(kbPostsForIndex)) },
+        // 同步全站搜索索引（否则搜索页仍会返回已删除的文档）
+        searchAllChange(kbPostsForIndex, remaining),
+      ];
+    });
+    const commitSha = result.sha;
 
     return json({ ok: true, commitSha, message: "已删除并提交，等待自动部署" });
   }
